@@ -1,4 +1,4 @@
-# ⚡ GoldenFloat — φ-Optimized Zig Kernel for ML
+# ZIF ⚡ GoldenFloat — φ-Optimized Zig Kernel for ML
 
 [![Zig](https://img.shields.io/badge/Zig-0.15-f7a41d?logo=zig)](https://ziglang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
