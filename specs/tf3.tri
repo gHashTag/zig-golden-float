@@ -1,0 +1,115 @@
+# TF3-9 Format Specification (Source of Truth)
+# Ternary Float: 3-trit exponent, 9-trit mantissa for ternary neural networks
+
+format: TF3_9
+version: 1
+
+storage:
+  bits: 16
+  align_bytes: 2
+  endianness: little
+  underlying: u16
+  encoding: balanced_ternary  # trits encoded as 2 bits each
+
+fields:
+  - name: sign
+    bits: 1
+    position_msb: 15
+    trit_value: true  # {-1, 0, +1}
+  - name: exponent
+    bits: 6
+    position_msb: 14
+    trit_count: 3
+    encoding: balanced_ternary
+  - name: mantissa
+    bits: 9
+    position_msb: 8
+    trit_count: 9
+    encoding: balanced_ternary
+
+exponent:
+  bits: 6
+  trits: 3
+  bias: 3
+  max: 13
+  min: -13
+  base: 3
+  special:
+    zero:
+      exponent: 0
+      mantissa: 0
+    subnormal:
+      exponent: 0
+      mantissa_nonzero: true
+    inf:
+      exponent: 13
+      mantissa: 0
+    nan:
+      exponent: 13
+      mantissa_nonzero: true
+
+ternary:
+  trit_values: [-1, 0, +1]
+  encoding: balanced  # -1=10, 0=00, +1=01 (2-bit per trit)
+  bits_per_trit: 2
+  total_trits: 13
+
+rounding:
+  mode: ties_to_zero  # Ternary rounding differs from binary
+  source_type: f32
+  overflow_policy: saturate_to_inf
+  underflow_policy: flush_to_zero
+
+phi:
+  total_bits: 12  # exponent trits + mantissa trits
+  exponent_trits: 3
+  mantissa_trits: 9
+  target_ratio: 0.6180339  # 1/phi
+  ratio: 0.25  # 3/12
+  distance: 0.3680339
+
+vsa:
+  compatible: true
+  bind_arity: 2
+  bundle_arity: 3
+  similarity: cosine
+
+abi:
+  c:
+    typename: uint16_t
+  rust:
+    typename: u16
+  cpp:
+    typename: uint16_t
+  zig:
+    typename: u16
+
+conversion:
+  from_f32_steps:
+    - extract_sign_exponent_mantissa
+    - quantize_to_ternary
+    - encode_trits_to_bits
+    - handle_overflow_to_inf
+    - handle_underflow_to_zero
+  to_f32_steps:
+    - decode_bits_to_trits
+    - handle_special_values
+    - compute_ternary_value
+    - build_f32_bits
+
+test_vectors:
+  - name: zero
+    f32: 0.0
+    raw_hex: "0000"
+  - name: one
+    f32: 1.0
+    raw_hex: "0155"
+  - name: minus_one
+    f32: -1.0
+    raw_hex: "8555"
+  - name: pi
+    f32: 3.1415927
+    raw_hex: "07aa"
+  - name: max_pos
+    f32: 1093.0
+    raw_hex: "7fff"
