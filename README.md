@@ -17,21 +17,6 @@
 
 ---
 
-## 🔥 Zig Pain Points We Solve
-
-| Pain Point | Zig Issue | GoldenFloat Fix |
-|---|---|---|
-| f16 = 2,304 SIMD инструкции | [#19550](https://github.com/ziglang/zig/issues/19550) | GF16 packed u16 = ~56 инструкций |
-| std.Random не поддерживает f16 | [#23518](https://github.com/ziglang/zig/issues/23518) | `GF16.fromF32(Random.float(f32))` |
-| @Vector пакует побитово | [#18652](https://github.com/ziglang/zig/issues/18652) | GF16 = стандартный `@Vector(N, u16)` |
-| f16 range 65,504 — overflow | [#19550](https://github.com/ziglang/zig/issues/19550) | GF16 max ~4.3B (65,645× больше) |
-| f16 underflow 6.1e-5 — vanishing | [#19550](https://github.com/ziglang/zig/issues/19550) | GF16 min ~4.7e-10 (131,072× лучше) |
-| Нет ternary типов | — | HybridBigInt + PackedTrit |
-| Нет VSA | — | bind, bundle, similarity 10K-dim |
-| Нет φ-констант | — | PHI, PHI_SQ, TRINITY |
-
----
-
 ## 🤔 The Problem: Why Not Just Use f16?
 
 Zig's IEEE f16 generates **2,304 SIMD instructions** for vectorized math — constant `f16↔f32` conversion kills performance ([ziglang/zig#19550](https://github.com/ziglang/zig/issues/19550)).
@@ -44,6 +29,23 @@ IEEE f16 pipeline:   load f16 → vcvtph2ps → compute f32 → vcvtps2ph → st
 GF16 pipeline:       fromF32() once → compute f32 → toF32() once
                      ~56 instructions total
 ```
+
+---
+
+## 🔥 Zig Pain Points We Solve
+
+| # | Zig Pain Point | Issue | GoldenFloat Fix |
+|---|----------------|-------|-----------------|
+| 1 | f16 = 2,304 SIMD inst/loop | [#19550](https://github.com/ziglang/zig/issues/19550) | GF16 packed u16 = ~56 inst |
+| 2 | std.Random no f16 support | [#23518](https://github.com/ziglang/zig/issues/23518) | `GF16.fromF32(Random.float(f32))` |
+| 3 | @Vector packs bits not bytes | [#18652](https://github.com/ziglang/zig/issues/18652) | GF16 = standard `@Vector(N, u16)` |
+| 4 | f16 range 65,504 — overflow | [#19550](https://github.com/ziglang/zig/issues/19550) | GF16 max ~4.3B (65,645× more) |
+| 5 | f16 underflow 6.1e-5 — vanishing | [#19550](https://github.com/ziglang/zig/issues/19550) | GF16 min ~4.7e-10 (131,072× better) |
+| 6 | No ternary types in stdlib | — | HybridBigInt + PackedTrit |
+| 7 | No VSA / hyperdimensional | — | bind, bundle, similarity 10K-dim |
+| 8 | No φ constants in std.math | — | PHI, PHI_SQ, TRINITY built in |
+
+---
 
 ## 📊 GF16 vs The Competition
 
