@@ -15,6 +15,26 @@ pub fn build(b: *std.Build) void {
     });
 
     // ─────────────────────────────────────────────────────────────────
+    // tri_gen executable — code generator from .tri specs
+    // ─────────────────────────────────────────────────────────────────
+    const tri_gen_module = b.createModule(.{
+        .root_source_file = b.path("tools/gen/tri_gen.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const tri_gen = b.addExecutable(.{
+        .name = "tri_gen",
+        .root_module = tri_gen_module,
+    });
+
+    b.installArtifact(tri_gen);
+
+    const run_tri_gen = b.addRunArtifact(tri_gen);
+    const gen_step = b.step("gen", "Generate code from .tri specs");
+    gen_step.dependOn(&run_tri_gen.step);
+
+    // ─────────────────────────────────────────────────────────────────
     // Tests — formats (GF16/TF3)
     // ─────────────────────────────────────────────────────────────────
     const formats_tests_root = b.createModule(.{

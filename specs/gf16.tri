@@ -1,8 +1,10 @@
 # GF16 Format Specification (Source of Truth)
 # Single source of truth for generating GF16 implementations
+# Level 0 + Level 1: Format + Operations
 
 format: GF16
 version: 1
+level: 1
 
 storage:
   bits: 16
@@ -30,9 +32,6 @@ exponent:
     zero:
       exponent: 0
       mantissa: 0
-    subnormal:
-      exponent: 0
-      mantissa_nonzero: true
     inf:
       exponent: 63
       mantissa: 0
@@ -78,6 +77,74 @@ conversion:
     - compute_E = e16 - 31
     - compute_e32 = E + 127
     - build_f32_bits
+
+ops:
+  add:
+    inputs: [GF16, GF16]
+    output: GF16
+    intermediate_type: f32
+    algorithm: decode_f32_add_reencode
+    rounding: ties-to-even
+    commutative: true
+    associative_approx: true
+
+  sub:
+    inputs: [GF16, GF16]
+    output: GF16
+    intermediate_type: f32
+    algorithm: decode_f32_sub_reencode
+    rounding: ties-to-even
+    commutative: false
+
+  mul:
+    inputs: [GF16, GF16]
+    output: GF16
+    intermediate_type: f32
+    algorithm: decode_f32_mul_reencode
+    rounding: ties-to-even
+    commutative: true
+    associative_approx: true
+
+  div:
+    inputs: [GF16, GF16]
+    output: GF16
+    intermediate_type: f32
+    algorithm: decode_f32_div_reencode
+    rounding: ties-to-even
+    commutative: false
+
+  fma:
+    inputs: [GF16, GF16, GF16]
+    output: GF16
+    intermediate_type: f32
+    algorithm: fused_multiply_add
+    single_rounding: true
+    commutative: false
+
+  sqrt:
+    inputs: [GF16]
+    output: GF16
+    intermediate_type: f32
+    algorithm: decode_f32_sqrt_reencode
+    rounding: ties-to-even
+
+  abs:
+    inputs: [GF16]
+    output: GF16
+    algorithm: sign_mask
+    commutative: true
+
+  neg:
+    inputs: [GF16]
+    output: GF16
+    algorithm: sign_flip
+    commutative: false
+
+  cmp:
+    inputs: [GF16, GF16]
+    outputs: [lt, eq, gt, ne, le, ge]
+    intermediate_type: f32
+    algorithm: decode_f32_compare
 
 test_vectors:
   - name: zero

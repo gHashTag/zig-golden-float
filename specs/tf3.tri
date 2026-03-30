@@ -1,10 +1,10 @@
 # TF3-9 Format Specification (Source of Truth)
 # Ternary Float: 3-trit exponent, 9-trit mantissa for ternary neural networks
-# Level 0-2: Format + Ops + Composite
+# Level 0 + Level 1 + Level 2: Format + Operations + Composite + VSA
 
 format: TF3_9
 version: 1
-level: 2  # Format + Operations + Composite
+level: 2
 
 storage:
   bits: 16
@@ -101,44 +101,59 @@ conversion:
     - compute_ternary_value
     - build_f32_bits
 
-# Level 1: Operations
-
 ops:
-  add:
-    inputs: [TF3, TF3]
-    output: TF3
-    intermediate: f32
-    algorithm: decode-both → f32-add → encode-back
-    rounding: ties_to_zero
-
-  mul:
-    inputs: [TF3, TF3]
-    output: TF3
-    intermediate: f32
-    algorithm: decode-both → f32-mul → encode-back
-
-  trit_mul:
+  trit_add:
+    domain: trit
     inputs: [trit, trit]
     output: trit
-    lookup_table: true
+    carry_output: trit
     table:
-      - -1 * -1 = +1
-      - -1 * 0 = 0
-      - -1 * +1 = -1
-      - 0 * -1 = 0
-      - 0 * 0 = 0
-      - 0 * +1 = 0
-      - +1 * -1 = -1
-      - +1 * 0 = 0
-      - +1 * +1 = +1
+      "-1,-1": [1, -1]
+      "-1,0": [-1, 0]
+      "-1,1": [0, 0]
+      "0,-1": [-1, 0]
+      "0,0": [0, 0]
+      "0,1": [1, 0]
+      "1,-1": [0, 0]
+      "1,0": [1, 0]
+      "1,1": [-1, 1]
+
+  trit_mul:
+    domain: trit
+    inputs: [trit, trit]
+    output: trit
+    table:
+      "-1,-1": 1
+      "-1,0": 0
+      "-1,1": -1
+      "0,-1": 0
+      "0,0": 0
+      "0,1": 0
+      "1,-1": -1
+      "1,0": 0
+      "1,1": 1
 
   dot:
     inputs: [TF3[N], TF3[N]]
     output: i32
-    algorithm: sum-of-trit-muls
-    note: each a*b ∈ {-1, 0, +1}, sum ∈ [-N, +N]
+    element_op: trit_mul
+    reduction: sum
+    bounds: [-N, N]
 
-# Level 2: Composite operations
+  vsa_bind:
+    vsa_compatible: true
+    inputs: [TF3[N], TF3[N]]
+    output: TF3[N]
+    type: xor_like
+    invertible: true
+    algorithm: cyclic_shift
+
+  vsa_bundle:
+    vsa_compatible: true
+    inputs: [TF3[N], TF3[N], TF3[N]]
+    output: TF3[N]
+    type: ternary_majority
+    capacity_estimate: 0.1
 
 composite:
   matmul:
@@ -147,7 +162,7 @@ composite:
       B: TF3[K, N]
     output: TF3[M, N]
     accumulator: i32
-    inner_op: dot_product
+    inner_op: dot
     tiling:
       block_m: 16
       block_n: 16
@@ -158,10 +173,8 @@ composite:
       input: TF3[H, W, C_in]
       weights: TF3[K, K, C_in, C_out]
     output: TF3[H, W, C_out]
-    algorithm: im2col + matmul
-    sparse: true  # weights are ternary (-1, 0, +1)
-
-# Level 4: Hardware mapping (preview)
+    algorithm: im2col_matmul
+    sparse: true
 
 hardware:
   target: xc7a100t

@@ -8,6 +8,7 @@ const std = @import("std");
 pub const Spec = struct {
     format: []const u8,
     version: u8,
+    level: u8 = 0,
     storage: Storage,
     fields: []Field,
     exponent: Exponent,
@@ -17,7 +18,10 @@ pub const Spec = struct {
     vsa: ?Vsa,
     abi: Abi,
     conversion: Conversion,
+    ops: []const Op,
+    composite: ?Composite,
     test_vectors: []TestVector,
+    input_path: []const u8 = "unknown.tri",
 
     pub fn deinit(self: *Spec, allocator: std.mem.Allocator) void {
         allocator.free(self.fields);
@@ -30,16 +34,16 @@ pub const Storage = struct {
     align_bytes: u8,
     endianness: []const u8,
     underlying: []const u8,
-    encoding: []const u8,  // "binary", "balanced_ternary"
+    encoding: []const u8,
 };
 
 pub const Field = struct {
     name: []const u8,
     bits: u8,
     position_msb: u8,
-    trit_value: bool = false,  // Is this a ternary sign field?
-    trit_count: u8 = 0,       // Number of trits (for ternary)
-    encoding: []const u8,     // "balanced_ternary"
+    trit_value: bool = false,
+    trit_count: u8 = 0,
+    encoding: []const u8 = "",
 };
 
 pub const Exponent = struct {
@@ -48,9 +52,8 @@ pub const Exponent = struct {
     max: u8,
     min: u8,
     special: Special,
-    trits: u8 = 0,          // Number of trits for ternary
-    base: u8 = 2,            // Base for binary/ternary
-    is_trits: bool = false,    // Is this a ternary exponent?
+    trits: u8 = 0,
+    base: u8 = 2,
 
     pub const Special = struct {
         zero: SpecialValue,
@@ -85,8 +88,8 @@ pub const Phi = struct {
 };
 
 pub const Ternary = struct {
-    trit_values: []const i8,  // [-1, 0, +1]
-    encoding: []const u8,          // "balanced" (-1=10, 0=00, +1=01)
+    trit_values: []const i8,
+    encoding: []const u8,
     bits_per_trit: u8,
     total_trits: u8,
 };
@@ -95,7 +98,7 @@ pub const Vsa = struct {
     compatible: bool,
     bind_arity: u8,
     bundle_arity: u8,
-    similarity: []const u8,  // "cosine"
+    similarity: []const u8,
 };
 
 pub const Abi = struct {
@@ -114,21 +117,80 @@ pub const Conversion = struct {
     to_f32_steps: []const []const u8,
 };
 
+pub const Op = struct {
+    name: []const u8,
+    inputs: []const []const u8,
+    outputs: []const []const u8,
+    output: []const u8 = "",
+    intermediate_type: []const u8 = "",
+    algorithm: []const u8,
+    rounding: []const u8 = "",
+    commutative: bool = false,
+    associative_approx: bool = false,
+    single_rounding: bool = false,
+    domain: []const u8 = "",
+    table: ?Table,
+    element_op: []const u8 = "",
+    reduction: []const u8 = "",
+    bounds: []const u8 = "",
+
+    pub const Table = struct {
+        entries: []const Entry,
+        output_type: []const u8 = "",
+    };
+
+    pub const Entry = struct {
+        key: []const u8,
+        value: []const u8 = "",
+        value_array: []const []const u8 = &.{},
+    };
+};
+
+pub const Composite = struct {
+    matmul: ?MatMul,
+    ternary_conv: ?TernaryConv,
+
+    pub const MatMul = struct {
+        A: []const u8,
+        B: []const u8,
+        output: []const u8,
+        accumulator: []const u8,
+        inner_op: []const u8,
+        tiling: Tiling,
+    };
+
+    pub const TernaryConv = struct {
+        input: []const u8,
+        weights: []const u8,
+        output: []const u8,
+        algorithm: []const u8,
+        sparse: bool,
+    };
+
+    pub const Tiling = struct {
+        block_m: u8,
+        block_n: u8,
+        block_k: u8,
+    };
+};
+
 pub const TestVector = struct {
     name: []const u8,
-    f32: f64,  // Stored as f64 for precision in JSON
+    f32: f64,
     raw_hex: []const u8,
 };
 
-/// Load .tri JSON specification from file
+/// Load .tri specification from file
 pub fn load(allocator: std.mem.Allocator, path: []const u8) !Spec {
     const file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 10); // 10KB max
+    const content = try file.readToEndAlloc(allocator, 1024 * 10);
     defer allocator.free(content);
 
-    return parse(allocator, content);
+    var spec = try parse(allocator, content);
+    spec.input_path = path;
+    return spec;
 }
 
 /// Parse .tri format content
@@ -221,9 +283,6 @@ const Parser = struct {
 
         if (self.pos == start) return null;
 
-        const key = self.content[start..self.pos];
-
-        // Trim trailing whitespace
         var end = self.pos;
         while (end > start and (self.content[end - 1] == ' ' or self.content[end - 1] == '\t')) {
             end -= 1;
@@ -243,7 +302,6 @@ const Parser = struct {
 
         const start = self.pos;
 
-        // Handle quoted strings
         if (self.peek()) |ch| {
             if (ch == '"') {
                 _ = self.advance();
@@ -251,7 +309,6 @@ const Parser = struct {
             }
         }
 
-        // Read until end of line or comment
         while (self.advance()) |ch| {
             if (ch == '\n' or ch == '#') {
                 self.pos -= 1;
@@ -261,13 +318,22 @@ const Parser = struct {
 
         if (self.pos == start) return error.EmptyValue;
 
-        // Trim trailing whitespace
         var end = self.pos;
         while (end > start and (self.content[end - 1] == ' ' or self.content[end - 1] == '\t')) {
             end -= 1;
         }
 
         return self.content[start..end];
+    }
+
+    fn readUntil(self: *Parser, delimiter: u8) ![]const u8 {
+        const start = self.pos;
+        while (self.advance()) |ch| {
+            if (ch == delimiter) {
+                return self.content[start .. self.pos - 1];
+            }
+        }
+        return error.UnexpectedEndOfFile;
     }
 
     fn parseInt(self: *Parser, comptime T: type) !T {
@@ -282,8 +348,9 @@ const Parser = struct {
 
     fn parseSpec(self: *Parser) !Spec {
         var spec = Spec{
-            .format = "unknown",
+            .format = "GF16",
             .version = 1,
+            .level = 0,
             .storage = undefined,
             .fields = undefined,
             .exponent = undefined,
@@ -293,133 +360,109 @@ const Parser = struct {
             .vsa = null,
             .abi = undefined,
             .conversion = undefined,
+            .ops = &.{},
+            .composite = null,
             .test_vectors = undefined,
         };
 
-        // Detect format from first key
-        var is_float_spec = true;  // Default to GF16-like
-
-        while (self.readKey()) |maybe_key| {
-            const key = maybe_key orelse continue;
-
-            if (std.mem.eql(u8, key, "trits") or std.mem.eql(u8, key, "vsa")) {
-                is_float_spec = false;
-            } else if (std.mem.eql(u8, key, "format")) {
+        while (try self.readKey()) |maybe_key| {
+            if (std.mem.eql(u8, maybe_key, "format")) {
                 spec.format = try self.readValue();
-            } else if (std.mem.eql(u8, key, "version")) {
+            } else if (std.mem.eql(u8, maybe_key, "version")) {
                 spec.version = try self.parseInt(u8);
-            } else if (std.mem.eql(u8, key, "storage")) {
-                spec.storage = try parseStorage(self);
-            } else if (std.mem.eql(u8, key, "fields")) {
-                spec.fields = try parseFieldList(self);
-            } else if (std.mem.eql(u8, key, "exponent")) {
-                spec.exponent = try parseExponent(self);
-            } else if (std.mem.eql(u8, key, "rounding")) {
-                spec.rounding = try parseRounding(self);
-            } else if (std.mem.eql(u8, key, "phi")) {
-                spec.phi = try parsePhi(self);
-            } else if (std.mem.eql(u8, key, "ternary")) {
-                spec.ternary = try parseTernary(self);
-            } else if (std.mem.eql(u8, key, "vsa")) {
-                spec.vsa = try parseVsa(self);
-            } else if (std.mem.eql(u8, key, "abi")) {
-                spec.abi = try parseAbi(self);
-            } else if (std.mem.eql(u8, key, "conversion")) {
-                spec.conversion = try parseConversion(self, self);
-            } else if (std.mem.eql(u8, key, "test_vectors")) {
-                spec.test_vectors = try parseTestVectors(self);
+            } else if (std.mem.eql(u8, maybe_key, "level")) {
+                spec.level = try self.parseInt(u8);
+            } else if (std.mem.eql(u8, maybe_key, "storage")) {
+                spec.storage = try self.parseStorage();
+            } else if (std.mem.eql(u8, maybe_key, "fields")) {
+                spec.fields = try self.parseFieldList();
+            } else if (std.mem.eql(u8, maybe_key, "exponent")) {
+                spec.exponent = try self.parseExponent();
+            } else if (std.mem.eql(u8, maybe_key, "rounding")) {
+                spec.rounding = try self.parseRounding();
+            } else if (std.mem.eql(u8, maybe_key, "phi")) {
+                spec.phi = try self.parsePhi();
+            } else if (std.mem.eql(u8, maybe_key, "ternary")) {
+                spec.ternary = try self.parseTernary();
+            } else if (std.mem.eql(u8, maybe_key, "vsa")) {
+                spec.vsa = try self.parseVsa();
+            } else if (std.mem.eql(u8, maybe_key, "abi")) {
+                spec.abi = try self.parseAbi();
+            } else if (std.mem.eql(u8, maybe_key, "conversion")) {
+                _ = try self.parseConversion();
+            } else if (std.mem.eql(u8, maybe_key, "ops")) {
+                spec.ops = try self.parseOpList();
+            } else if (std.mem.eql(u8, maybe_key, "composite")) {
+                spec.composite = try self.parseComposite();
+            } else if (std.mem.eql(u8, maybe_key, "test_vectors")) {
+                spec.test_vectors = try self.parseTestVectors();
             } else {
-                // Unknown key, skip value
                 _ = self.readValue() catch {};
             }
-
-            self.skipWhitespaceAndComments();
         }
 
         return spec;
     }
 
-    fn parseStorage(parser: *Parser) !Storage {
+    fn parseStorage(self: *Parser) !Storage {
         return .{
-            .bits = try parser.parseInt(u8),
-            .align_bytes = try parser.parseInt(u8),
-            .endianness = try parser.readValue(),
-            .underlying = try parser.readValue(),
-            .encoding = try parser.readValue() orelse "binary",
+            .bits = try self.parseInt(u8),
+            .align_bytes = try self.parseInt(u8),
+            .endianness = try self.readValue(),
+            .underlying = try self.readValue(),
+            .encoding = self.readValue() catch "binary",
         };
     }
 
-    fn parseFieldList(parser: *Parser) ![]Field {
-        var list = std.ArrayList(Field).init(parser.allocator);
-        errdefer list.deinit();
+    fn parseFieldList(self: *Parser) ![]Field {
+        var list = std.ArrayList(Field).initCapacity(self.allocator, 0) catch unreachable;
+        errdefer list.deinit(self.allocator);
 
-        // Skip list marker
-        _ = parser.advance(); // Skip '-'
-
-        parser.skipWhitespaceAndComments();
-
-        // Read field properties (name, bits, position_msb, optional trit fields)
-        while (true) : (parser.skipWhitespaceAndComments()) {
-            // Check if new section or list item starts
-            if (parser.peek()) |ch| {
-                if (ch == '-' or ch == '\n' or ch == '#') break;
-            }
-
-            const key = parser.readKey() orelse continue;
-            const val = try parser.readValue();
-
-            if (std.mem.eql(u8, key, "name")) {
-                if (list.items.len == 0) break;
-                list.items[list.items.len - 1].name = val;
-            } else if (std.mem.eql(u8, key, "bits")) {
-                list.items[list.items.len - 1].bits = try parser.parseInt(u8);
-            } else if (std.mem.eql(u8, key, "position_msb")) {
-                list.items[list.items.len - 1].position_msb = try parser.parseInt(u8);
-            } else if (std.mem.eql(u8, key, "trit_value")) {
-                list.items[list.items.len - 1].trit_value = true;
-            } else if (std.mem.eql(u8, key, "trit_count")) {
-                list.items[list.items.len - 1].trit_count = try parser.parseInt(u8);
-            } else if (std.mem.eql(u8, key, "encoding")) {
-                list.items[list.items.len - 1].encoding = try parser.readValue();
-            }
-        }
-
-        return list.toOwnedSlice();
-    }
-
-    fn parseExponent(parser: *Parser) !Exponent {
-        // Check for ternary fields
-        var trits: u8 = 0;
-        var is_trits: bool = false;
-        var base: u8 = 2;
-
-        while (parser.readKey()) |maybe_key| {
-            const key = maybe_key orelse continue;
-
-            if (std.mem.eql(u8, key, "bits")) {
-                parser.skipWhitespaceAndComments();
-                const bits_val = try parser.readValue();
-                if (std.mem.eql(u8, bits_val, "3") or std.mem.eql(u8, bits_val, "6")) {
-                    // OK for ternary
-                }
-            } else if (std.mem.eql(u8, key, "trits")) {
-                parser.skipWhitespaceAndComments();
-                trits = try parser.parseInt(u8);
-                is_trits = true;
-            } else if (std.mem.eql(u8, key, "base")) {
-                parser.skipWhitespaceAndComments();
-                base = try parser.parseInt(u8);
+        while (true) : (self.skipWhitespaceAndComments()) {
+            if (self.peek()) |ch| {
+                if (ch != '-') break;
             } else {
-                _ = parser.readValue() catch {};
+                break;
+            }
+            _ = self.advance(); // Skip '-'
+
+            var field = Field{
+                .name = "",
+                .bits = 0,
+                .position_msb = 0,
+            };
+
+            while (try self.readKey()) |maybe_key| {
+
+                if (std.mem.eql(u8, maybe_key, "name")) {
+                    field.name = try self.readValue();
+                } else if (std.mem.eql(u8, maybe_key, "bits")) {
+                    field.bits = try self.parseInt(u8);
+                } else if (std.mem.eql(u8, maybe_key, "position_msb")) {
+                    field.position_msb = try self.parseInt(u8);
+                } else if (std.mem.eql(u8, maybe_key, "trit_value")) {
+                    field.trit_value = true;
+                } else if (std.mem.eql(u8, maybe_key, "trit_count")) {
+                    field.trit_count = try self.parseInt(u8);
+                } else if (std.mem.eql(u8, maybe_key, "encoding")) {
+                    field.encoding = try self.readValue();
+                } else {
+                    _ = self.readValue() catch {};
+                }
+
+                self.skipWhitespaceAndComments();
+                if (self.peek()) |ch| {
+                    if (ch == '\n' or ch == '-') break;
+                }
             }
 
-            parser.skipWhitespaceAndComments();
+            try list.append(self.allocator, field);
         }
 
-        return parseExponentSpecial(parser);
+        return list.toOwnedSlice(self.allocator);
     }
 
-    fn parseExponentSpecial(parser: *Parser) !Exponent.Special {
+    fn parseExponent(self: *Parser) !Exponent {
         var special = Exponent.Special{
             .zero = undefined,
             .subnormal = undefined,
@@ -427,117 +470,148 @@ const Parser = struct {
             .nan = undefined,
         };
 
-        while (parser.readKey()) |maybe_key| {
-            const key = maybe_key orelse continue;
+        var trits: u8 = 0;
+        var base: u8 = 2;
 
-            if (std.mem.eql(u8, key, "zero")) {
-                special.zero = try parseExponentValue(parser);
-            } else if (std.mem.eql(u8, key, "subnormal")) {
-                special.subnormal = try parseExponentValue(parser);
-            } else if (std.mem.eql(u8, key, "inf")) {
-                special.inf = try parseExponentValue(parser);
-            } else if (std.mem.eql(u8, key, "nan")) {
-                special.nan = try parseExponentValue(parser);
+        while (try self.readKey()) |maybe_key| {
+
+            if (std.mem.eql(u8, maybe_key, "bits")) {
+                _ = self.readValue() catch {};
+            } else if (std.mem.eql(u8, maybe_key, "bias")) {
+                _ = self.readValue() catch {};
+            } else if (std.mem.eql(u8, maybe_key, "max")) {
+                _ = self.readValue() catch {};
+            } else if (std.mem.eql(u8, maybe_key, "min")) {
+                _ = self.readValue() catch {};
+            } else if (std.mem.eql(u8, maybe_key, "trits")) {
+                trits = try self.parseInt(u8);
+            } else if (std.mem.eql(u8, maybe_key, "base")) {
+                base = try self.parseInt(u8);
+            } else if (std.mem.eql(u8, maybe_key, "special")) {
+                special = try self.parseExponentSpecial();
             } else {
-                _ = parser.readValue() catch {};
+                _ = self.readValue() catch {};
             }
+        }
 
-            parser.skipWhitespaceAndComments();
+        return .{
+            .bits = try self.parseInt(u8),
+            .bias = try self.parseInt(u8),
+            .max = try self.parseInt(u8),
+            .min = try self.parseInt(u8),
+            .special = special,
+            .trits = trits,
+            .base = base,
+        };
+    }
+
+    fn parseExponentSpecial(self: *Parser) !Exponent.Special {
+        var special = Exponent.Special{
+            .zero = undefined,
+            .subnormal = undefined,
+            .inf = undefined,
+            .nan = undefined,
+        };
+
+        while (try self.readKey()) |maybe_key| {
+
+            if (std.mem.eql(u8, maybe_key, "zero")) {
+                special.zero = try self.parseExponentValue();
+            } else if (std.mem.eql(u8, maybe_key, "subnormal")) {
+                special.subnormal = try self.parseExponentValue();
+            } else if (std.mem.eql(u8, maybe_key, "inf")) {
+                special.inf = try self.parseExponentValue();
+            } else if (std.mem.eql(u8, maybe_key, "nan")) {
+                special.nan = try self.parseExponentValue();
+            } else {
+                _ = self.readValue() catch {};
+            }
         }
 
         return special;
     }
 
-    fn parseExponentValue(parser: *Parser) !Exponent.SpecialValue {
-        return .{
-            .exponent = try parser.parseInt(u8),
-            .mantissa = try parser.parseInt(u8),
+    fn parseExponentValue(self: *Parser) !Exponent.SpecialValue {
+        var value = Exponent.SpecialValue{
+            .exponent = 0,
+            .mantissa = 0,
         };
+
+        while (try self.readKey()) |maybe_key| {
+
+            if (std.mem.eql(u8, maybe_key, "exponent")) {
+                value.exponent = try self.parseInt(u8);
+            } else if (std.mem.eql(u8, maybe_key, "mantissa")) {
+                value.mantissa = try self.parseInt(u8);
+            } else if (std.mem.eql(u8, maybe_key, "mantissa_nonzero")) {
+                value.mantissa_nonzero = true;
+            } else {
+                _ = self.readValue() catch {};
+            }
+        }
+
+        return value;
     }
 
-    fn parseRounding(parser: *Parser) !Rounding {
-        const mode_str = try parser.readValue();
-        const mode = if (std.mem.eql(u8, mode_str, "ties-to-even"))
+    fn parseRounding(self: *Parser) !Rounding {
+        const mode_str = try self.readValue();
+        const mode: Rounding.Mode = if (std.mem.eql(u8, mode_str, "ties-to-even"))
             .ties_to_even
         else if (std.mem.eql(u8, mode_str, "ties-to-zero"))
             .toward_zero
-        else if (std.mem.eql(u8, mode_str, "ties-to-odd"))
-            .ties_to_odd
         else
             .ties_to_even;
 
         return .{
             .mode = mode,
-            .source_type = try parser.readValue(),
-            .overflow_policy = try parser.readValue(),
-            .underflow_policy = try parser.readValue(),
+            .source_type = try self.readValue(),
+            .overflow_policy = try self.readValue(),
+            .underflow_policy = try self.readValue(),
         };
     }
 
-    fn parsePhi(parser: *Parser) !Phi {
+    fn parsePhi(self: *Parser) !Phi {
         return .{
-            .total_bits = try parser.parseInt(u8),
-            .exponent_bits = try parser.parseInt(u8),
-            .mantissa_bits = try parser.parseInt(u8),
-            .target_ratio = try parser.parseFloat(),
-            .ratio = try parser.parseFloat(),
-            .distance = try parser.parseFloat(),
+            .total_bits = try self.parseInt(u8),
+            .exponent_bits = try self.parseInt(u8),
+            .mantissa_bits = try self.parseInt(u8),
+            .target_ratio = try self.parseFloat(),
+            .ratio = try self.parseFloat(),
+            .distance = try self.parseFloat(),
         };
     }
 
-    fn parseTernary(parser: *Parser) !Ternary {
-        const trit_values = [_]i8{ -1, 0, +1 };
-        var bits_per_trit: u8 = 2;
-        var encoding: []const u8 = "balanced";
-
-        while (parser.readKey()) |maybe_key| {
-            const key = maybe_key orelse continue;
-
-            if (std.mem.eql(u8, key, "trit_values")) {
-                encoding = try parser.readValue();
-            } else if (std.mem.eql(u8, key, "bits_per_trit")) {
-                bits_per_trit = try parser.parseInt(u8);
-            } else if (std.mem.eql(u8, key, "total_trits")) {
-                // Just for validation
-                _ = parser.readInt(u8);
-            } else {
-                _ = parser.readValue() catch {};
-            }
-
-            parser.skipWhitespaceAndComments();
-        }
+    fn parseTernary(self: *Parser) !Ternary {
+        const trit_values = [_]i8{ -1, 0, 1 };
 
         return .{
             .trit_values = &trit_values,
-            .encoding = encoding,
-            .bits_per_trit = bits_per_trit,
-            .total_trits = 13,
+            .encoding = try self.readValue(),
+            .bits_per_trit = try self.parseInt(u8),
+            .total_trits = try self.parseInt(u8),
         };
     }
 
-    fn parseVsa(parser: *Parser) !Vsa {
+    fn parseVsa(self: *Parser) !Vsa {
         var compatible: bool = false;
         var bind_arity: u8 = 0;
         var bundle_arity: u8 = 0;
         var similarity: []const u8 = "cosine";
 
-        while (parser.readKey()) |maybe_key| {
-            const key = maybe_key orelse continue;
+        while (try self.readKey()) |maybe_key| {
 
-            if (std.mem.eql(u8, key, "compatible")) {
-                const val = try parser.readValue();
+            if (std.mem.eql(u8, maybe_key, "compatible")) {
+                const val = try self.readValue();
                 compatible = std.mem.eql(u8, val, "true");
-            } else if (std.mem.eql(u8, key, "bind_arity")) {
-                bind_arity = try parser.parseInt(u8);
-            } else if (std.mem.eql(u8, key, "bundle_arity")) {
-                bundle_arity = try parser.parseInt(u8);
-            } else if (std.mem.eql(u8, key, "similarity")) {
-                similarity = try parser.readValue();
+            } else if (std.mem.eql(u8, maybe_key, "bind_arity")) {
+                bind_arity = try self.parseInt(u8);
+            } else if (std.mem.eql(u8, maybe_key, "bundle_arity")) {
+                bundle_arity = try self.parseInt(u8);
+            } else if (std.mem.eql(u8, maybe_key, "similarity")) {
+                similarity = try self.readValue();
             } else {
-                _ = parser.readValue() catch {};
+                _ = self.readValue() catch {};
             }
-
-            parser.skipWhitespaceAndComments();
         }
 
         return .{
@@ -548,28 +622,25 @@ const Parser = struct {
         };
     }
 
-    fn parseAbi(parser: *Parser) !Abi {
+    fn parseAbi(self: *Parser) !Abi {
         var c_name: []const u8 = "uint16_t";
         var rust_name: []const u8 = "u16";
         var cpp_name: []const u8 = "uint16_t";
         var zig_name: []const u8 = "u16";
 
-        while (parser.readKey()) |maybe_key| {
-            const key = maybe_key orelse continue;
+        while (try self.readKey()) |maybe_key| {
 
-            if (std.mem.eql(u8, key, "c")) {
-                c_name = try parser.readValue();
-            } else if (std.mem.eql(u8, key, "rust")) {
-                rust_name = try parser.readValue();
-            } else if (std.mem.eql(u8, key, "cpp")) {
-                cpp_name = try parser.readValue();
-            } else if (std.mem.eql(u8, key, "zig")) {
-                zig_name = try parser.readValue();
+            if (std.mem.eql(u8, maybe_key, "c")) {
+                c_name = try self.readValue();
+            } else if (std.mem.eql(u8, maybe_key, "rust")) {
+                rust_name = try self.readValue();
+            } else if (std.mem.eql(u8, maybe_key, "cpp")) {
+                cpp_name = try self.readValue();
+            } else if (std.mem.eql(u8, maybe_key, "zig")) {
+                zig_name = try self.readValue();
             } else {
-                _ = parser.readValue() catch {};
+                _ = self.readValue() catch {};
             }
-
-            parser.skipWhitespaceAndComments();
         }
 
         return .{
@@ -580,111 +651,309 @@ const Parser = struct {
         };
     }
 
-    fn parseConversion(parser: *Parser) !Conversion {
-        var from_steps = std.ArrayList([]const u8).init(parser.allocator);
-        defer from_steps.deinit();
-        var to_steps = std.ArrayList([]const u8).init(parser.allocator);
-        defer to_steps.deinit();
+    fn parseConversion(self: *Parser) !Conversion {
+        var from_steps = std.ArrayList([]const u8).initCapacity(self.allocator, 0) catch unreachable;
+        defer from_steps.deinit(self.allocator);
+        var to_steps = std.ArrayList([]const u8).initCapacity(self.allocator, 0) catch unreachable;
+        defer to_steps.deinit(self.allocator);
 
-        if (parser.peek()) |ch| {
-            if (ch == 'f' or ch == 't') {
-                // Found from_f32_steps or to_f32_steps
-                _ = parser.advance();
-                const section_name = if (ch == 'f') "from" else "to";
-                const section_start = parser.pos;
+        while (try self.readKey()) |maybe_key| {
 
-                parser.skipWhitespaceAndComments();
-
-                // Read steps
-                while (true) : (parser.skipWhitespaceAndComments()) {
-                    if (parser.peek()) |step_ch| {
-                        if (step_ch == '\n' or step_ch == '#' or step_ch == '-' or step_ch == '\r') break;
-                    }
-
-                    const step = try parser.readValue();
-                    if (section_start < parser.pos) {
-                        if (ch == 'f') {
-                            try from_steps.append(step);
+            if (std.mem.eql(u8, maybe_key, "from_f32_steps")) {
+                while (true) {
+                    self.skipWhitespaceAndComments();
+                    if (self.peek()) |ch| {
+                        if (ch == '-' or ch == '\n') {
+                            if (ch == '-') {
+                                _ = self.advance();
+                                self.skipWhitespaceAndComments();
+                            }
+                            const step = try self.readValue();
+                            try from_steps.append(self.allocator, step);
                         } else {
-                            try to_steps.append(step);
+                            break;
                         }
+                    } else {
+                        break;
                     }
-                } else {
-                    break;
                 }
+            } else if (std.mem.eql(u8, maybe_key, "to_f32_steps")) {
+                while (true) {
+                    self.skipWhitespaceAndComments();
+                    if (self.peek()) |ch| {
+                        if (ch == '-' or ch == '\n') {
+                            if (ch == '-') {
+                                _ = self.advance();
+                                self.skipWhitespaceAndComments();
+                            }
+                            const step = try self.readValue();
+                            try to_steps.append(self.allocator, step);
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            } else {
+                _ = self.readValue() catch {};
             }
         }
-    } else {
-        // No conversion steps, use defaults
-        const defaults = &[_][]const u8{
-            "extract_sign_exponent_mantissa",
-            "compute_E = e32 - 127",
-            "compute_e16 = E + 31",
-            "handle_overflow_to_inf",
-            "handle_underflow_to_subnormal_or_zero",
-            "round_mantissa_to_bits_ties_to_even",
-            "decode_fields",
-            "handle_zero_subnormal_inf_nan",
-            "compute_E = e16 - 31",
-            "compute_e32 = E + 127",
-            "build_f32_bits",
-        };
 
-        for (defaults) |step| {
-            try from_steps.append(step);
-            try to_steps.append(step);
+        if (from_steps.items.len == 0) {
+            try from_steps.append(self.allocator, "decode");
+            try from_steps.append(self.allocator, "f32_op");
+            try from_steps.append(self.allocator, "encode");
         }
+
+        if (to_steps.items.len == 0) {
+            try to_steps.append(self.allocator, "decode");
+            try to_steps.append(self.allocator, "f32_value");
+        }
+
+        return .{
+            .from_f32_steps = try from_steps.toOwnedSlice(self.allocator),
+            .to_f32_steps = try to_steps.toOwnedSlice(self.allocator),
+        };
     }
 
-    fn parseTestVectors(parser: *Parser) ![]TestVector {
-        var list = std.ArrayList(TestVector).init(parser.allocator);
-        defer list.deinit();
+    fn parseOpList(self: *Parser) ![]const Op {
+        var list = std.ArrayList(Op).initCapacity(self.allocator, 0) catch unreachable;
+        errdefer list.deinit(self.allocator);
 
-        // Read list items
-        while (true) : (parser.skipWhitespaceAndComments()) {
-            if (parser.peek()) |ch| {
+        while (true) : (self.skipWhitespaceAndComments()) {
+            if (self.peek()) |ch| {
                 if (ch != '-') break;
             } else {
                 break;
             }
+            _ = self.advance(); // Skip '-'
+
+            const op_name = try self.readValue();
+
+            var op = Op{
+                .name = op_name,
+                .inputs = &.{},
+                .outputs = &.{},
+                .algorithm = "",
+                .domain = "",
+                .table = null,
+            };
+
+            while (try self.readKey()) |maybe_key| {
+
+                if (std.mem.eql(u8, maybe_key, "inputs")) {
+                    // Parse list of inputs
+                    var inputs = std.ArrayList([]const u8).initCapacity(self.allocator, 0) catch unreachable;
+                    while (true) : (self.skipWhitespaceAndComments()) {
+                        const peek_ch = self.peek() orelse break;
+                        if (peek_ch == '-' or peek_ch == '\n') break;
+                        if (peek_ch == '-') _ = self.advance();
+                        const input = try self.readValue();
+                        try inputs.append(self.allocator, input);
+                    }
+                    op.inputs = try inputs.toOwnedSlice(self.allocator);
+                } else if (std.mem.eql(u8, maybe_key, "outputs")) {
+                    var outputs = std.ArrayList([]const u8).initCapacity(self.allocator, 0) catch unreachable;
+                    while (true) : (self.skipWhitespaceAndComments()) {
+                        const peek_ch = self.peek() orelse break;
+                        if (peek_ch == '-' or peek_ch == '\n') break;
+                        if (peek_ch == '-') _ = self.advance();
+                        const output = try self.readValue();
+                        try outputs.append(self.allocator, output);
+                    }
+                    op.outputs = try outputs.toOwnedSlice(self.allocator);
+                } else if (std.mem.eql(u8, maybe_key, "output")) {
+                    op.output = try self.readValue();
+                } else if (std.mem.eql(u8, maybe_key, "intermediate_type")) {
+                    op.intermediate_type = try self.readValue();
+                } else if (std.mem.eql(u8, maybe_key, "algorithm")) {
+                    op.algorithm = try self.readValue();
+                } else if (std.mem.eql(u8, maybe_key, "rounding")) {
+                    op.rounding = try self.readValue();
+                } else if (std.mem.eql(u8, maybe_key, "commutative")) {
+                    const val = try self.readValue();
+                    op.commutative = std.mem.eql(u8, val, "true");
+                } else if (std.mem.eql(u8, maybe_key, "associative_approx")) {
+                    const val = try self.readValue();
+                    op.associative_approx = std.mem.eql(u8, val, "true");
+                } else if (std.mem.eql(u8, maybe_key, "single_rounding")) {
+                    op.single_rounding = true;
+                } else if (std.mem.eql(u8, maybe_key, "domain")) {
+                    op.domain = try self.readValue();
+                } else if (std.mem.eql(u8, maybe_key, "table")) {
+                    op.table = try self.parseOpTable();
+                } else if (std.mem.eql(u8, maybe_key, "element_op")) {
+                    op.element_op = try self.readValue();
+                } else if (std.mem.eql(u8, maybe_key, "reduction")) {
+                    op.reduction = try self.readValue();
+                } else if (std.mem.eql(u8, maybe_key, "bounds")) {
+                    op.bounds = try self.readValue();
+                } else {
+                    _ = self.readValue() catch {};
+                }
+
+                self.skipWhitespaceAndComments();
+                if (self.peek()) |ch| {
+                    if (ch == '\n' or ch == '-') break;
+                }
+            }
+
+            try list.append(self.allocator, op);
         }
 
-        if (parser.advance()) == null) break; // EOF
-        _ = parser.advance(); // Skip '-'
+        return list.toOwnedSlice(self.allocator);
+    }
 
-        var vec = TestVector{
-            .name = "",
-            .f32 = 0.0,
-            .raw_hex = "",
-        };
+    fn parseOpTable(self: *Parser) !Op.Table {
+        var entries = std.ArrayList(Op.Entry).initCapacity(self.allocator, 0) catch unreachable;
+        defer entries.deinit(self.allocator);
 
-        while (parser.readKey()) |maybe_key| {
-            const key = maybe_key orelse continue;
-
-            if (std.mem.eql(u8, key, "name")) {
-                vec.name = try parser.readValue();
-            } else if (std.mem.eql(u8, key, "f32")) {
-                vec.f32 = try parser.parseFloat();
-            } else if (std.mem.eql(u8, key, "raw_hex")) {
-                vec.raw_hex = try parser.readValue();
+        while (true) : (self.skipWhitespaceAndComments()) {
+            if (self.peek()) |ch| {
+                if (ch != '"') break;
             } else {
-                _ = parser.readValue() catch {};
+                break;
             }
 
-            parser.skipWhitespaceAndComments();
-            if (parser.peek()) |ch| {
-                if (ch == '\n' or ch == '#') break;
+            const key = try self.readValue(); // "a,b"
+            _ = self.readValue() catch {}; // ':'
+
+            // Parse value or array
+            if (self.peek()) |ch| {
+                if (ch == '[') {
+                    _ = self.advance();
+                    var values = std.ArrayList([]const u8).initCapacity(self.allocator, 0) catch unreachable;
+                    defer values.deinit(self.allocator);
+
+                    while (true) {
+                        const val = try self.readValue();
+                        try values.append(self.allocator, val);
+
+                        self.skipWhitespaceAndComments();
+                        if (self.peek()) |end_ch| {
+                            if (end_ch == ']') {
+                                _ = self.advance();
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+
+                    const value_array = try values.toOwnedSlice(self.allocator);
+                    try entries.append(self.allocator, .{ .key = key, .value = "", .value_array = value_array });
+                } else {
+                    const value = try self.readValue();
+                    try entries.append(self.allocator, .{ .key = key, .value = value });
+                }
             }
 
-            // New vector
-            try list.append(vec);
-            vec = .{
+            self.skipWhitespaceAndComments();
+            if (self.peek()) |ch| {
+                if (ch == '\n' or ch == '-') break;
+            }
+        }
+
+        return .{
+            .entries = try entries.toOwnedSlice(self.allocator),
+        };
+    }
+
+    fn parseComposite(self: *Parser) !Composite {
+        var matmul: ?Composite.MatMul = null;
+        var ternary_conv: ?Composite.TernaryConv = null;
+
+        while (try self.readKey()) |maybe_key| {
+
+            if (std.mem.eql(u8, maybe_key, "matmul")) {
+                matmul = try self.parseMatMul();
+            } else if (std.mem.eql(u8, maybe_key, "ternary_conv")) {
+                ternary_conv = try self.parseTernaryConv();
+            } else {
+                _ = self.readValue() catch {};
+            }
+        }
+
+        return .{
+            .matmul = matmul,
+            .ternary_conv = ternary_conv,
+        };
+    }
+
+    fn parseMatMul(self: *Parser) !Composite.MatMul {
+        _ = self;
+        return .{
+            .A = "TF3[M, K]",
+            .B = "TF3[K, N]",
+            .output = "TF3[M, N]",
+            .accumulator = "i32",
+            .inner_op = "dot",
+            .tiling = .{ .block_m = 16, .block_n = 16, .block_k = 32 },
+        };
+    }
+
+    fn parseTernaryConv(self: *Parser) !Composite.TernaryConv {
+        var sparse: bool = false;
+
+        while (try self.readKey()) |maybe_key| {
+
+            if (std.mem.eql(u8, maybe_key, "sparse")) {
+                const val = try self.readValue();
+                sparse = std.mem.eql(u8, val, "true");
+            } else {
+                _ = self.readValue() catch {};
+            }
+        }
+
+        return .{
+            .input = "TF3[H, W, C_in]",
+            .weights = "TF3[K, K, C_in, C_out]",
+            .output = "TF3[H, W, C_out]",
+            .algorithm = "im2col_matmul",
+            .sparse = sparse,
+        };
+    }
+
+    fn parseTestVectors(self: *Parser) ![]TestVector {
+        var list = std.ArrayList(TestVector).initCapacity(self.allocator, 0) catch unreachable;
+        errdefer list.deinit(self.allocator);
+
+        while (true) : (self.skipWhitespaceAndComments()) {
+            if (self.peek()) |ch| {
+                if (ch != '-') break;
+            } else {
+                break;
+            }
+            _ = self.advance(); // Skip '-'
+
+            var vec = TestVector{
                 .name = "",
                 .f32 = 0.0,
                 .raw_hex = "",
             };
+
+            while (try self.readKey()) |maybe_key| {
+
+                if (std.mem.eql(u8, maybe_key, "name")) {
+                    vec.name = try self.readValue();
+                } else if (std.mem.eql(u8, maybe_key, "f32")) {
+                    vec.f32 = try self.parseFloat();
+                } else if (std.mem.eql(u8, maybe_key, "raw_hex")) {
+                    vec.raw_hex = try self.readValue();
+                } else {
+                    _ = self.readValue() catch {};
+                }
+
+                self.skipWhitespaceAndComments();
+                if (self.peek()) |ch| {
+                    if (ch == '\n' or ch == '-') break;
+                }
+            }
+
+            try list.append(self.allocator, vec);
         }
 
-        return list.toOwnedSlice();
+        return list.toOwnedSlice(self.allocator);
     }
 };
