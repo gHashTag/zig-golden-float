@@ -34,16 +34,27 @@ GF16 pipeline:       fromF32() once → compute f32 → toF32() once
 
 ## 🔥 Zig Pain Points We Solve
 
-| # | Zig Pain Point | Issue | GoldenFloat Fix |
-|---|----------------|-------|-----------------|
-| 1 | f16 = 2,304 SIMD inst/loop | [#19550](https://github.com/ziglang/zig/issues/19550) | GF16 packed u16 = ~56 inst |
-| 2 | std.Random no f16 support | [#23518](https://github.com/ziglang/zig/issues/23518) | `GF16.fromF32(Random.float(f32))` |
-| 3 | @Vector packs bits not bytes | [#18652](https://github.com/ziglang/zig/issues/18652) | GF16 = standard `@Vector(N, u16)` |
-| 4 | f16 range 65,504 — overflow | [#19550](https://github.com/ziglang/zig/issues/19550) | GF16 max ~4.3B (65,645× more) |
-| 5 | f16 underflow 6.1e-5 — vanishing | [#19550](https://github.com/ziglang/zig/issues/19550) | GF16 min ~4.7e-10 (131,072× better) |
-| 6 | No ternary types in stdlib | — | HybridBigInt + PackedTrit |
-| 7 | No VSA / hyperdimensional | — | bind, bundle, similarity 10K-dim |
-| 8 | No φ constants in std.math | — | PHI, PHI_SQ, TRINITY built in |
+> These are **real open issues** in the Zig compiler
+> ([Codeberg](https://codeberg.org/ziglang/zig/issues) +
+> [GitHub legacy](https://github.com/ziglang/zig/issues))
+> that affect ML developers. GoldenFloat fixes every one.
+
+| # | Zig Pain Point | Codeberg | GitHub (legacy) | GoldenFloat Fix |
+|---|----------------|----------|-----------------|-----------------|
+| 1 | **f16 = 2,304 SIMD inst/loop** — vcvtph2ps/vcvtps2ph every op | — | [gh#19550](https://github.com/ziglang/zig/issues/19550) | `GF16` packed u16 = **~56 inst** (40×) |
+| 2 | **@Vector inside packed struct returns wrong values** (0.16.0-dev) | [cb#30233](https://codeberg.org/ziglang/zig/issues/30233) | — | GF16 doesn't use @Vector in packed struct — pure u16 |
+| 3 | **@Vector + struct layout → LLVM crashes** — multiple align bugs | [cb#31629](https://codeberg.org/ziglang/zig/issues/31629) | — | GF16 = `@Vector(N, u16)` without struct alignment issues |
+| 4 | **LLVM non-byte-sized loads/stores** — violates LLVM project guidelines | [cb#31346](https://codeberg.org/ziglang/zig/issues/31346) | — | GF16 = byte-aligned u16 — LLVM loads natively |
+| 5 | **Concatenation of vectors → "expected indexable" error** | [cb#30586](https://codeberg.org/ziglang/zig/issues/30586) | — | VSA vectors = `[N]u16` arrays, not @Vector — no bug |
+| 6 | **Bitshift @Vector → LLVM error** Invalid record | [cb#31116](https://codeberg.org/ziglang/zig/issues/31116) | — | Ternary ops on `HybridBigInt` — no LLVM backend dependency |
+| 7 | **Vector compare → bool instead of bool Vector** | [cb#30908](https://codeberg.org/ziglang/zig/issues/30908) | — | VSA similarity returns `f32` — scalar result |
+| 8 | **Langref vague on packed structs + vectors** — documentation unclear | [cb#30185](https://codeberg.org/ziglang/zig/issues/30185) | — | GF16 = unambiguous `packed struct(u16) { exp: u6, mant: u9, sign: u1 }` |
+| 9 | **Packed struct defaultValue incorrect** | [cb#30145](https://codeberg.org/ziglang/zig/issues/30145) | — | GF16 initializes via `fromF32()` — independent of defaultValue |
+| 10 | **std.math.big.int setFloat() panics** on certain values | [cb#30234](https://codeberg.org/ziglang/zig/issues/30234) | — | `HybridBigInt` — custom impl without std.math.big.int |
+| 11 | **libc pow() behaviour changed** — broken pow() between versions | [cb#31207](https://codeberg.org/ziglang/zig/issues/31207) | — | Sacred math constants — comptime, no libc dependency |
+| 12 | **std.Random no f16 support** | — | [gh#23518](https://github.com/ziglang/zig/issues/23518) | `GF16.fromF32(random.float(f32))` — works today |
+| 13 | **findSentinel SIMD limited by pointer provenance** — Andrew Kelley (Urgent!) | [cb#31630](https://codeberg.org/ziglang/zig/issues/31630) | — | VSA search via cosine similarity — not dependent on sentinel |
+| 14 | **evex512 ABI changes** without feature enabled | [cb#30907](https://codeberg.org/ziglang/zig/issues/30907) | — | GF16 doesn't require AVX-512 — works on any x86 |
 
 ---
 
