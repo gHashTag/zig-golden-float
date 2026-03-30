@@ -1,21 +1,30 @@
 # TF3-9 Format Specification (Source of Truth)
 # Ternary Float: 3-trit exponent, 9-trit mantissa for ternary neural networks
+# Level 0-2: Format + Ops + Composite
 
 format: TF3_9
 version: 1
+level: 2  # Format + Operations + Composite
 
 storage:
   bits: 16
   align_bytes: 2
   endianness: little
   underlying: u16
-  encoding: balanced_ternary  # trits encoded as 2 bits each
+  encoding: balanced_ternary
+
+trit_encoding:
+  minus_one: 0b10
+  zero: 0b00
+  plus_one: 0b01
+  invalid: 0b11
+  bits_per_trit: 2
 
 fields:
   - name: sign
     bits: 1
     position_msb: 15
-    trit_value: true  # {-1, 0, +1}
+    trit_value: true
   - name: exponent
     bits: 6
     position_msb: 14
@@ -38,9 +47,6 @@ exponent:
     zero:
       exponent: 0
       mantissa: 0
-    subnormal:
-      exponent: 0
-      mantissa_nonzero: true
     inf:
       exponent: 13
       mantissa: 0
@@ -50,22 +56,22 @@ exponent:
 
 ternary:
   trit_values: [-1, 0, +1]
-  encoding: balanced  # -1=10, 0=00, +1=01 (2-bit per trit)
+  encoding: balanced
   bits_per_trit: 2
   total_trits: 13
 
 rounding:
-  mode: ties_to_zero  # Ternary rounding differs from binary
+  mode: ties_to_zero
   source_type: f32
   overflow_policy: saturate_to_inf
   underflow_policy: flush_to_zero
 
 phi:
-  total_bits: 12  # exponent trits + mantissa trits
+  total_bits: 12
   exponent_trits: 3
   mantissa_trits: 9
-  target_ratio: 0.6180339  # 1/phi
-  ratio: 0.25  # 3/12
+  target_ratio: 0.6180339
+  ratio: 0.25
   distance: 0.3680339
 
 vsa:
@@ -77,25 +83,96 @@ vsa:
 abi:
   c:
     typename: uint16_t
+    trit_typename: int8_t
   rust:
     typename: u16
-  cpp:
-    typename: uint16_t
+    trit_typename: i8
   zig:
     typename: u16
+    trit_typename: i8
 
 conversion:
   from_f32_steps:
     - extract_sign_exponent_mantissa
     - quantize_to_ternary
     - encode_trits_to_bits
-    - handle_overflow_to_inf
-    - handle_underflow_to_zero
   to_f32_steps:
     - decode_bits_to_trits
-    - handle_special_values
     - compute_ternary_value
     - build_f32_bits
+
+# Level 1: Operations
+
+ops:
+  add:
+    inputs: [TF3, TF3]
+    output: TF3
+    intermediate: f32
+    algorithm: decode-both → f32-add → encode-back
+    rounding: ties_to_zero
+
+  mul:
+    inputs: [TF3, TF3]
+    output: TF3
+    intermediate: f32
+    algorithm: decode-both → f32-mul → encode-back
+
+  trit_mul:
+    inputs: [trit, trit]
+    output: trit
+    lookup_table: true
+    table:
+      - -1 * -1 = +1
+      - -1 * 0 = 0
+      - -1 * +1 = -1
+      - 0 * -1 = 0
+      - 0 * 0 = 0
+      - 0 * +1 = 0
+      - +1 * -1 = -1
+      - +1 * 0 = 0
+      - +1 * +1 = +1
+
+  dot:
+    inputs: [TF3[N], TF3[N]]
+    output: i32
+    algorithm: sum-of-trit-muls
+    note: each a*b ∈ {-1, 0, +1}, sum ∈ [-N, +N]
+
+# Level 2: Composite operations
+
+composite:
+  matmul:
+    inputs:
+      A: TF3[M, K]
+      B: TF3[K, N]
+    output: TF3[M, N]
+    accumulator: i32
+    inner_op: dot_product
+    tiling:
+      block_m: 16
+      block_n: 16
+      block_k: 32
+
+  ternary_conv:
+    inputs:
+      input: TF3[H, W, C_in]
+      weights: TF3[K, K, C_in, C_out]
+    output: TF3[H, W, C_out]
+    algorithm: im2col + matmul
+    sparse: true  # weights are ternary (-1, 0, +1)
+
+# Level 4: Hardware mapping (preview)
+
+hardware:
+  target: xc7a100t
+  clock_mhz: 200
+  pipeline_stages: 2
+  stage_1: trit_decode
+  stage_2: dot_product_accumulate
+  resources:
+    luts: ~50
+    dsps: 0
+    bram: 0
 
 test_vectors:
   - name: zero
