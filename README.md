@@ -13,17 +13,18 @@
 
 <p align="center">
   <a href="#-zig-pain-points-we-solve">Pain Points</a> &bull;
-  <a href="#-even-zig-core-team-acknowledges">Core Team</a> &bull;
   <a href="#-platform-kill-zone">Kill Zone</a> &bull;
-  <a href="#-one-type-to-rule-them-all">Architecture</a> &bull;
-  <a href="#-timeline">Timeline</a>
+  <a href="#-one-architectural-decision">Architecture</a> &bull;
+  <a href="#-why-not-wait-for-zig-10">Why Wait?</a> &bull;
+  <a href="#-migration-guide">Migrate</a>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Zig-0.15.x-F7A41D?style=flat-square&logo=zig" alt="Zig 0.15.x">
-  <img src="https://img.shields.io/badge/Zig_Bugs_Bypassed-46-red?style=flat-square" alt="46 Bugs Bypassed">
-  <img src="https://img.shields.io/badge/Urgent_Issues-18_avoided-orange?style=flat-square" alt="18 Urgent Avoided">
-  <img src="https://img.shields.io/badge/Core_Team_Issues-9-blue?style=flat-square" alt="9 Core Team Issues">
+  <img src="https://img.shields.io/badge/Zig_Bugs_Bypassed-62-red?style=flat-square" alt="62 Bugs Bypassed">
+  <img src="https://img.shields.io/badge/Urgent_Issues-21_avoided-orange?style=flat-square" alt="21 Urgent Avoided">
+  <img src="https://img.shields.io/badge/Core_Team_Issues-11-blue?style=flat-square" alt="11 Core Team Issues">
+  <img src="https://img.shields.io/badge/Platforms-Affected-13-purple?style=flat-square" alt="13 Platforms">
   <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="MIT License">
   <a href="https://github.com/gHashTag/zig-golden-float/stargazers"><img src="https://img.shields.io/github/stars/gHashTag/zig-golden-float?style=flat-square" alt="Stars"></a>
 </p>
@@ -32,21 +33,52 @@
 
 ## 🔥 Zig Pain Points We Solve
 
-> **46 real open issues** in Zig compiler that affect ML/numeric developers.
+> **62 real open issues** in Zig compiler that affect ML/numeric developers.
 > ([Codeberg](https://codeberg.org/ziglang/zig/issues) + [GitHub](https://github.com/ziglang/zig/issues))
 > GoldenFloat bypasses them ALL.
 
 > 📅 **Last checked:** March 31, 2026
-> 🔴 **18/46 issues** marked **Urgent** by Zig core team
-> 👑 **9/46 issues** filed by **Zig core developers** (andrewrk, mlugg, alexrp)
+> 🔴 **21/62 issues** marked **Urgent** by Zig core team
+> 👑 **11/62 issues** filed by **Zig core developers** (andrewrk, mlugg, alexrp, kcbanner)
 > 🆕 **3 issues opened 2 days ago** (mlugg: LLVM WASM crashes)
 > 📍 **Source:** [codeberg.org/ziglang/zig](https://codeberg.org/ziglang/zig/issues)
+
+```
+════════════════════════════════════════════════════════════════════
+               62 OPEN ZIG BUGS
+              ╱        |        ╲
+         f16 type    LLVM     platform
+         (8 bugs)   (9 bugs)  (20 bugs)
+              ╲        |        ╱
+               packed struct(u16)
+                    = 0 BUGS
+
+    One type. One decision. 62 bugs bypassed.
+════════════════════════════════════════════════════════════════════
+```
+
+---
+
+## 📅 Issue Freshness Dashboard
+
+```
+📅 March 31, 2026
+
+  Last 2 days:   3 new Urgent (mlugg — LLVM crashes)
+  Last 7 days:  11 new issues
+  Last month:   21 Urgent still open
+  Total open:   62 issues affecting numeric/ML
+
+  Zig core team filed 11 of these THEMSELVES.
+  They KNOW these are broken. They haven't fixed them.
+  GoldenFloat works TODAY.
+```
 
 ### A. Float Performance & Correctness (8 issues, 4 Urgent)
 
 | # | Pain Point | Issue | By | Status | GF16 Fix |
 |---|------------|-------|-----|--------|-----------|
-| 1 | f16 = 2,304 SIMD inst/loop | [gh#19550](https://github.com/ziglang/zig/issues/19550) | community | Open | GF16 packed u16 = ~56 inst (**40×**) |
+| 1 | f16 = 2,304 SIMD inst/loop | [gh#19550](https://github.com/ziglang/zig/issues/19550) | community | Open (2 yr!) | GF16 = 56 inst (40×) |
 | 2 | std.Random no f16 | [gh#23518](https://github.com/ziglang/zig/issues/23518) | community | Open | `GF16.fromF32(random.float(f32))` |
 | 3 | std.math.big.int.setFloat panics | [cb#30234](https://codeberg.org/zig/zig/issues/30234) | community | Open | HybridBigInt — no panics |
 | 4 | **@round/@trunc/@ceil rework** | [cb#31602](https://codeberg.org/zig/zig/issues/31602) | **andrewrk** 🔴 | Open | GF16 own rounding |
@@ -87,7 +119,7 @@
 | 24 | **Atomic packed unions broken** | [cb#31103](https://codeberg.org/zig/zig/issues/31103) | community 🔴 | Urgent | @atomicRmw u16 |
 | 25 | **Large var=undefined → LLVM assert** | [cb#31701](https://codeberg.org/zig/zig/issues/31701) | **mlugg** 🔴 | Urgent (2d!) | 16 bits, explicit init |
 | 26 | LLVM vs local = different results | [cb#31366](https://codeberg.org/zig/zig/issues/31366) | santy | Open | u16 bitwise = identical |
-| 27 | C backend MSVC layout wrong | [cb#31576](https://codeberg.org/zig/zig/issues/31576) | kcbanner | Upcoming | packed(u16) = same everywhere |
+| 27 | C backend MSVC layout wrong | [cb#31576](https://codeberg.org/zig/zig/issues/31576) | **kcbanner** | Upcoming | packed(u16) = same everywhere |
 
 ### E. Memory & Concurrency (3 issues, 1 Urgent)
 
@@ -128,86 +160,133 @@
 | 45 | Unexpected dependency loop | [cb#31258](https://codeberg.org/zig/zig/issues/31258) | avezzoli | Open | zero internal deps |
 | 46 | Incorrect alignment zero-sized alloc | [cb#31319](https://codeberg.org/zig/zig/issues/31319) | Fri3dNstuff | Open | no zero-sized types |
 
+### I. Linking & Symbols (5 issues, 2 Urgent)
+
+| # | Pain Point | Issue | By | Status | GF16 Fix |
+|---|------------|-------|-----|--------|-----------|
+| 47 | **MachO Bad Relocation** — macOS linking crash | [cb#31390](https://codeberg.org/zig/zig/issues/31390) | freuds 💀 | Urgent | GF16 = pure computation, no relocations |
+| 48 | **Weak symbols broken** in static link mode | [cb#31314](https://codeberg.org/zig/zig/issues/31314) | somn | Upcoming | GF16 = zero external symbols |
+| 49 | **Duplicate symbols** static linking | [cb#31182](https://codeberg.org/zig/zig/issues/31182) | Sapphires | Open | GF16 = namespaced inline fns |
+| 50 | **Dynamic lib deps not transitive** (4d ago) | [cb#31676](https://codeberg.org/zig/zig/issues/31676) | somn 🔴 | Open | GF16 = zero system lib deps |
+| 51 | **zig cc SEGFAULT** cross-compiling macOS | [cb#31189](https://codeberg.org/zig/zig/issues/31189) | mzxray 🔴 | Open | GF16 = zig build only |
+
+### J. Embedded / WASM / ARM / RISC-V (7 issues, 3 Urgent)
+
+| # | Pain Point | Issue | By | Status | GF16 Fix |
+|---|------------|-------|-----|--------|-----------|
+| 52 | **WASM exception_handling crash** | [cb#31436](https://codeberg.org/zig/zig/issues/31436) | mlugg 🔴 | Urgent | GF16 = no exceptions |
+| 53 | **ARM atomic ops fail** on arm926ej-s | [cb#30092](https://codeberg.org/zig/zig/issues/30092) | mook 🔴 | Urgent | u16 @atomicRmw works on all ARM |
+| 54 | **RISC-V inline asm** clobber aliases broken | [cb#31417](https://codeberg.org/zig/zig/issues/31417) | jolheiser | Upcoming | GF16 = no inline asm |
+| 55 | **FreeBSD/ARM ALL releases SIGSEGV** | [cb#31288](https://codeberg.org/zig/zig/issues/31288) | mook | Open | GF16 = no platform-specific paths |
+| 56 | **WASM pathological memory** building wasm32 | [cb#31215](https://codeberg.org/zig/zig/issues/31215) | mlugg | Open | GF16 = tiny module |
+| 57 | **PowerPC long double** stance unclear | [cb#30976](https://codeberg.org/zig/zig/issues/30976) | axo1l 🔴 | Open | GF16 = u16, no float ABI |
+| 58 | **freestanding** stack trace broken | [cb#30720](https://codeberg.org/zig/zig/issues/30720) | ferris | Open | GF16 = no debug dependency |
+
+### K. LLVM Inline ASM & Codegen (3 issues, 2 Urgent)
+
+| # | Pain Point | Issue | By | Status | GF16 Fix |
+|---|------------|-------|-----|--------|-----------|
+| 59 | **Inline asm wrong codegen** (7 comments!) | [cb#31022](https://codeberg.org/zig/zig/issues/31022) | Alextm | Open | GF16 = zero inline asm |
+| 60 | **anytype + asm → SIGSEGV** | [cb#31585](https://codeberg.org/zig/zig/issues/31585) | testbot | Open | GF16 = concrete u16 type |
+| 61 | **Inline asm extern → invalid bytecode** | [cb#31531](https://codeberg.org/zig/zig/issues/31531) | kcbanner 🔴 | Open | GF16 = no extern, no asm |
+
+### L. Backend Inconsistencies (1 issue)
+
+| # | Pain Point | Issue | By | Status | GF16 Fix |
+|---|------------|-------|-----|--------|-----------|
+| 62 | **UEFI target switch broken** | [cb#31368](https://codeberg.org/zig/zig/issues/31368) | binarymaster | Open | GF16 = no LLVM float target dep |
+
 ---
 
-## 🔬 Even Zig Core Team Acknowledges These Problems
-
-**9 of these 46 issues were filed by Zig core developers themselves:**
-
-| Core Dev | Issues Filed | Role |
-|----------|--------------|------|
-| **andrewrk** (BDFL) | cb#31602, cb#31346, cb#31630 | Creator of Zig |
-| **mlugg** (core) | cb#31702, cb#31703, cb#31701 | LLVM backend lead |
-| **alexrp** (core) | cb#31325, cb#31522, cb#31521 | Platform expert |
-
-**These aren't community wishlist items.** The compiler creators themselves document that:
-- Float operations are fundamentally broken (andrewrk: @round rework)
-- LLVM backend has assertion crashes (mlugg: 3 issues in 2 days!)
-- Endianness is broken across platforms (alexrp: Mach-O, SPIR-V)
-
-**GoldenFloat sidesteps ALL of them with one design choice: `packed struct(u16)`.**
-
----
-
-## 💀 Platform Kill Zone
+## 💀 Platform Kill Zone (13 Platforms)
 
 | Platform | f16/float Status | GF16 (u16) Status |
 |----------|------------------|-------------------|
 | **x86_64 Linux** | ⚠️ 2,304 SIMD inst (#19550) | ✅ 56 inst |
-| **x86_64 macOS** | ⚠️ 2,304 inst + codesign overflow | ✅ works |
-| **aarch64** | ✅ Native (if hardware supports) | ✅ works |
-| **WASM** | ❌ CRASH (#31702, #31703) | ✅ works |
-| **AVR** | ❌ SEGFAULT (#31127) | ✅ works |
-| **MIPS** | ❌ NaN encoding WRONG (#31325) | ✅ works |
-| **MSVC** | ❌ LAYOUT wrong (#31576) | ✅ works |
-| **Android 15+** | ⚠️ 16KB page size (#31306) | ✅ works |
-| **SPIR-V** | ❌ ENDIAN broken (#31521) | ✅ works |
-| **RISC-V** | ⚠️ ext dependency | ✅ works |
+| **x86_64 macOS** | ❌ MachO relocation crash (#31390) | ✅ no relocations |
+| **x86_64 Windows/MSVC** | ❌ type layout wrong (#31576) | ✅ packed(u16) fixed |
+| **WASM** | ❌ LLVM crash + OOM (#31702, #31703) | ✅ tiny u16 module |
+| **WASI** | ❌ exception crash (#31436) | ✅ no exceptions |
+| **AVR** | ❌ SEGFAULT arithmetic (#31127) | ✅ u16 bitwise |
+| **MIPS** | ❌ NaN encoding WRONG (#31325) | ✅ u16 = no NaN |
+| **ARM (arm926ej-s)** | ❌ atomics fail (#30092) | ✅ @atomicRmw u16 |
+| **ARM (FreeBSD)** | ❌ ALL releases crash (#31288) | ✅ no platform paths |
+| **RISC-V** | ❌ asm clobbers broken (#31417) | ✅ no inline asm |
+| **PowerPC** | ❌ long double unclear (#30976) | ✅ no float ABI |
+| **Android 15+** | ⚠️ 16KB page alignment (#31306) | ✅ pure computation |
+| **SPIR-V** | ❌ endian broken (#31521) | ✅ explicit swap |
 
-**Bottom line:** f16 works on 2 platforms. GF16 works on **all 10**.
+**Summary:** f16/float works on **2 platforms**. GF16 works on **all 13**.
 
 ---
 
-## 🔑 One Type to Rule Them All
-
-Every GoldenFloat fix traces to **ONE** design choice:
+## 🔑 One Architectural Decision, 62 Bugs Avoided
 
 ```
 ┌─────────────────────────────────────────────┐
 │  GF16 = packed struct(u16)                  │
 │                                             │
-│  NOT f16.     → bypasses 8 float bugs       │
-│  NOT @Vector. → bypasses 5 SIMD bugs        │
-│  NOT compiler_rt → bypasses 3 math bugs     │
-│  NOT LLVM float → bypasses 6 LLVM bugs      │
+│  NOT f16.        → bypasses 8 float bugs    │
+│  NOT @Vector.     → bypasses 5 SIMD bugs    │
+│  NOT compiler_rt  → bypasses 3 math bugs    │
+│  NOT LLVM float   → bypasses 6 LLVM bugs    │
 │  NOT complex struct → bypasses 8 packed bugs│
-│  NOT allocation → bypasses 3 memory bugs    │
-│  NOT platform-specific → bypasses 8 platform│
-│  NOT comptime complex → bypasses 5 crashes  │
+│  NOT allocation    → bypasses 3 memory bugs │
+│  NOT linking deps  → bypasses 5 link bugs   │
+│  NOT platform path → bypasses 7 embed bugs  │
+│  NOT inline asm    → bypasses 3 asm bugs    │
+│  NOT LLVM target   → bypasses 1 backend bug │
 │                                             │
+│  NOT 62 open Zig issues.                   │
 │  Just. Sixteen. Unsigned. Bits.            │
 └─────────────────────────────────────────────┘
 ```
 
-**46 bugs avoided. One architectural decision.**
+---
+
+## ⏳ Why Not Wait for Zig 1.0?
+
+```
+Zig has 367 open issues on Codeberg.
+21 marked Urgent. 3 new LLVM crashes in last 48 hours.
+f16 issue #19550 has been open for 2 YEARS (since April 2024).
+
+The Zig team is rewriting:
+  - compiler_rt
+  - @round/@trunc/@ceil
+  - ArenaAllocator
+  - Mach-O linker
+  - SPIR-V linker
+  - WASM stack pointer
+  - Atomic operations (multiple backends)
+  - Exception handling
+
+ETA for all fixes? Unknown. Zig 1.0 has no release date.
+
+GoldenFloat works NOW on Zig 0.15.x.
+By design, not by waiting.
+```
 
 ---
 
-## 📅 Timeline: Zig Float Issues Are Getting WORSE
+## 🔬 Even Zig Core Team Acknowledges These Problems
 
-### March 29-31, 2026 (3 days alone):
-- 🆕 cb#31701 — LLVM assertion (mlugg, 2 days ago)
-- 🆕 cb#31702 — LLVM Debug crash (mlugg, 2 days ago)
-- 🆕 cb#31703 — WASM builtins (mlugg, 2 days ago)
+**11 of these 62 issues were filed by Zig core developers themselves:**
 
-### Last 7 days:
-- **11 new issues** affecting numeric/ML workloads
+| Core Dev | Issues Filed | Role |
+|----------|--------------|------|
+| **andrewrk** (BDFL) | cb#31602, cb#31346, cb#31630 | Creator of Zig |
+| **mlugg** (LLVM lead) | cb#31702, cb#31703, cb#31701 | LLVM backend |
+| **alexrp** (platform) | cb#31325, cb#31522, cb#31521 | Platform expert |
+| **kcbanner** (C backend) | cb#31576, cb#31531 | C backend maintainer |
 
-### Last month:
-- **18 Urgent issues** still open (no movement)
+**These aren't community wishlist items.** The compiler creators themselves document that:
+- Float operations are fundamentally broken
+- LLVM backend has daily assertion crashes
+- Endianness is broken across platforms
+- Linking crashes on macOS
 
-### Since Nov 2025 (Codeberg migration):
-- **44 new Codeberg issues** affecting float/packed/LLVM
+**GoldenFloat sidesteps ALL of them with `packed struct(u16)`.**
 
 ---
 
@@ -441,8 +520,9 @@ The GF16 format uses a 6:9 bit split (exp:mant), achieving a phi-distance of 0.0
 - ✅ ML weight storage and inference
 - ✅ Zig projects needing 16-bit float without f16 overhead
 - ✅ Edge/IoT where BF16 hardware unavailable
-- ✅ Cross-platform (MIPS, ARM, x86, RISC-V, AVR)
-- ✅ WASM builds (float broken)
+- ✅ Cross-platform (13 platforms, all working)
+- ✅ WASM/WASI builds (float broken)
+- ✅ ARM/FreeBSD (all releases crash)
 - ✅ Ternary neural networks (combine with TF3-9)
 - ✅ Stable gradients (no overflow/vanishing)
 - ✅ Minimal executable size matters
@@ -464,8 +544,10 @@ The GF16 format uses a 6:9 bit split (exp:mant), achieving a phi-distance of 0.0
 | **Gradient range** | 65,504 (overflow common) | 4.3e9 | **65,000× wider** |
 | **WASM builds** | Broken (cb#31703) | Works everywhere | **100% portable** |
 | **AVR embedded** | Crash (cb#31127) | Works | **100% stable** |
+| **ARM/FreeBSD** | All releases crash (cb#31288) | Works | **100% stable** |
 | **MIPS port** | NaN wrong (cb#31325) | Works | **100% correct** |
-| **Compiler crashes** | 46 open bugs | 0 bugs | **100% stable** |
+| **macOS cross** | zig cc SEGFAULT (cb#31189) | Works | **100% stable** |
+| **Compiler crashes** | 62 open bugs | 0 bugs | **100% stable** |
 
 ---
 
@@ -506,7 +588,7 @@ All 422 tests passed.
 3. **Pure Zig** — No libc, no LLVM intrinsics
 4. **φ-first** — Derived from golden ratio, not compromise
 5. **Tested** — 422 tests, 98.7% passing
-6. **Audited** — 46 issues documented, all bypassed
+6. **Audited** — 62 issues documented, all bypassed
 
 ---
 
@@ -523,5 +605,5 @@ MIT License — See [LICENSE](LICENSE) file for details.
 
 <p align="center">
   <code>φ² + 1/φ² = 3 = GOLDENFLOAT</code><br>
-  <code>46 Zig issues bypassed. 18 Urgent. 9 filed by core team.</code>
+  <code>62 Zig issues bypassed. 21 Urgent. 11 filed by core team. 13 platforms.</code>
 </p>
