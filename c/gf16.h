@@ -34,10 +34,11 @@ typedef struct {
 #define GF16_EXP(g)     (((g).raw >> 9)  & 0x3F)
 #define GF16_MANT(g)    ((g).raw         & 0x1FF)
 
-/* Special values */
-#define GF16_PINF       ((gf16_t){.raw = 0x7C00})  /* +Infinity */
-#define GF16_NINF       ((gf16_t){.raw = 0xFC00})  /* -Infinity */
-#define GF16_NAN        ((gf16_t){.raw = 0x7C01})  /* Quiet NaN */
+/* Special values (GF16: 6-bit exp, 9-bit mantissa) */
+/* Exponent field = 0x3F (63) for special values */
+#define GF16_PINF       ((gf16_t){.raw = 0x7E00})  /* +Infinity (exp=0x3F, mant=0) */
+#define GF16_NINF       ((gf16_t){.raw = 0xFE00})  /* -Infinity (sign=1, exp=0x3F, mant=0) */
+#define GF16_NAN        ((gf16_t){.raw = 0x7E01})  /* Quiet NaN (exp=0x3F, mant=1) */
 #define GF16_PZERO     ((gf16_t){.raw = 0x0000})  /* +0.0 */
 #define GF16_NZERO     ((gf16_t){.raw = 0x8000})  /* -0.0 */
 

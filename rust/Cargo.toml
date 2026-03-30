@@ -21,6 +21,7 @@ path = "src/lib.rs"
 default = ["std"]
 std = []
 no_std = []
+c-ffi = []  # Enable C FFI bindings (requires c/gf16.c to be compiled)
 
 [package.metadata.docs.rs]
 all-features = false

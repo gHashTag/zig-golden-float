@@ -1,1 +1,4 @@
 .zig-cache/
+rust/target/
+rust/*.rs
+rust/test_nan
