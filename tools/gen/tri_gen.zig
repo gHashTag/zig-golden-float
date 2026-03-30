@@ -1,13 +1,14 @@
 //! TRI Format Code Generator
 //!
-//! Reads .tri spec files and generates language implementations.
+//! Reads .tri JSON spec files and generates language implementations.
 //!
-//! Usage: zig run tri_gen --lang [all|c|rust|zig|cpp]
+//! Usage: zig run tri_gen --lang [all|c|rust|zig|cpp] [--dry-run] [--output-root PATH]
 
 const std = @import("std");
 const reader = @import("tri_reader.zig");
 
 const stdout = std.io.getStdOut();
+const stderr = std.io.getStdErr();
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{});
@@ -20,10 +21,14 @@ pub fn main() !void {
     // Parse arguments
     var lang: []const u8 = "all";
     var input: []const u8 = "specs/gf16.tri";
+    var output_root: []const u8 = ".";
+    var dry_run: bool = false;
+    var verbose: bool = false;
 
     var i: usize = 1;
     while (i < args.len) : (i += 1) {
         const arg = args[i];
+
         if (std.mem.eql(u8, arg, "--lang") or std.mem.eql(u8, arg, "-l")) {
             if (i + 1 < args.len) {
                 lang = args[i + 1];
@@ -34,6 +39,15 @@ pub fn main() !void {
                 input = args[i + 1];
                 i += 1;
             }
+        } else if (std.mem.eql(u8, arg, "--output-root") or std.mem.eql(u8, arg, "-o")) {
+            if (i + 1 < args.len) {
+                output_root = args[i + 1];
+                i += 1;
+            }
+        } else if (std.mem.eql(u8, arg, "--dry-run") or std.mem.eql(u8, arg, "-n")) {
+            dry_run = true;
+        } else if (std.mem.eql(u8, arg, "--verbose") or std.mem.eql(u8, arg, "-v")) {
+            verbose = true;
         } else if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
             try printHelp();
             std.process.exit(0);
@@ -44,23 +58,46 @@ pub fn main() !void {
     const spec = try reader.load(alloc, input);
     defer spec.deinit(alloc);
 
+    if (verbose) {
+        try stderr.writer().print("Loaded spec: {s} v{}\n", .{ spec.format, spec.version });
+        try stderr.writer().print("  Fields: {d}\n", .{spec.fields.len});
+        try stderr.writer().print("  Test vectors: {d}\n", .{spec.test_vectors.len});
+    }
+
+    // Setup output directory
+    var out_dir = if (dry_run)
+        null
+    else
+        try std.fs.cwd().makeOpenPath(output_root, .{});
+
     // Generate based on language
     const generate_all = std.mem.eql(u8, lang, "all");
+    var generated_count: usize = 0;
 
     if (generate_all or std.mem.eql(u8, lang, "c")) {
-        try genC(alloc, spec);
+        try genC(alloc, spec, out_dir, dry_run, verbose);
+        generated_count += 2;
     }
 
     if (generate_all or std.mem.eql(u8, lang, "rust")) {
-        try genRust(alloc, spec);
+        try genRust(alloc, spec, out_dir, dry_run, verbose);
+        generated_count += 1;
     }
 
     if (generate_all or std.mem.eql(u8, lang, "zig")) {
-        try genZig(alloc, spec);
+        try genZig(alloc, spec, out_dir, dry_run, verbose);
+        generated_count += 1;
     }
 
     if (generate_all or std.mem.eql(u8, lang, "cpp")) {
-        try genCpp(alloc, spec);
+        try genCpp(alloc, spec, out_dir, dry_run, verbose);
+        generated_count += 1;
+    }
+
+    if (dry_run) {
+        try stdout.writeAll("Dry-run complete (no files written)\n");
+    } else {
+        try stdout.writer().print("Generated {d} file(s)\n", .{generated_count});
     }
 }
 
@@ -68,20 +105,53 @@ fn printHelp() !void {
     try stdout.writeAll(
         \\TRI Format Code Generator
         \\
-        \\Usage: zig run tri_gen --lang <all|c|rust|zig|cpp> [--input <path>]
+        \\Usage: zig run tri_gen [OPTIONS]
         \\
         \\Options:
-        \\  --lang, -l      Language to generate (default: all)
-        \\  --input, -i     Input spec file (default: specs/gf16.tri)
+        \\  --lang, -l      Language to generate (all|c|rust|zig|cpp) [default: all]
+        \\  --input, -i     Input spec file [default: specs/gf16.tri]
+        \\  --output-root, -o Output directory [default: .]
+        \\  --dry-run, -n   Show what would be generated without writing files
+        \\  --verbose, -v   Show detailed progress
         \\  --help, -h      Show this help
+        \\
+        \\Examples:
+        \\  zig run tri_gen --lang all
+        \\  zig run tri_gen --lang rust --output-root ./output
+        \\  zig run tri_gen --dry-run --verbose
         \\
     );
 }
 
-fn genC(alloc: std.mem.Allocator, spec: reader.Spec) !void {
+fn writeFile(
+    maybe_dir: ?std.fs.Dir,
+    path: []const u8,
+    content: []const u8,
+    dry_run: bool,
+    verbose: bool,
+) !void {
+    if (dry_run) {
+        try stdout.writer().print("  [DRY] {s} ({d} bytes)\n", .{ path, content.len });
+        return;
+    }
+
+    const dir = maybe_dir orelse std.fs.cwd();
+    try dir.writeFile(path, content);
+
+    if (verbose) {
+        try stdout.writer().print("  {s} ({d} bytes)\n", .{ path, content.len });
+    }
+}
+
+fn genC(
+    alloc: std.mem.Allocator,
+    spec: reader.Spec,
+    maybe_dir: ?std.fs.Dir,
+    dry_run: bool,
+    verbose: bool,
+) !void {
     _ = alloc;
 
-    // Generate header
     const h_output =
         \\/**
  * GF16: φ-optimized 16-bit floating point
@@ -129,10 +199,6 @@ float gf16_to_f32(gf16_t g);
 #endif /* GF16_H */
     ;
 
-    try std.fs.cwd().writeFile("c/gf16.h", h_output);
-    try stdout.writeAll("Generated c/gf16.h\n");
-
-    // Generate source
     const c_output =
         \\/**
  * GF16: φ-optimized 16-bit floating point
@@ -198,11 +264,17 @@ float gf16_to_f32(gf16_t g) {
 }
     ;
 
-    try std.fs.cwd().writeFile("c/gf16.c", c_output);
-    try stdout.writeAll("Generated c/gf16.c\n");
+    try writeFile(maybe_dir, "c/gf16.h", h_output, dry_run, verbose);
+    try writeFile(maybe_dir, "c/gf16.c", c_output, dry_run, verbose);
 }
 
-fn genRust(alloc: std.mem.Allocator, spec: reader.Spec) !void {
+fn genRust(
+    alloc: std.mem.Allocator,
+    spec: reader.Spec,
+    maybe_dir: ?std.fs.Dir,
+    dry_run: bool,
+    verbose: bool,
+) !void {
     _ = alloc;
 
     const output =
@@ -345,11 +417,16 @@ impl From<Gf16> for f32 {
 }
     ;
 
-    try std.fs.cwd().writeFile("rust/src/lib.rs", output);
-    try stdout.writeAll("Generated rust/src/lib.rs\n");
+    try writeFile(maybe_dir, "rust/src/lib.rs", output, dry_run, verbose);
 }
 
-fn genZig(alloc: std.mem.Allocator, spec: reader.Spec) !void {
+fn genZig(
+    alloc: std.mem.Allocator,
+    spec: reader.Spec,
+    maybe_dir: ?std.fs.Dir,
+    dry_run: bool,
+    verbose: bool,
+) !void {
     _ = alloc;
 
     const output =
@@ -424,11 +501,16 @@ fn genZig(alloc: std.mem.Allocator, spec: reader.Spec) !void {
         }
     ;
 
-    try std.fs.cwd().writeFile("zig/src/formats/gf16.zig", output);
-    try stdout.writeAll("Generated zig/src/formats/gf16.zig\n");
+    try writeFile(maybe_dir, "zig/src/formats/gf16.zig", output, dry_run, verbose);
 }
 
-fn genCpp(alloc: std.mem.Allocator, spec: reader.Spec) !void {
+fn genCpp(
+    alloc: std.mem.Allocator,
+    spec: reader.Spec,
+    maybe_dir: ?std.fs.Dir,
+    dry_run: bool,
+    verbose: bool,
+) !void {
     _ = alloc;
 
     const output =
@@ -504,6 +586,5 @@ struct GF16 {
 } // namespace gf16
     ;
 
-    try std.fs.cwd().writeFile("cpp/gf16.hpp", output);
-    try stdout.writeAll("Generated cpp/gf16.hpp\n");
+    try writeFile(maybe_dir, "cpp/gf16.hpp", output, dry_run, verbose);
 }
