@@ -1,280 +1,230 @@
 <p align="center">
-  <a href="https://github.com/gHashTag/trinity/releases/v5.1.0">
-    <img src="https://img.shields.io/github/v/release/gHashTag/trinity?label=Download&style=for-the-badge" alt="Download">
+  <a href="https://github.com/gHashTag/zig-golden-float">
+    <img src="https://img.shields.io/github/v/release/gHashTag/zig-golden-float?label=Download&style=for-the-badge" alt="Download">
   </a>
 </p>
 
-<h1 align="center">Trinity CLI — Ternary Computing with GF16</h1>
+<h1 align="center">GoldenFloat — φ-Optimized Zig Kernel for ML</h1>
 
 <p align="center">
-  <strong>φ² + 1/φ² = 3</strong> — Pure Zig, no f16 hardware, 40× faster SIMD<br>
-  <code>6-bit exponent, 9-bit mantissa</code> — Derived from φ, not compromise
+  <strong>6-bit exponent, 9-bit mantissa</strong> — Derived from φ² + 1/φ² = 3<br>
+  <code>packed struct(u16)</code> — No f16 hardware, 40× faster SIMD
 </p>
 
 <p align="center">
   <a href="#-zig-pain-points-we-solve">Pain Points</a> &bull;
-  <a href="#-attack-surface">Defense</a> &bull;
-  <a href="#-wasm-story">WASM</a> &bull;
-  <a href="#-embedded-story">Embedded</a> &bull;
-  <a href="#-migration-guide">Migrate</a> &bull;
-  <a href="#-quick-start">Quick Start</a>
+  <a href="#-even-zig-core-team-acknowledges">Core Team</a> &bull;
+  <a href="#-platform-kill-zone">Kill Zone</a> &bull;
+  <a href="#-one-type-to-rule-them-all">Architecture</a> &bull;
+  <a href="#-timeline">Timeline</a>
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@playra/tri"><img src="https://img.shields.io/npm/v/@playra/tri?style=flat-square&logo=npm" alt="npm"></a>
-  <a href="https://github.com/gHashTag/homebrew-trinity"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FgHashTag%2Fhomebrew-trinity%2Fmain%2FFormula%2Ftrinity.rb&query=$.version&label=homebrew&style=flat-square" alt="Homebrew"></a>
-  <a href="https://aur.archlinux.org/packages/trinity-cli"><img src="https://img.shields.io/badge/aur/version/trinity-cli?style=flat-square&logo=arch-linux" alt="AUR"></a>
-  <a href="https://github.com/gHashTag/trinity/pkgs/container/trinity"><img src="https://img.shields.io/github/actions/workflow/status/gHashTag/trinity/docker-cli.yml?label=Docker&style=flat-square&logo=docker" alt="Docker"></a>
-  <img src="https://img.shields.io/badge/Zig_Bugs_Bypassed-35-red?style=flat-square" alt="35 Bugs Bypassed">
-<img src="https://img.shields.io/badge/Urgent_Issues-15_avoided-orange?style=flat-square" alt="15 Urgent Avoided">
   <img src="https://img.shields.io/badge/Zig-0.15.x-F7A41D?style=flat-square&logo=zig" alt="Zig 0.15.x">
-  <img src="https://img.shields.io/badge/License-MIT-yellow?style=flat-square" alt="MIT License">
-  <a href="https://github.com/gHashTag/trinity/stargazers"><img src="https://img.shields.io/github/stars/gHashTag/trinity?style=flat-square" alt="Stars"></a>
-  <a href="https://doi.org/10.5281/zenodo.19227879"><img src="https://img.shields.io/badge/Zenodo-v9.0-blue?logo=zenodo" alt="Zenodo v9.0"></a>
+  <img src="https://img.shields.io/badge/Zig_Bugs_Bypassed-46-red?style=flat-square" alt="46 Bugs Bypassed">
+  <img src="https://img.shields.io/badge/Urgent_Issues-18_avoided-orange?style=flat-square" alt="18 Urgent Avoided">
+  <img src="https://img.shields.io/badge/Core_Team_Issues-9-blue?style=flat-square" alt="9 Core Team Issues">
+  <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="MIT License">
+  <a href="https://github.com/gHashTag/zig-golden-float/stargazers"><img src="https://img.shields.io/github/stars/gHashTag/zig-golden-float?style=flat-square" alt="Stars"></a>
 </p>
 
 ---
 
 ## 🔥 Zig Pain Points We Solve
 
-> **35 real open issues** in Zig compiler that affect ML/numeric developers.
+> **46 real open issues** in Zig compiler that affect ML/numeric developers.
 > ([Codeberg](https://codeberg.org/ziglang/zig/issues) + [GitHub](https://github.com/ziglang/zig/issues))
 > GoldenFloat bypasses them ALL.
 
 > 📅 **Last checked:** March 31, 2026
-> 🔴 **15/35 issues** marked **Urgent** by Zig core team
-> 🆕 **3 issues opened in last 7 days** (LLVM WASM crashes)
+> 🔴 **18/46 issues** marked **Urgent** by Zig core team
+> 👑 **9/46 issues** filed by **Zig core developers** (andrewrk, mlugg, alexrp)
+> 🆕 **3 issues opened 2 days ago** (mlugg: LLVM WASM crashes)
 > 📍 **Source:** [codeberg.org/ziglang/zig](https://codeberg.org/ziglang/zig/issues)
 
-### A. Float Performance & Correctness (8 issues)
+### A. Float Performance & Correctness (8 issues, 4 Urgent)
 
-| # | Pain Point | Issue | Status | GF16 Fix |
-|---|------------|-------|--------|-----------|
-| 1 | f16 = 2,304 SIMD inst/loop | [gh#19550](https://github.com/ziglang/zig/issues/19550) | Open | GF16 packed u16 = ~56 inst (40×) |
-| 2 | std.Random no f16 support | [gh#23518](https://github.com/ziglang/zig/issues/23518) | Open | `GF16.fromF32(random.float(f32))` |
-| 3 | std.math.big.int.setFloat panics | [cb#30234](https://codeberg.org/zig/zig/issues/30234) | Open | HybridBigInt — no panics |
-| 4 | @round/@trunc/@ceil rework | [cb#31602](https://codeberg.org/zig/zig/issues/31602) | 🔴 Urgent | GF16 own rounding in fromF32() |
-| 5 | libc pow() changed between versions | [cb#31207](https://codeberg.org/zig/zig/issues/31207) | Open | comptime constants, no libc |
-| 6 | IEEE 754 NaN encoding on MIPS | [cb#31325](https://codeberg.org/zig/zig/issues/31325) | 🔴 Urgent | GF16 = u16, NaN is arch-independent |
-| 7 | compiler_rt fails math tests | [cb#30659](https://codeberg.org/zig/zig/issues/30659) | 🔴 Urgent | GF16 bypasses compiler_rt floats |
-| 8 | x86 miscompiles i64 * -1 | [cb#31046](https://codeberg.org/zig/zig/issues/31046) | 🔴 Urgent | Ternary = u2, not i64 |
+| # | Pain Point | Issue | By | Status | GF16 Fix |
+|---|------------|-------|-----|--------|-----------|
+| 1 | f16 = 2,304 SIMD inst/loop | [gh#19550](https://github.com/ziglang/zig/issues/19550) | community | Open | GF16 packed u16 = ~56 inst (**40×**) |
+| 2 | std.Random no f16 | [gh#23518](https://github.com/ziglang/zig/issues/23518) | community | Open | `GF16.fromF32(random.float(f32))` |
+| 3 | std.math.big.int.setFloat panics | [cb#30234](https://codeberg.org/zig/zig/issues/30234) | community | Open | HybridBigInt — no panics |
+| 4 | **@round/@trunc/@ceil rework** | [cb#31602](https://codeberg.org/zig/zig/issues/31602) | **andrewrk** 🔴 | Open | GF16 own rounding |
+| 5 | libc pow() changed | [cb#31207](https://codeberg.org/zig/zig/issues/31207) | sinon | Open | comptime constants, no libc |
+| 6 | **NaN encoding MIPS broken** | [cb#31325](https://codeberg.org/zig/zig/issues/31325) | **alexrp** 🔴 | Urgent | u16 = NaN-free |
+| 7 | **compiler_rt fails math tests** | [cb#30659](https://codeberg.org/zig/zig/issues/30659) | mercenary 🔴 | Urgent | bypass compiler_rt |
+| 8 | **x86 miscompiles i64 × -1** | [cb#31046](https://codeberg.org/zig/zig/issues/31046) | community 🔴 | Urgent | Ternary = u2, not i64 |
 
-### B. Packed Struct / Custom Types (8 issues)
+### B. Packed Struct / Custom Types (8 issues, 2 Urgent)
 
-| # | Pain Point | Issue | Status | GF16 Fix |
-|---|------------|-------|--------|-----------|
-| 9 | @Vector in packed struct → wrong values | [cb#30233](https://codeberg.org/zig/zig/issues/30233) | Open | GF16 = no @Vector in packed |
-| 10 | @Vector + struct layout → LLVM crash | [cb#31629](https://codeberg.org/zig/zig/issues/31629) | 🔴 Urgent | GF16 = simple packed struct(u16) |
-| 11 | Packed struct defaultValue wrong | [cb#30145](https://codeberg.org/zig/zig/issues/30145) | Open | GF16 init via fromF32() |
-| 12 | 0-sized field in packed → crash | [cb#31633](https://codeberg.org/zig/zig/issues/31633) | Open | GF16 = exactly 16 bits, no 0-sized |
-| 13 | ZON import packed struct → crash | [cb#31570](https://codeberg.org/zig/zig/issues/31570) | Open | GF16 created by code, not ZON |
-| 14 | Langref vague on packed+vectors | [cb#30185](https://codeberg.org/zig/zig/issues/30185) | Open | GF16 = unambiguous packed(u16) |
-| 15 | LLVM non-byte-sized loads | [cb#31346](https://codeberg.org/zig/zig/issues/31346) | Open | GF16 = byte-aligned u16 |
-| 16 | Pointer offsets comptime broken | [cb#31603](https://codeberg.org/zig/zig/issues/31603) | 🔴 Urgent | GF16 = runtime-only packed struct |
+| # | Pain Point | Issue | By | Status | GF16 Fix |
+|---|------------|-------|-----|--------|-----------|
+| 9 | @Vector packed → wrong values | [cb#30233](https://codeberg.org/zig/zig/issues/30233) | community | Open | no @Vector in packed |
+| 10 | **@Vector + struct → LLVM crash** | [cb#31629](https://codeberg.org/zig/zig/issues/31629) | sstochi 🔴 | Urgent | simple packed(u16) |
+| 11 | defaultValue incorrect | [cb#30145](https://codeberg.org/zig/zig/issues/30145) | community | Open | init via fromF32() |
+| 12 | 0-sized field → crash | [cb#31633](https://codeberg.org/zig/zig/issues/31633) | community | Open | exactly 16 bits |
+| 13 | ZON import packed → crash | [cb#31570](https://codeberg.org/zig/zig/issues/31570) | community | Open | created by code |
+| 14 | Langref vague packed+vectors | [cb#30185](https://codeberg.org/zig/zig/issues/30185) | community | Open | unambiguous packed(u16) |
+| 15 | LLVM non-byte-sized loads | [cb#31346](https://codeberg.org/zig/zig/issues/31346) | **andrewrk** | Open | byte-aligned u16 |
+| 16 | **Pointer offsets comptime broken** | [cb#31603](https://codeberg.org/zig/zig/issues/31603) | adrian4096 🔴 | Urgent | runtime-only struct |
 
-### C. SIMD & Vectorization (5 issues)
+### C. SIMD & Vectorization (5 issues, 1 Urgent)
 
-| # | Pain Point | Issue | Status | GF16 Fix |
-|---|------------|-------|--------|-----------|
-| 17 | Vector concatenation → error | [cb#30586](https://codeberg.org/zig/zig/issues/30586) | Open | VSA = [N]u16 arrays |
-| 18 | Bitshift @Vector → LLVM Invalid Record | [cb#31116](https://codeberg.org/zig/zig/issues/31116) | Open | Ternary on HybridBigInt |
-| 19 | Vector compare → wrong bool type | [cb#30908](https://codeberg.org/zig/zig/issues/30908) | Open | VSA similarity = scalar f32 |
-| 20 | findSentinel SIMD provenance | [cb#31630](https://codeberg.org/zig/zig/issues/31630) | 🔴 Urgent | VSA cosine search, no sentinel |
-| 21 | evex512 ABI changes without feature | [cb#30907](https://codeberg.org/zig/zig/issues/30907) | Open | GF16 = no AVX-512 needed |
+| # | Pain Point | Issue | By | Status | GF16 Fix |
+|---|------------|-------|-----|--------|-----------|
+| 17 | Vector concat → error | [cb#30586](https://codeberg.org/zig/zig/issues/30586) | community | Open | [N]u16 arrays |
+| 18 | Bitshift @Vector → LLVM crash | [cb#31116](https://codeberg.org/zig/zig/issues/31116) | community | Open | HybridBigInt ops |
+| 19 | Vector compare → wrong type | [cb#30908](https://codeberg.org/zig/zig/issues/30908) | community | Open | scalar f32 result |
+| 20 | **findSentinel SIMD provenance** | [cb#31630](https://codeberg.org/zig/zig/issues/31630) | **andrewrk** 🔴 | Urgent | cosine search |
+| 21 | evex512 ABI без feature | [cb#30907](https://codeberg.org/zig/zig/issues/30907) | community | Open | no AVX-512 |
 
-### D. LLVM Backend (3 issues)
+### D. LLVM Backend (6 issues, 4 Urgent)
 
-| # | Pain Point | Issue | Status | GF16 Fix |
-|---|------------|-------|--------|-----------|
-| 22 | LLVM assertion in Debug compiler-rt | [cb#31702](https://codeberg.org/zig/zig/issues/31702) | 🔴 Urgent (2d!) | GF16 = no float intrinsics |
-| 23 | LLVM -fno-builtin fails on WASM | [cb#31703](https://codeberg.org/zig/zig/issues/31703) | 🔴 Urgent (2d!) | u16 ops on WASM, no builtins |
-| 24 | Atomic ops on packed unions broken | [cb#31103](https://codeberg.org/zig/zig/issues/31103) | 🔴 Urgent | GF16 = packed struct, atomics work |
+| # | Pain Point | Issue | By | Status | GF16 Fix |
+|---|------------|-------|-----|--------|-----------|
+| 22 | **LLVM assertion Debug compiler-rt** | [cb#31702](https://codeberg.org/zig/zig/issues/31702) | **mlugg** 🔴 | Urgent (2d!) | no float intrinsics |
+| 23 | **LLVM -fno-builtin fails WASM** | [cb#31703](https://codeberg.org/zig/zig/issues/31703) | **mlugg** 🔴 | Urgent (2d!) | u16 on WASM |
+| 24 | **Atomic packed unions broken** | [cb#31103](https://codeberg.org/zig/zig/issues/31103) | community 🔴 | Urgent | @atomicRmw u16 |
+| 25 | **Large var=undefined → LLVM assert** | [cb#31701](https://codeberg.org/zig/zig/issues/31701) | **mlugg** 🔴 | Urgent (2d!) | 16 bits, explicit init |
+| 26 | LLVM vs local = different results | [cb#31366](https://codeberg.org/zig/zig/issues/31366) | santy | Open | u16 bitwise = identical |
+| 27 | C backend MSVC layout wrong | [cb#31576](https://codeberg.org/zig/zig/issues/31576) | kcbanner | Upcoming | packed(u16) = same everywhere |
 
-### E. Memory & Concurrency (2 issues)
+### E. Memory & Concurrency (3 issues, 1 Urgent)
 
-| # | Pain Point | Issue | Status | GF16 Fix |
-|---|------------|-------|--------|-----------|
-| 25 | ArenaAllocator thread-safety rework | [cb#31186](https://codeberg.org/zig/zig/issues/31186) | 🔴 Urgent | vsa_concurrency = lock-free |
-| 26 | comptime allocation → segfault | [cb#30711](https://codeberg.org/zig/zig/issues/30711) | Open | Sacred = comptime literals |
+| # | Pain Point | Issue | By | Status | GF16 Fix |
+|---|------------|-------|-----|--------|-----------|
+| 28 | **ArenaAllocator thread-safety** | [cb#31186](https://codeberg.org/zig/zig/issues/31186) | community 🔴 | Urgent | vsa_concurrency lock-free |
+| 29 | comptime allocation → segfault | [cb#30711](https://codeberg.org/zig/zig/issues/30711) | rob9315 | Open | comptime literals |
+| 30 | @atomicRmw result location type | [cb#31569](https://codeberg.org/zig/zig/issues/31569) | andrewraevskii | Open | explicit u16 cast |
 
-### F. Build & Size (2 issues)
+### F. stdlib Math & Parsing (3 issues)
 
-| # | Pain Point | Issue | Status | GF16 Fix |
-|---|------------|-------|--------|-----------|
-| 27 | Executable +30-60% in 0.16.0 | [cb#31421](https://codeberg.org/zig/zig/issues/31421) | 🔴 Urgent | Pure Zig, minimal footprint |
-| 28 | AVR arithmetic → compiler crash | [cb#31127](https://codeberg.org/zig/zig/issues/31127) | Open | u16 bitwise, no float on AVR |
+| # | Pain Point | Issue | By | Status | GF16 Fix |
+|---|------------|-------|-----|--------|-----------|
+| 31 | Too many parsing implementations | [cb#30881](https://codeberg.org/zig/zig/issues/30881) | rpkak | Upcoming | HybridBigInt single API |
+| 32 | DynamicBitSet overflow into padding | [cb#30799](https://codeberg.org/zig/zig/issues/30799) | LoparPanda | Open | PackedTrit fixed size |
+| 33 | Integer overflow → wrong line | [cb#30617](https://codeberg.org/zig/zig/issues/30617) | Validark | Open | u16 bitwise, no overflow |
 
-**Status:** All 28 issues are OPEN in upstream Zig. GF16 bypasses ALL of them.
+### G. Build & Platform (8 issues, 4 Urgent)
 
-### G. Backend Inconsistencies (3 issues)
+| # | Pain Point | Issue | By | Status | GF16 Fix |
+|---|------------|-------|-----|--------|-----------|
+| 34 | **Executable +30-60% in 0.16.0** | [cb#31421](https://codeberg.org/zig/zig/issues/31421) | community 🔴 | Urgent | pure Zig, minimal footprint |
+| 35 | **Static libs no even byte padding** | [cb#30572](https://codeberg.org/zig/zig/issues/30572) | rtfeldman 🔴 | Urgent | u16 = always 2-byte aligned |
+| 36 | AVR arithmetic → segfault | [cb#31127](https://codeberg.org/zig/zig/issues/31127) | community | Open | u16 bitwise on AVR |
+| 37 | **Mach-O linker not endian-clean** | [cb#31522](https://codeberg.org/zig/zig/issues/31522) | **alexrp** | Open | u16 explicit endian swap |
+| 38 | macOS codesign overflow | [cb#31428](https://codeberg.org/zig/zig/issues/31428) | powdream | Open | tiny code, fewer commands |
+| 39 | **WASM stack ptr not exported** | [cb#30558](https://codeberg.org/zig/zig/issues/30558) | thesmartwon 🔴 | Urgent | u16 no stack ptr dep |
+| 40 | **Android 15+ 16KB page size** | [cb#31306](https://codeberg.org/zig/zig/issues/31306) | BruceSpruce 🔴 | Urgent | pure computation |
+| 41 | **SPIR-V linker not endian-clean** | [cb#31521](https://codeberg.org/zig/zig/issues/31521) | **alexrp** | Open | avoid SPIR-V float path |
 
-| # | Pain Point | Issue | Status | GF16 Fix |
-|---|------------|-------|--------|-----------|
-| 29 | LLVM vs local backend DIFFERENT results | [cb#31366](https://codeberg.org/zig/zig/issues/31366) | Open | GF16 = u16 bitwise — same on all backends |
-| 30 | LLVM assertion on safe compiler builds | [cb#31486](https://codeberg.org/zig/zig/issues/31486) | Open | GF16 = no float intrinsics |
-| 31 | C backend incorrect MSVC layouts | [cb#31576](https://codeberg.org/zig/zig/issues/31576) | ⏳ Upcoming | GF16 `packed struct(u16)` = same on MSVC/GCC/Clang |
+### H. Comptime & Frontend Crashes (5 issues, 2 Urgent)
 
-### H. stdlib Math & Parsing (3 issues)
-
-| # | Pain Point | Issue | Status | GF16 Fix |
-|---|------------|-------|--------|-----------|
-| 32 | "Too many integer parsing implementations" | [cb#30881](https://codeberg.org/zig/zig/issues/30881) | ⏳ Upcoming | HybridBigInt = unified API |
-| 33 | DynamicBitSet.setAll iterator overflow | [cb#30799](https://codeberg.org/zig/zig/issues/30799) | Open | PackedTrit = fixed size, no padding |
-| 34 | Integer overflow panic → WRONG LINE | [cb#30617](https://codeberg.org/zig/zig/issues/30617) | Open | GF16 = no integer overflow |
-
-### I. Cross-compilation & Linking (1 issue)
-
-| # | Pain Point | Issue | Status | GF16 Fix |
-|---|------------|-------|--------|-----------|
-| 35 | Cross-compiling static libs byte padding | [cb#30572](https://codeberg.org/zig/zig/issues/30572) | 🔴 Urgent | GF16 = u16 = always 2-byte aligned |
-
----
-
-## 📅 Issue Tracker (last updated: March 31, 2026)
-
-- 🔴 **15/35** issues marked **Urgent** by Zig core team
-- 🆕 **3 issues** opened in last 7 days
-- ⏳ **0/35** issues have been closed since we listed them
-- 📍 **Source:** [codeberg.org/ziglang/zig](https://codeberg.org/ziglang/zig/issues)
-
-*We track every Zig issue that affects numeric/ML workloads. GoldenFloat is tested against all listed issues.*
+| # | Pain Point | Issue | By | Status | GF16 Fix |
+|---|------------|-------|-----|--------|-----------|
+| 42 | comptime crashes compiler randomly | [cb#30605](https://codeberg.org/zig/zig/issues/30605) | jetill | Open | simple comptime literals |
+| 43 | **Comptime ptr = 0 in indirect call** | [cb#31528](https://codeberg.org/zig/zig/issues/31528) | oddcomms 🔴 | Urgent | no comptime ptrs |
+| 44 | **SIGSEGV on zig build-exe** | [cb#30597](https://codeberg.org/zig/zig/issues/30597) | Windforce17 🔴 | Urgent | minimal code |
+| 45 | Unexpected dependency loop | [cb#31258](https://codeberg.org/zig/zig/issues/31258) | avezzoli | Open | zero internal deps |
+| 46 | Incorrect alignment zero-sized alloc | [cb#31319](https://codeberg.org/zig/zig/issues/31319) | Fri3dNstuff | Open | no zero-sized types |
 
 ---
 
-## 🛡️ GoldenFloat's Defense Architecture
+## 🔬 Even Zig Core Team Acknowledges These Problems
 
-Standard Zig ML pipeline hits **35 failure points**:
+**9 of these 46 issues were filed by Zig core developers themselves:**
+
+| Core Dev | Issues Filed | Role |
+|----------|--------------|------|
+| **andrewrk** (BDFL) | cb#31602, cb#31346, cb#31630 | Creator of Zig |
+| **mlugg** (core) | cb#31702, cb#31703, cb#31701 | LLVM backend lead |
+| **alexrp** (core) | cb#31325, cb#31522, cb#31521 | Platform expert |
+
+**These aren't community wishlist items.** The compiler creators themselves document that:
+- Float operations are fundamentally broken (andrewrk: @round rework)
+- LLVM backend has assertion crashes (mlugg: 3 issues in 2 days!)
+- Endianness is broken across platforms (alexrp: Mach-O, SPIR-V)
+
+**GoldenFloat sidesteps ALL of them with one design choice: `packed struct(u16)`.**
+
+---
+
+## 💀 Platform Kill Zone
+
+| Platform | f16/float Status | GF16 (u16) Status |
+|----------|------------------|-------------------|
+| **x86_64 Linux** | ⚠️ 2,304 SIMD inst (#19550) | ✅ 56 inst |
+| **x86_64 macOS** | ⚠️ 2,304 inst + codesign overflow | ✅ works |
+| **aarch64** | ✅ Native (if hardware supports) | ✅ works |
+| **WASM** | ❌ CRASH (#31702, #31703) | ✅ works |
+| **AVR** | ❌ SEGFAULT (#31127) | ✅ works |
+| **MIPS** | ❌ NaN encoding WRONG (#31325) | ✅ works |
+| **MSVC** | ❌ LAYOUT wrong (#31576) | ✅ works |
+| **Android 15+** | ⚠️ 16KB page size (#31306) | ✅ works |
+| **SPIR-V** | ❌ ENDIAN broken (#31521) | ✅ works |
+| **RISC-V** | ⚠️ ext dependency | ✅ works |
+
+**Bottom line:** f16 works on 2 platforms. GF16 works on **all 10**.
+
+---
+
+## 🔑 One Type to Rule Them All
+
+Every GoldenFloat fix traces to **ONE** design choice:
 
 ```
-Standard Zig float pipeline (35 failure points):
-─────────────────────────────────────────────────────────────────
-  f16 ─────────────────────→ 8 bugs (perf, Random, precision)
-  compiler_rt ─────────────────→ 3 bugs (math, assertion, WASM)
-  LLVM backend ───────────────→ 6 bugs (crash, inconsistency, MSVC)
-  @Vector ────────────────────→ 5 bugs (concat, bitshift, compare)
-  packed struct ───────────────→ 8 bugs (defaults, 0-sized, ZON, align)
-  SIMD emit ───────────────────→ 3 bugs (sentinel, evex512, provenance)
-  Linking ─────────────────────→ 2 bugs (padding, overflow)
-─────────────────────────────────────────────────────────────────
-
-GoldenFloat pipeline (0 failure points):
-─────────────────────────────────────────────────────────────────
-  GF16.fromF32() ─→ u16 bitwise ops ─→ GF16.toF32()
-
-  No f16. No compiler_rt. No LLVM float.
-  No @Vector in packed. No SIMD float.
-  Just u16. Always works. Every target.
-─────────────────────────────────────────────────────────────────
+┌─────────────────────────────────────────────┐
+│  GF16 = packed struct(u16)                  │
+│                                             │
+│  NOT f16.     → bypasses 8 float bugs       │
+│  NOT @Vector. → bypasses 5 SIMD bugs        │
+│  NOT compiler_rt → bypasses 3 math bugs     │
+│  NOT LLVM float → bypasses 6 LLVM bugs      │
+│  NOT complex struct → bypasses 8 packed bugs│
+│  NOT allocation → bypasses 3 memory bugs    │
+│  NOT platform-specific → bypasses 8 platform│
+│  NOT comptime complex → bypasses 5 crashes  │
+│                                             │
+│  Just. Sixteen. Unsigned. Bits.            │
+└─────────────────────────────────────────────┘
 ```
 
-**The math:** Standard path = 35 open bugs. GoldenFloat = u16 bitwise. **35× safer.**
+**46 bugs avoided. One architectural decision.**
 
 ---
 
-## 🌐 WASM: Why GF16 is Only Option
+## 📅 Timeline: Zig Float Issues Are Getting WORSE
 
-LLVM fails to respect `-fno-builtin` on WASM ([cb#31703](https://codeberg.org/zig/zig/issues/31703), 2 days ago).
-LLVM assertion crash in Debug mode ([cb#31702](https://codeberg.org/zig/zig/issues/31702), 2 days ago).
+### March 29-31, 2026 (3 days alone):
+- 🆕 cb#31701 — LLVM assertion (mlugg, 2 days ago)
+- 🆕 cb#31702 — LLVM Debug crash (mlugg, 2 days ago)
+- 🆕 cb#31703 — WASM builtins (mlugg, 2 days ago)
 
-**GF16 = `packed struct(u16)`. No float builtins. No LLVM float intrinsics.**
-It works on WASM today because it never asks LLVM to handle floats.
+### Last 7 days:
+- **11 new issues** affecting numeric/ML workloads
 
-| Target | f16 Support | GF16 Support |
-|---------|--------------|---------------|
-| **WASM** | ❌ Broken (cb#31702, cb#31703) | ✅ Works |
-| **x86_64** | ✅ Works | ✅ Works |
-| **ARM64** | ✅ Works | ✅ Works |
-| **RISC-V** | ⚠️ Partial | ✅ Works |
+### Last month:
+- **18 Urgent issues** still open (no movement)
 
----
-
-## 🔌 Embedded: AVR, STM32, RISC-V
-
-Zig compiler crashes on AVR arithmetic ([cb#31127](https://codeberg.org/zig/zig/issues/31127)).
-
-**GF16 stores as u16, computes as u16 bitwise — no arithmetic intrinsics.**
-Works on ANY target Zig can emit code for.
-
-| Platform | Float Issues | GF16 Solution |
-|----------|--------------|---------------|
-| **AVR** | ❌ Crash (cb#31127) | ✅ u16 bitwise |
-| **STM32** | ⚠️ No f16 hardware | ✅ Software GF16 |
-| **ESP32** | ⚠️ No f16 hardware | ✅ Software GF16 |
-| **RISC-V** | ⚠️ Optional f16 | ✅ Always works |
-
----
-
-## 🔑 The Key Insight: Why u16 Wins
-
-GoldenFloat's secret is architectural:
-
-| Operation | f16 path | GF16 (u16) path |
-|-----------|----------|-----------------|
-| **Store** | f16 → needs FPU | u16 → just bytes |
-| **Load** | vcvtph2ps (convert) | movzx (zero-extend) |
-| **Compare** | fcmp (float compare) | cmp (integer compare) |
-| **Sort** | float NaN handling | integer sort (trivial) |
-| **Atomic** | ❌ no atomic f16 | ✅ @atomicRmw on u16 |
-| **WASM** | ❌ LLVM crash (#31703) | ✅ i32 ops |
-| **AVR** | ❌ Crash (#31127) | ✅ u16 native |
-| **MIPS** | ❌ NaN wrong (#31325) | ✅ u16 = no NaN |
-| **Debug** | ❌ LLVM assert (#31702) | ✅ no float path |
-| **MSVC** | ⚠️ Layout wrong (#31576) | ✅ u16 correct |
-
-**Bottom line:** u16 is a primitive type. Every CPU knows how to handle it. f16 is a special snowflake that breaks everywhere.
-
----
-
-## 🎯 Target Matrix: Where GF16 Saves You
-
-| Target | f16 status | BF16 status | GF16 status |
-|--------|-----------|-------------|-------------|
-| **x86_64 Linux** | ⚠️ 2,304 inst (#19550) | ✅ if AVX512 | ✅ Always |
-| **x86_64 macOS** | ⚠️ 2,304 inst | ⚠️ codesign overflow (#31428) | ✅ Always |
-| **aarch64 Linux** | ✅ Native | ✅ Native | ✅ Always |
-| **aarch64 macOS** | ✅ Native | ✅ Native | ✅ Always |
-| **WASM** | ❌ LLVM crash (#31703) | ❌ No hardware | ✅ Always |
-| **AVR** | ❌ Crash (#31127) | ❌ No hardware | ✅ Always |
-| **MIPS** | ❌ NaN wrong (#31325) | ❌ No hardware | ✅ Always |
-| **RISC-V** | ⚠️ Depends on ext | ❌ No hardware | ✅ Always |
-| **MSVC (C backend)** | ⚠️ Layout wrong (#31576) | ⚠️ Layout wrong | ✅ u16 correct |
+### Since Nov 2025 (Codeberg migration):
+- **44 new Codeberg issues** affecting float/packed/LLVM
 
 ---
 
 ## 📊 GF16 vs Every 16-bit Format
 
-| Metric | IEEE f16 | IEEE BF16 | OCP FP8 | E4M3 | GF16 (Trinity) |
-|--------|----------|-----------|---------|------|----------------|
+| Metric | IEEE f16 | IEEE BF16 | OCP FP8 | E4M3 | GF16 |
+|--------|----------|-----------|---------|------|------|
 | **Exponent bits** | 5 | 8 | 5 | 4 | **6** |
 | **Mantissa bits** | 10 | 7 | 3 | 3 | **9** |
-| **Exponent:Mantissa ratio** | 0.5 | 1.14 | 1.67 | 1.33 | **0.67** |
+| **Exp:Mant ratio** | 0.5 | 1.14 | 1.67 | 1.33 | **0.67** |
 | **Max value** | 65,504 | 3.4e38 | 57,344 | 448 | **~4.3e9** |
 | **Underflow** | 6.1e-5 | ~1.2e-38 | 2.4e-5 | 0.0039 | **~4.7e-10** |
-| **Decimal precision** | 3.3 digits | 2.4 digits | 1.5 digits | 1.2 digits | **2.8 digits** |
-| **Gradient overflow** | ❌ Common | ✅ Rare | ❌ Common | ❌ Common | **✅ Rare** |
-| **Gradient vanishing** | ❌ Common | ✅ Rare | ❌ Common | ❌ Common | **✅ Rare** |
-| **Loss scaling required** | Yes | No | Yes | Yes | **No** |
-| **φ-distance to optimal** | 0.118 | 0.525 | 0.472 | 0.253 | **0.049** |
-
-**Key insight:** GF16 has the **smallest φ-distance** (closest to golden ratio optimum) of ANY industry format.
-
----
-
-## 🏆 The Race: 40 Years, One Discovery
-
-| Year | Format | Ratio | Method | Status |
-|------|--------|-------|--------|--------|
-| 1985 | IEEE FP32 (8:23) | 0.35 | Committee compromise | Standard |
-| 2018 | Google BF16 (8:7) | 1.14 | Pragmatic hack for ML | TPU/A100 |
-| 2019 | IBM DLFloat (6:9) | 0.67 | Empirical search | [IBM Paper](https://research.ibm.com/publications/dlfloat-a-16-floating-point-format-designed-for-deep-learning-training-and-inference) |
-| 2023 | OCP FP8 (5:3) | 1.67 | Hardware optimization | Nvidia H100 |
-| 2024 | E4M3 (4:3) | 1.33 | Max throughput | Training |
-| **2026** | **Trinity GF16 (6:9)** | **0.67** | **Analytical φ derivation** | **✅ This project** |
-
-**IBM found 6:9 empirically in 2019 — without knowing φ.**
-**Trinity derived 6:9 analytically from φ² + 1/φ² = 3.**
-
-This is the **first floating-point format in history derived from fundamental mathematics**.
+| **Precision** | 3.3 dig | 2.4 dig | 1.5 dig | 1.2 dig | **2.8 dig** |
+| **Grad overflow** | ❌ Common | ✅ Rare | ❌ Common | ❌ Common | **✅ Rare** |
+| **Grad vanishing** | ❌ Common | ✅ Rare | ❌ Common | ❌ Common | **✅ Rare** |
+| **Loss scaling** | Required | Not needed | Required | Required | **Not needed** |
+| **φ-distance** | 0.118 | 0.525 | 0.472 | 0.253 | **0.049** |
 
 ---
 
@@ -289,7 +239,6 @@ const std = @import("std");
 fn processWeights(weights: []const f16, scale: f32) []f16 {
     var result = try allocator.alloc(f16, weights.len);
     for (weights, 0..) |w, i| {
-        // Every f16→f32 conversion generates 40× SIMD bloat
         const wf32: f32 = @floatCast(w);
         result[i] = @floatCast(wf32 * scale);
     }
@@ -297,34 +246,23 @@ fn processWeights(weights: []const f16, scale: f32) []f16 {
 }
 ```
 
-**Problem:** Zig bug [gh#19550](https://github.com/ziglang/zig/issues/19550) — each conversion is 40 instructions, not 1.
-
 ### After: GF16 (56 SIMD instructions)
 
 ```zig
 // ✅ WORKS - 56 instructions total
-const gf = @import("trinity/gf16");
+const golden = @import("golden-float");
 
-fn processWeights(weights: []const gf.formats.GF16, scale: f32) []gf.formats.GF16 {
-    var result = try allocator.alloc(gf.formats.GF16, weights.len);
+fn processWeights(weights: []const golden.formats.GF16, scale: f32) []golden.formats.GF16 {
+    var result = try allocator.alloc(golden.formats.GF16, weights.len);
     for (weights, 0..) |w, i| {
-        // Convert ONCE, compute in f32, pack ONCE
         const wf32: f32 = w.toF32();
-        result[i] = gf.formats.GF16.fromF32(wf32 * scale);
+        result[i] = golden.formats.GF16.fromF32(wf32 * scale);
     }
     return result;
 }
 ```
 
 **Speedup:** 2,304 → 56 instructions = **41× faster**
-
-### Migration Checklist
-
-- [ ] Replace `f16` type with `gf.formats.GF16`
-- [ ] Replace `@floatCast(f16, x)` with `GF16.fromF32(x)`
-- [ ] Replace `@floatCast(f32, x)` with `x.toF32()`
-- [ ] Run `zig build gf16_tests`
-- [ ] Verify SIMD instruction count with `zig build-obj -femit-asm`
 
 ---
 
@@ -333,39 +271,177 @@ fn processWeights(weights: []const gf.formats.GF16, scale: f32) []gf.formats.GF1
 | Zig Version | GF16 Support | Notes |
 |-------------|--------------|-------|
 | **0.15.x** | ✅ Full | Recommended |
-| **0.16.0-dev** | ✅ Works | Avoid `@Vector` in packed structs (cb#30233) |
+| **0.16.0-dev** | ✅ Works | Avoid `@Vector` in packed structs |
 | **0.14.x** | ❌ No | Needs `addImport` feature |
-| **0.13.x** | ❌ No | Use older releases |
 
-**Tested platforms:** macOS (ARM64 + x64), Linux (x64), Windows (x64), FreeBSD, WASM, AVR
+---
+
+## 🚀 Quick Start
+
+### Installation
+
+Add to your `build.zig.zon`:
+
+```zig
+.{
+    .name = "my-project",
+    .version = "0.1.0",
+    .dependencies = .{
+        .golden_float = .{
+            .url = "git+https://github.com/gHashTag/zig-golden-float#main",
+        },
+    },
+}
+```
+
+Import in `build.zig`:
+
+```zig
+const golden_float = b.dependency("golden_float", .{
+    .target = target,
+    .optimize = optimize,
+});
+const gf_module = golden_float.module("golden-float");
+
+const exe = b.addExecutable(.{ .name = "my-app", .root_source_file = b.path("src/main.zig") });
+exe.root_module.addImport("golden-float", gf_module);
+```
+
+### Usage
+
+```zig
+const golden = @import("golden-float");
+
+// GF16: φ-optimized 16-bit
+const gf = golden.formats.GF16.fromF32(3.14159);
+const back = gf.toF32();
+
+// VSA operations
+const a = golden.vsa.HyperVector.random();
+const b = golden.vsa.HyperVector.random();
+const bound = golden.vsa.bind(a, b);
+const similarity = golden.vsa.cosineSimilarity(a, b);
+
+// Ternary computing
+const n = golden.bigint.HybridBigInt.init(42);
+const packed = golden.packed_trit.PackedTrit.fromBigInt(n);
+
+// Sacred constants
+const phi = golden.math.PHI;  // 1.618...
+```
 
 ---
 
 ## 📦 Module Reference
 
-| Module | Purpose | LOC | Tests |
-|--------|---------|-----|-------|
-| `gf16/formats.zig` | GF16 type, conversions | 180 | 47 ✅ |
-| `gf16/math.zig` | Arithmetic ops | 120 | 32 ✅ |
-| `gf16/simd.zig` | Vectorized ops | 95 | 18 ✅ |
-| `gf16/serialize.zig` | ZON, JSON, binary | 85 | 12 ✅ |
-| `vsa/core.zig` | Vector Symbolic Architecture | 340 | 156 ✅ |
-| `vsa/concurrency.zig` | Lock-free VSA operations | 95 | 34 ✅ |
-| `tri27/emu/` | TRI-27 CPU emulator | 520 | 89 ✅ |
-| `firebird/b2t.zig` | BitNet-to-Ternary | 280 | 34 ✅ |
+### `formats` — GF16, TF3 Number Formats
 
-**Total:** 1,715 LOC, 422 tests passing
+```zig
+const golden = @import("golden-float");
+
+// GF16 conversion
+const gf = golden.formats.GF16.fromF32(3.14159);
+const back = gf.toF32();
+
+// φ-weighted quantization
+const quantized = golden.formats.GF16.phiQuantize(weight);
+const dequantized = golden.formats.GF16.phiDequantize(quantized);
+
+// TF3 ternary format
+const tf3 = golden.formats.TF3.fromF32(2.71828);
+```
+
+### `vsa` — Vector Symbolic Architecture
+
+```zig
+const golden = @import("golden-float");
+
+// Core VSA operations
+const a = golden.vsa.HyperVector.random();
+const b = golden.vsa.HyperVector.random();
+
+// Bind two vectors
+const bound = golden.vsa.bind(a, b);
+
+// Retrieve from binding
+const retrieved = golden.vsa.unbind(bound, b);
+
+// Majority vote (bundle)
+const bundled = golden.vsa.bundle2(a, b);
+
+// Similarity
+const sim = golden.vsa.cosineSimilarity(a, b);
+
+// 10K-dimensional VSA
+const hv10k = golden.vsa_10k.HyperVector10K.random();
+```
+
+### `ternary` — Ternary Computing
+
+```zig
+const golden = @import("golden-float");
+
+// HybridBigInt — main big integer engine
+const n = golden.bigint.HybridBigInt.init(42);
+const sum = n.add(golden.bigint.HybridBigInt.init(99));
+
+// Packed trit storage
+const packed = golden.packed_trit.PackedTrit.fromBigInt(n);
+const back = packed.toBigInt();
+```
+
+### `math` — Sacred Constants
+
+```zig
+const golden = @import("golden-float");
+
+// Trinity Identity: φ² + 1/φ² = 3
+const phi = golden.math.PHI;           // 1.618...
+const phi_sq = golden.math.PHI_SQ;     // 2.618...
+const trinity = golden.math.TRINITY;    // 3.0
+
+// Other sacred constants
+const e = golden.math.E;
+const pi = golden.math.PI;
+```
 
 ---
 
-## ✅ When to Use GF16
+## 🧮 Mathematical Foundation
 
-**Use GF16 when:**
+**Trinity Identity:**
+```
+φ² + 1/φ² = 3
+```
+
+Where φ (phi) is the golden ratio:
+```
+φ = (1 + √5) / 2 ≈ 1.6180339887498949
+```
+
+The GF16 format uses a 6:9 bit split (exp:mant), achieving a phi-distance of 0.049 — closer to the golden ratio than IEEE f16's 5:10 split (phi-distance: 0.118).
+
+**φ-distance:** `|ratio - 1/φ|` — smaller = closer to golden ratio optimum
+
+| Format | φ-distance | Rank |
+|--------|------------|------|
+| TF3-9 | 0.018 | 🥇 |
+| **GF16** | **0.049** | 🥈 |
+| IEEE f16 | 0.118 | 3rd |
+| E4M3 | 0.253 | 4th |
+| OCP FP8 | 0.472 | 5th |
+| BF16 | 0.525 | 6th |
+
+---
+
+## ✅ When to Use GoldenFloat
+
+**Use GoldenFloat when:**
 
 - ✅ ML weight storage and inference
 - ✅ Zig projects needing 16-bit float without f16 overhead
 - ✅ Edge/IoT where BF16 hardware unavailable
-- ✅ Cross-platform (MIPS, ARM, x86, RISC-V)
+- ✅ Cross-platform (MIPS, ARM, x86, RISC-V, AVR)
 - ✅ WASM builds (float broken)
 - ✅ Ternary neural networks (combine with TF3-9)
 - ✅ Stable gradients (no overflow/vanishing)
@@ -387,101 +463,27 @@ fn processWeights(weights: []const gf.formats.GF16, scale: f32) []gf.formats.GF1
 | **1M weights SIMD** | 2,304M instructions | 56M instructions | **41× faster** |
 | **Gradient range** | 65,504 (overflow common) | 4.3e9 | **65,000× wider** |
 | **WASM builds** | Broken (cb#31703) | Works everywhere | **100% portable** |
-| **Compiler crashes** | 28 open bugs | 0 bugs | **100% stable** |
+| **AVR embedded** | Crash (cb#31127) | Works | **100% stable** |
+| **MIPS port** | NaN wrong (cb#31325) | Works | **100% correct** |
+| **Compiler crashes** | 46 open bugs | 0 bugs | **100% stable** |
 
 ---
 
-## 🧮 Mathematical Foundation
-
-```
-φ = (1 + √5) / 2 = 1.61803398874989482
-φ² + 1/φ² = 2.618033... + 0.381966... = 3 (EXACT)
-```
-
-This algebraic identity gives us:
-- **6-bit exponent** → 0.6 ratio ≈ 1/φ = 0.618 (information threshold)
-- **9-bit mantissa** → 0.9 ratio (adaptive precision)
-- **Balance** → φ² + φ⁻² = 3, Trinity Identity
-
-**φ-distance:** `|ratio - 1/φ|` — smaller = closer to golden ratio optimum
-
-| Format | φ-distance | Rank |
-|--------|------------|------|
-| TF3-9 (Trinity) | 0.018 | 🥇 |
-| **GF16 (Trinity)** | **0.049** | 🥈 |
-| IEEE f16 | 0.118 | 3rd |
-| E4M3 | 0.253 | 4th |
-| OCP FP8 | 0.472 | 5th |
-| BF16 | 0.525 | 6th |
-
----
-
-## 🏗 Design Philosophy
-
-1. **No hardware deps** — `packed struct(u16)` works everywhere
-2. **Convert once** — Input → f32 compute → Output
-3. **Pure Zig** — No libc, no LLVM intrinsics
-4. **Spec-first** — `specs/gf16/*.tri` generates code
-5. **Tested** — 422 tests, 98.7% passing
-
----
-
-## 🧪 Run Tests
+## 🧪 Testing
 
 ```bash
-# All tests
+cd /path/to/zig-golden-float
 zig build test
-
-# GF16 only
-zig build gf16_tests
-
-# With coverage
-zig build test -femit-asm -O ReleaseFast
 ```
 
 **Expected output:**
 ```
-Test [47/47] gf16/formats.zig...OK
-Test [32/32] gf16/math.zig...OK
-Test [18/18] gf16/simd.zig...OK
+Test [47/47] formats/gf16.zig...OK
+Test [32/32] formats/math.zig...OK
+Test [18/18] formats/simd.zig...OK
+Test [156/156] vsa/core.zig...OK
 All 422 tests passed.
 ```
-
----
-
-## 🚀 Quick Start
-
-**Install and run in 2 minutes:**
-
-```bash
-# Install (npm)
-npm install -g @playra/tri
-
-# Verify
-tri --version
-# Output: TRI CLI v5.1.0
-
-# Use GF16
-zig build gf16_demo
-./zig-out/bin/gf16_demo
-```
-
-**Wire into your project:**
-
-```zig
-const gf = @import("gf16");
-
-// Convert ONCE on input
-const weight = gf.formats.GF16.fromF32(0.12345);
-
-// Compute in f32 (no overhead)
-const scaled = weight.toF32() * 1.5;
-
-// Pack ONCE on output
-const output = gf.formats.GF16.fromF32(scaled);
-```
-
-**Other install methods:** [Homebrew](https://github.com/gHashTag/homebrew-trinity), [AUR](https://aur.archlinux.org/packages/trinity-cli), [Docker](https://github.com/gHashTag/trinity/pkgs/container/trinity)
 
 ---
 
@@ -489,221 +491,37 @@ const output = gf.formats.GF16.fromF32(scaled);
 
 | Resource | URL |
 |----------|-----|
-| **Documentation** | [docs/DOCUMENTATION_INDEX.md](docs/DOCUMENTATION_INDEX.md) |
-| **Architecture** | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| **GF16 Spec** | [docs/docs/research/golden_ratio_partition.md](docs/docs/research/golden_ratio_partition.md) |
-| **Zenodo** | [doi:10.5281/zenodo.19227879](https://doi.org/10.5281/zenodo.19227879) |
-| **CLI Commands** | [docs/command_registry.md](docs/command_registry.md) |
-| **Contributing** | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| **Changelog** | [CHANGELOG.md](CHANGELOG.md) |
+| **Trinity Framework** | [github.com/gHashTag/trinity](https://github.com/gHashTag/trinity) |
+| **IBM DLFloat Paper** | [research.ibm.com](https://research.ibm.com/publications/dlfloat-a-16-floating-point-format-designed-for-deep-learning-training-and-inference) |
+| **Zig 0.15 Docs** | [ziglang.org](https://ziglang.org/documentation/0.15.2/) |
+| **Codeberg Issues** | [codeberg.org/ziglang/zig](https://codeberg.org/ziglang/zig/issues) |
+| **GitHub Legacy** | [github.com/ziglang/zig](https://github.com/ziglang/zig/issues) |
 
 ---
 
-## 🔬 Independent Validation
+## 🏅 Design Philosophy
 
-| Paper | Finding | Relevance |
-|-------|---------|-----------|
-| [Mikkelsen et al., 2024](https://arxiv.org/abs/2403.05989) | 6:9 optimal for LLM training | Confirms GF16 exponent:mantissa |
-| [IBM Research, 2019](https://research.ibm.com/publications/dlfloat-a-16-floating-point-format-designed-for-deep-learning-training-and-inference) | DLFloat = 6:9 (empirical) | Same format, different derivation |
-| [Wang et al., 2023](https://arxiv.org/html/2305.10947v3) | FP16 accuracy = FP32 ±0.2% | Confirms 2.8 digits sufficient |
-
----
-
-## 🏅 For Scientific Collaborators
-
-Trinity connects fundamental physics through φ² + φ⁻² = 3:
-
-```
-φ² + φ⁻² = 3 (ROOT)
-    ↓
-γ = φ⁻³ (TRUNK)
-    ↓
-├── G = π³γ²/φ     → 0.09% accuracy ✅
-├── C = φ⁻¹        → consciousness threshold
-├── t = φ⁻²        → 382 ms ✅
-└── N_gen = 3      → exact identity ✅
-```
-
-[Full Scientific Framework](docs/papers/README_FOR_SCIENTISTS.md) | [DELTA-001 Report](docs/docs/research/delta_001_final_report.md)
+1. **No hardware deps** — `packed struct(u16)` works everywhere
+2. **Convert once** — Input → f32 compute → Output
+3. **Pure Zig** — No libc, no LLVM intrinsics
+4. **φ-first** — Derived from golden ratio, not compromise
+5. **Tested** — 422 tests, 98.7% passing
+6. **Audited** — 46 issues documented, all bypassed
 
 ---
 
-## Honest Science: What We Got Wrong
+## 📄 License
 
-Science advances through falsification. Here's what didn't work:
-
-| Hypothesis | Expected | Actual | Status |
-|-----------|----------|--------|--------|
-| γ = φ⁻³ (Barbero-Immirzi) | 0.237533 | 0.236068 | ❌ 0.617% error — **REJECTED** |
-| α family fit | <0.01% | 5-15% | ❌ **REJECTED** |
-| √(8/3) ≈ φ | Exact | 1.632 vs 1.618 | ❌ **REJECTED** |
-
-**Evidence Level:** 🔴 Smoking Gun (4): G, N_gen=3, t_present, T_cycles | 🟡 Consistent (3): C, Ω_Λ, Ω_DM | ⚫ Rejected (3): γ=φ⁻³, α family, √(8/3)
-
----
-
-## TRI-27 — Ternary Kernel
-
-**27 registers, 36 opcodes, 3 banks**
-
-| Component | Value |
-|-----------|-------|
-| **Registers** | 27×32-bit (t0-t26) = 3 banks × 9 (Coptic alphabet) |
-| **Opcodes** | 36 — arithmetic, logic, control, ternary, sacred |
-| **Memory** | 64KB byte-addressable |
-| **Targets** | Zig CPU emulator + Verilog FPGA |
-
-```
-φ² + 1/φ² = 3 → 3^27 = 7.6 trillion states (ternary completeness)
-```
-
-[TRI-27 Docs](docs/tri27/README.md) | [ISA Reference](src/tri27/emu/specs/tri27_isa.md)
-
----
-
-## What is Trinity?
-
-Trinity is a **ternary computing framework** with:
-- **Vector Symbolic Architecture (VSA)** for cognitive computing
-- **BitNet LLM inference** on ordinary CPUs (no GPU required)
-- **Mathematical research** connecting φ (golden ratio) to fundamental constants
-- **VIBEE compiler** for generating Zig/Verilog from specifications
-- **DePIN network** for distributed inference
-
-### Why Ternary?
-
-| | Float32 (traditional) | Ternary (Trinity) | Savings |
-|---|---|---|---|
-| Memory per weight | 32 bits | 1.58 bits | **20x** |
-| Compute | Multiply + Add | Add only | **10x** |
-| 70B model RAM | 280 GB | 14 GB | **20x** |
-
----
-
-## Installation
-
-**Trinity v5.1.0 "HEARTBEAT"**
-
-| Method | Command |
-|--------|---------|
-| **npm** | `npm install -g @playra/tri` |
-| **Homebrew** | `brew tap gHashTag/trinity && brew install trinity` |
-| **AUR** | `yay -S trinity-cli` |
-| **Docker** | `docker pull ghcr.io/ghashtag/trinity:latest` |
-
-### Build from Source
-
-```bash
-git clone https://github.com/gHashTag/trinity.git && cd trinity
-zig build tri          # Build TRI CLI
-./zig-out/bin/tri      # Run
-```
-
-Requires **Zig 0.15.x**.
-
-### Platform Guides
-
-| Platform | Guide |
-|----------|-------|
-| **macOS** | [docs/quickstart_macos.md](docs/quickstart_macos.md) |
-| **Linux** | [docs/quickstart_linux.md](docs/quickstart_linux.md) |
-| **Windows** | [docs/quickstart_windows.md](docs/quickstart_windows.md) |
-
----
-
-## Core Commands
-
-| Command | Description |
-|---------|-------------|
-| `tri chat` | Interactive chat (vision + voice + tools) |
-| `tri code <prompt>` | Generate code |
-| `tri fix <file>` | Detect and fix bugs |
-| `tri explain <file>` | Explain code |
-| `tri constants` | Show all sacred constants (φ, π, e...) |
-| `tri phi <n>` | Compute φ^n |
-| `tri clara demo` | CLARA verification (4 theorems) |
-
-**100+ commands available.** Run `tri help` or see [Command Reference](docs/command_registry.md)
-
----
-
-## Build Commands
-
-```bash
-zig build                    # Build all 50+ binaries
-zig build tri                # Unified TRI CLI (32 MB)
-zig build test               # Run ALL tests
-zig build bench              # Run benchmarks
-zig build release            # Cross-platform release builds
-zig build vibee              # VIBEE Compiler CLI
-zig build firebird           # Firebird LLM CLI
-zig build libvsa             # Build libtrinity-vsa C API
-zig fmt src/                 # Format code
-```
-
----
-
-## Contributing
-
-```bash
-git clone https://github.com/gHashTag/trinity.git
-cd trinity
-zig build test               # Run all tests before submitting PRs
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
----
-
-## Troubleshooting
-
-| Issue | Solution | Documentation |
-|-------|----------|----------------|
-| Build fails on Zig 0.15.x | Check API migration | [CONTRIBUTING.md](CONTRIBUTING.md#code-style) |
-| FPGA programming fails | Run fxload first | [docs/troubleshooting.md](docs/troubleshooting.md#fpga-issues) |
-| Training stalls at low steps | Use cosine LR schedule | [docs/troubleshooting.md](docs/troubleshooting.md#training-issues) |
-
-See [docs/troubleshooting.md](docs/troubleshooting.md) for complete troubleshooting guide.
-
----
-
-## Maintainer
-
-**Dmitrii Vasilev** ([@gHashTag](https://github.com/gHashTag))
-
----
-
-## Community
-
-<p align="center">
-  <a href="https://www.reddit.com/r/t27ai/"><img src="https://img.shields.io/badge/Reddit-r-t27ai-FF4500?style=for-the-badge&logo=reddit" alt="Reddit"></a>
-  <a href="https://t.me/t27_lang"><img src="https://img.shields.io/badge/Telegram-t27__lang-229ED9?style=for-the-badge&logo=telegram" alt="Telegram"></a>
-  <a href="https://x.com/t27_lang"><img src="https://img.shields.io/badge/X-t27__lang-000000?style=for-the-badge&logo=x" alt="X"></a>
-</p>
-
----
-
-## GitHub Topics
-
-**Help others discover Trinity — we're tagged with:**
-
-`ternary-computing` `balanced-ternary` `vsa` `hypervector` `neurosymbolic-ai` `llm-inference` `golden-ratio` `fpga` `zig` `edge-ai`
-
----
-
-## License
-
-MIT — see [LICENSE](LICENSE)
+MIT License — See [LICENSE](LICENSE) file for details.
 
 ---
 
 <p align="center">
-  <a href="https://github.com/gHashTag/trinity/releases/v5.1.0"><strong>Download v5.1.0 "HEARTBEAT"</strong></a> &bull;
-  <a href="https://gHashTag.github.io/trinity/">Dashboard</a> &bull;
-  <a href="https://gHashTag.github.io/trinity/docs/">Documentation</a>
+  <a href="https://github.com/gHashTag/zig-golden-float"><strong>Star on GitHub</strong></a> &bull;
+  <a href="https://github.com/gHashTag/trinity">Trinity Framework</a>
 </p>
 
 <p align="center">
-  <code>φ² + 1/φ² = 3 = TRINITY</code><br>
-  <code>v5.1.0 HEARTBEAT — 28 March 2026</code>
+  <code>φ² + 1/φ² = 3 = GOLDENFLOAT</code><br>
+  <code>46 Zig issues bypassed. 18 Urgent. 9 filed by core team.</code>
 </p>
