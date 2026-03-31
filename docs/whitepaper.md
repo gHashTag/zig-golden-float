@@ -1,10 +1,12 @@
-# GoldenFloat16: An Integer-Backed Implementation of the 1/6/9 Floating Format
+# GoldenFloat16: An Integer-Backed Implementation of 1/6/9 Floating Point Format
 
 **Authors:** Dmitrii Vasilev, Trinity Project
 **Date:** April 1, 2026
 **Status:** v1.1 — BENCH-001–006 Complete
 
-> Abstract: We present GoldenFloat16 (GF16), an integer-backed implementation of the 1/6/9 floating-point format first proposed as IBM DLFloat (Agrawal et al., 2019). Unlike prior DLFloat work focused on ASIC FPUs, we implement GF16 as a packed `u16` type, eliminating 62+ half-type compiler bugs across Zig, Rust, C++, and WASM. Across six benchmarks (BENCH-001–006), GF16 matches f32 accuracy (97.67% on trained MNIST MLP, 0.00% gap) while reducing memory bandwidth and compute cost compared to FP32 under a simple energy model. On FPGA (XC7A100T via openXC7 toolchain), we provide the first open-source characterization of 1/6/9 arithmetic, measuring unit-level (118/94 LUT) and MAC-level (71 LUT + 16 DSP) costs against ternary baselines.
+> **Attribution Notice:** GF16 adopts IBM's DLFloat format specification (1/6/9, bias=31). The novelty is its **integer-backed implementation** using `u16` storage, which bypasses 62+ compiler bugs in half-precision floating-point.
+
+**> Abstract: We present GoldenFloat16 (GF16), an integer-backed implementation of the 1/6/9 floating-point format first proposed as IBM DLFloat (Agrawal et al., 2019). Unlike prior DLFloat work focused on ASIC FPUs, we implement GF16 as a packed `u16` type, eliminating 62+ half-type compiler bugs across Zig, Rust, C++, and WASM. Across six benchmarks (BENCH-001–006), GF16 matches f32 accuracy (97.67% on trained MNIST MLP, 0.00% gap) while reducing memory bandwidth and compute cost compared to FP32 under a simple energy model. On FPGA (XC7A100T via openXC7 toolchain), we provide the first open-source characterization of 1/6/9 arithmetic, measuring unit-level (118/94 LUT) and MAC-level (71 LUT + 16 DSP) costs against ternary baselines.
 
 ---
 
@@ -306,6 +308,58 @@ The 1/6/9 format was proven optimal for deep learning by Mellempudi et al. (2021
 | Results tables | `tables/*.csv` | CSV data files |
 | Test validation | `tests/whitepaper_results.zig` | Zig tests (16 pass) |
 | FPGA modules | `fpga/openxc7-synth/*.v` | Verilog sources |
+
+---
+
+## 10. Dissemination & Marketing Plan
+
+### 10.1 Target Platforms
+
+| Platform | Subreddit | Audience | Goal |
+|----------|-----------|----------|------|
+| **Zig** | r/zig | Zig developers | Solve f16 issues |
+| **Rust** | r/rust | Rustacees | half-rs alternative |
+| **FPGA** | r/FPGA | Hardware engineers | Open characterization |
+| **ML** | r/MachineLearning | Researchers | Format comparison |
+| **Hacker News** | Front page | Tech enthusiasts | Broad reach |
+
+### 10.2 Key Messages
+
+**For Zig developers:**
+> "GF16 gives you 40× faster SIMD than f16 (56 vs 2,304 instructions) while bypassing 62 compiler bugs."
+
+**For FPGA engineers:**
+> "First open-source FPGA characterization of IBM DLFloat 1/6/9 arithmetic with direct ternary comparison."
+
+**For ML researchers:**
+> "GF16 matches f32 accuracy on trained models (97.67%, 0.00% gap) — validates Mellempudi 2021 theoretical result."
+
+**For all audiences:**
+> "GF16 is NOT a new format — it's an integer-backed implementation of IBM's proven DLFloat (1/6/9)."
+
+### 10.3 Post Calendar
+
+| Week | Platform | Topic | Link |
+|------|----------|-------|------|
+| W1 | r/zig, r/rust | "62 Zig bugs bypassed with one u16 type" | README + demo |
+| W2 | r/MachineLearning | "Why your training gradients overflow: f16 vs GF16" | BENCH-004b results |
+| W3 | r/FPGA | "First open DLFloat synthesis: 118 LUT adder" | BENCH-005 tables |
+| W4 | HN Show & Tell | "Full technical deep dive" | whitepaper.md |
+
+### 10.4 Engagement Strategy
+
+1. **Answer questions** on Zig/ML forums with data citations
+2. **Post benchmarks** as tables (not screenshots) for credibility
+3. **Link to source** — everything is reproducible on GitHub
+4. **Credit IBM** for the format, highlight our implementation novelty
+5. **Avoid hype** — let benchmarks speak (0.00% gap, 1.37× LUT)
+
+### 10.5 Anti-Patterns to Avoid
+
+- ❌ "We invented a new format" → **Say:** "We implement IBM's DLFloat as integer-backed u16"
+- ❌ "10× energy savings" → **Say:** "~2× energy (model-based, ≈2× vs FP32)"
+- ❌ "φ-optimal design" → **Say:** "6:9 has φ-distance 0.049; IBM found 6:9 via distribution analysis"
+- ❌ "Better than IEEE" → **Say:** "Different trade-off; matches f32 accuracy on trained MNIST MLP"
 
 ---
 
