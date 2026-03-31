@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="https://maas-log-prod.cn-wlcb.ufileos.com/anthropic/9abb931a-09e2-47f1-b604-85eb9b561805/52f3aea9c58e791b8438dfaa4e33281f.jpg?UCloudPublicKey=TOKEN_e15ba47a-d098-4fbd-9afc-a0dcf0e4e621&Expires=1774961194&Signature=HpSLonNyhvxJewblKFKHIDlKjxI=" alt="GoldenFloat">
+</p>
+
+<p align="center">
   <a href="https://github.com/gHashTag/zig-golden-float">
     <img src="https://img.shields.io/github/v/release/gHashTag/zig-golden-float?label=Download&style=for-the-badge" alt="Download">
   </a>
