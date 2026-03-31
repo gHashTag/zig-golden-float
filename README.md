@@ -692,6 +692,234 @@ print(f"Result: {result}")
 #define GF16_NAN    ((gf16_t)0x7E01)   // NaN
 ```
 
+### Use Cases
+
+#### 1. ML Experiments from Python — PyTorch Pipeline Integration
+
+Integrate GF16 directly into PyTorch training without writing Zig code:
+
+```python
+import ctypes
+import torch
+from torch.utils.cpp_extension import load
+
+# Load GoldenFloat shared library
+lib = ctypes.CDLL("./zig-out/lib/libgoldenfloat.dylib")
+
+# Define function signatures
+lib.gf16_from_f32.restype = ctypes.c_uint16
+lib.gf16_from_f32.argtypes = [ctypes.c_float]
+lib.gf16_to_f32.restype = ctypes.c_float
+lib.gf16_to_f32.argtypes = [ctypes.c_uint16]
+lib.gf16_phi_quantize.restype = ctypes.c_uint16
+lib.gf16_phi_quantize.argtypes = [ctypes.c_float]
+
+# Custom GF16 tensor storage
+class GF16Tensor:
+    def __init__(self, data):
+        self._data = [lib.gf16_from_f32(float(x)) for x in data.flatten()]
+
+    def to_float(self):
+        return [lib.gf16_to_f32(x) for x in self._data]
+
+    def phi_quantize_batch(self, weights):
+        """φ-optimized quantization for ML weights"""
+        return [lib.gf16_phi_quantize(w) for w in weights]
+
+# PyTorch integration
+def quantize_layer_weights(model):
+    for name, param in model.named_parameters():
+        gf16_weights = GF16Tensor(param.data.cpu().numpy())
+        param.data = torch.tensor(gf16_weights.to_float())
+```
+
+#### 2. FPGA Synthesis from C++ — Vitis HLS/Xilinx Direct Calls
+
+Use GF16 operations directly in HLS synthesis:
+
+```cpp
+// gf16_hls.cpp — Vitis HLS compatible
+#include <ap_int.h>
+#include "gf16.h"
+
+// HLS-compatible GF16 operations
+ap_uint<16> gf16_add_hls(ap_uint<16> a, ap_uint<16> b) {
+    #pragma HLS INLINE
+    return gf16_add(a.to_uint(), b.to_uint());
+}
+
+ap_uint<16> gf16_mul_hls(ap_uint<16> a, ap_uint<16> b) {
+    #pragma HLS INLINE
+    return gf16_mul(a.to_uint(), b.to_uint());
+}
+
+// Matrix multiplication with GF16
+void gf16_matmul(
+    ap_uint<16> A[16][16],
+    ap_uint<16> B[16][16],
+    ap_uint<16> C[16][16]
+) {
+    #pragma HLS ARRAY_PARTITION variable=A cyclic factor=4
+    #pragma HLS ARRAY_PARTITION variable=B cyclic factor=4
+
+    for (int i = 0; i < 16; i++) {
+        for (int j = 0; j < 16; j++) {
+            ap_uint<16> sum = gf16_from_f32(0.0f);
+            for (int k = 0; k < 16; k++) {
+                ap_uint<16> prod = gf16_mul_hls(A[i][k], B[k][j]);
+                sum = gf16_add(sum, prod);
+            }
+            C[i][j] = sum;
+        }
+    }
+}
+```
+
+Synthesis command:
+```bash
+vitis_hls -tcl_run gf16_hls.tcl
+```
+
+#### 3. Rust Server — Zero-Copy FFI in High-Throughput Service
+
+```rust
+use goldenfloat_sys::*;
+use std::ffi::CStr;
+use std::os::raw::c_char;
+
+// Zero-copy wrapper
+#[repr(transparent)]
+pub struct Gf16(pub u16);
+
+impl Gf16 {
+    #[inline]
+    pub fn from_f32(x: f32) -> Self {
+        Self(unsafe { gf16_from_f32(x) })
+    }
+
+    #[inline]
+    pub fn to_f32(&self) -> f32 {
+        unsafe { gf16_to_f32(self.0) }
+    }
+
+    #[inline]
+    pub fn add(&self, other: Gf16) -> Gf16 {
+        Gf16(unsafe { gf16_add(self.0, other.0) })
+    }
+
+    // Batch processing for throughput
+    pub fn batch_add(a: &[Gf16], b: &[Gf16], out: &mut [Gf16]) {
+        assert_eq!(a.len(), b.len());
+        assert_eq!(a.len(), out.len());
+        for ((ai, bi), oi) in a.iter().zip(b.iter()).zip(out.iter_mut()) {
+            *oi = ai.add(*bi);
+        }
+    }
+}
+
+// High-throughput service endpoint
+pub fn process_inference_batch(input: Vec<f32>) -> Vec<f32> {
+    // Convert to GF16 (quantization)
+    let gf_input: Vec<Gf16> = input.into_iter()
+        .map(Gf16::from_f32)
+        .collect();
+
+    // Process in GF16 domain
+    let mut gf_output = vec![Gf16(0); gf_input.len()];
+    Gf16::batch_add(&gf_input, &gf_input, &mut gf_output);
+
+    // Convert back to f32
+    gf_output.into_iter()
+        .map(|g| g.to_f32())
+        .collect()
+}
+
+// Library info
+pub fn version() -> String {
+    unsafe {
+        CStr::from_ptr(goldenfloat_version() as *const c_char)
+            .to_string_lossy()
+            .into_owned()
+    }
+}
+```
+
+#### 4. Node.js Microservice — N-API Wrapper for Web API
+
+```javascript
+// gf16_napi.cpp — Node.js native addon
+#include <node_api.h>
+#include "gf16.h"
+
+// Wrap gf16_from_f32
+napi_value FromF32(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1];
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+
+    double value;
+    napi_get_value_double(env, args[0], &value);
+
+    uint16_t result = gf16_from_f32((float)value);
+
+    napi_value js_result;
+    napi_create_uint32(env, result, &js_result);
+    return js_result;
+}
+
+// Wrap gf16_add
+napi_value Add(napi_env env, napi_callback_info info) {
+    size_t argc = 2;
+    napi_value args[2];
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+
+    uint32_t a, b;
+    napi_get_value_uint32(env, args[0], &a);
+    napi_get_value_uint32(env, args[1], &b);
+
+    uint16_t result = gf16_add((uint16_t)a, (uint16_t)b);
+
+    napi_value js_result;
+    napi_create_uint32(env, result, &js_result);
+    return js_result;
+}
+
+// Module registration
+napi_value Init(napi_env env, napi_value exports) {
+    napi_value fn_from_f32, fn_add;
+
+    napi_create_function(env, nullptr, 0, FromF32, nullptr, &fn_from_f32);
+    napi_create_function(env, nullptr, 0, Add, nullptr, &fn_add);
+
+    napi_set_named_property(env, exports, "fromF32", fn_from_f32);
+    napi_set_named_property(env, exports, "add", fn_add);
+
+    return exports;
+}
+
+NAPI_MODULE(NODE_GYP_MODULE_NAME, Init)
+```
+
+Usage in Node.js:
+```javascript
+// index.js
+const gf16 = require('./build/Release/gf16_napi');
+
+// Express.js microservice
+const express = require('express');
+const app = express();
+
+app.post('/compute', (req, res) => {
+    const { a, b } = req.body;
+    const gf_a = gf16.fromF32(a);
+    const gf_b = gf16.fromF32(b);
+    const sum = gf16.add(gf_a, gf_b);
+    res.json({ sum });
+});
+
+app.listen(3000, () => console.log('GF16 microservice running'));
+```
+
 ---
 
 ## 🦀 Rust (Raw FFI Bindings)
