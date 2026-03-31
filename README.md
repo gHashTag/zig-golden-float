@@ -414,6 +414,8 @@ const packed = golden.packed_trit.PackedTrit.fromBigInt(n);
 const phi = golden.math.PHI;  // 1.618...
 ```
 
+**Need cross-language support?** See [C-ABI Bindings](#-c-abi--cross-language-bindings-v110) for Rust, Python, Node.js, and more.
+
 ---
 
 ## 📦 Module Reference
@@ -589,9 +591,235 @@ All 422 tests passed.
 
 ---
 
-## 🏅 Design Philosophy
+## 🌍 C-ABI — Cross-Language Bindings (v1.1.0)
 
-1. **No hardware deps** — `packed struct(u16)` works everywhere
+GoldenFloat provides a stable C-ABI layer for cross-language support (Rust, Python, Node.js, C/C++, Go).
+
+### Building the Shared Library
+
+```bash
+cd /path/to/zig-golden-float
+zig build shared
+```
+
+**Output:**
+- `zig-out/lib/libgoldenfloat.{so,dylib,dll}` — Shared library
+- `zig-out/include/gf16.h` — C header (specification)
+
+### C API
+
+```c
+#include <gf16.h>
+
+// Convert values
+gf16_t a = gf16_from_f32(3.14f);
+gf16_t b = gf16_from_f32(2.71f);
+
+// Arithmetic
+gf16_t sum = gf16_add(a, b);
+gf16_t prod = gf16_mul(a, b);
+
+// Convert back
+float result = gf16_to_f32(sum);
+
+// φ-optimized quantization
+gf16_t quantized = gf16_phi_quantize(weight);
+float dequantized = gf16_phi_dequantize(quantized);
+```
+
+### Rust
+
+```rust
+// extern "C" {
+//     fn gf16_from_f32(x: f32) -> u16;
+//     fn gf16_to_f32(g: u16) -> f32;
+//     fn gf16_add(a: u16, b: u16) -> u16;
+// }
+//
+// fn main() {
+//     let a = unsafe { gf16_from_f32(3.14) };
+//     let b = unsafe { gf16_from_f32(2.71) };
+//     let sum = unsafe { gf16_add(a, b) };
+//     let result = unsafe { gf16_to_f32(sum) };
+//     println!("Result: {}", result);
+// }
+```
+
+### Python (ctypes)
+
+```python
+import ctypes
+
+lib = ctypes.CDLL("./zig-out/lib/libgoldenfloat.dylib")
+
+lib.gf16_from_f32.restype = ctypes.c_uint16
+lib.gf16_from_f32.argtypes = [ctypes.c_float]
+
+lib.gf16_to_f32.restype = ctypes.c_float
+lib.gf16_to_f32.argtypes = [ctypes.c_uint16]
+
+lib.gf16_add.restype = ctypes.c_uint16
+lib.gf16_add.argtypes = [ctypes.c_uint16, ctypes.c_uint16]
+
+a = lib.gf16_from_f32(3.14)
+b = lib.gf16_from_f32(2.71)
+sum_gf = lib.gf16_add(a, b)
+result = lib.gf16_to_f32(sum_gf)
+
+print(f"Result: {result}")
+```
+
+### C-ABI Functions
+
+| Category | Functions |
+|----------|-----------|
+| **Conversion** | `gf16_from_f32`, `gf16_to_f32` |
+| **Arithmetic** | `gf16_add`, `gf16_sub`, `gf16_mul`, `gf16_div` |
+| **Unary** | `gf16_neg`, `gf16_abs` |
+| **Comparison** | `gf16_eq`, `gf16_lt`, `gf16_le`, `gf16_cmp` |
+| **Predicates** | `gf16_is_nan`, `gf16_is_inf`, `gf16_is_zero`, `gf16_is_subnormal` |
+| **φ-Math** | `gf16_phi_quantize`, `gf16_phi_dequantize` |
+| **Utility** | `gf16_copysign`, `gf16_min`, `gf16_max`, `gf16_fma` |
+| **Info** | `goldenfloat_version`, `goldenfloat_phi`, `goldenfloat_trinity` |
+
+### Constants
+
+```c
+#define GF16_ZERO   ((gf16_t)0x0000)   // Zero
+#define GF16_ONE    ((gf16_t)0x3C00)   // One
+#define GF16_PINF   ((gf16_t)0x7E00)   // +Infinity
+#define GF16_NINF   ((gf16_t)0xFE00)   // -Infinity
+#define GF16_NAN    ((gf16_t)0x7E01)   // NaN
+```
+
+---
+
+## 🦀 Rust (Raw FFI Bindings)
+
+### Using goldenfloat-sys Crate
+
+First, build the shared library:
+
+```bash
+zig build shared
+```
+
+Then add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+goldenfloat-sys = "1.1.0"
+```
+
+Or for local development:
+
+```toml
+[dependencies]
+goldenfloat-sys = { path = "rust/goldenfloat-sys" }
+```
+
+### Basic Usage
+
+```rust
+use goldenfloat_sys::*;
+
+fn main() {
+    unsafe {
+        // Convert f32 to GF16
+        let a = gf16_from_f32(3.14);
+        let b = gf16_from_f32(2.71);
+
+        // Arithmetic
+        let sum = gf16_add(a, b);
+        let prod = gf16_mul(a, b);
+
+        // Convert back
+        let result = gf16_to_f32(sum);
+        println!("3.14 + 2.71 = {:.2}", result);
+
+        // φ-Quantization
+        let weight = 2.71828;
+        let quantized = gf16_phi_quantize(weight);
+        let dequantized = gf16_phi_dequantize(quantized);
+
+        // Predicates
+        let zero = gf16_from_f32(0.0);
+        assert!(gf16_is_zero(zero));
+    }
+}
+```
+
+### Running with Library Path
+
+**macOS:**
+```bash
+DYLD_LIBRARY_PATH=zig-out/lib cargo run
+```
+
+**Linux:**
+```bash
+LD_LIBRARY_PATH=zig-out/lib cargo run
+```
+
+**Windows:**
+```powershell
+$env:PATH += ";C:\path\to\zig-out\lib"
+cargo run
+```
+
+### Available Functions
+
+```rust
+// Conversion
+fn gf16_from_f32(x: f32) -> gf16_t;
+fn gf16_to_f32(g: gf16_t) -> f32;
+
+// Arithmetic
+fn gf16_add(a: gf16_t, b: gf16_t) -> gf16_t;
+fn gf16_sub(a: gf16_t, b: gf16_t) -> gf16_t;
+fn gf16_mul(a: gf16_t, b: gf16_t) -> gf16_t;
+fn gf16_div(a: gf16_t, b: gf16_t) -> gf16_t;
+
+// Unary
+fn gf16_neg(g: gf16_t) -> gf16_t;
+fn gf16_abs(g: gf16_t) -> gf16_t;
+
+// Comparison
+fn gf16_eq(a: gf16_t, b: gf16_t) -> bool;
+fn gf16_lt(a: gf16_t, b: gf16_t) -> bool;
+fn gf16_le(a: gf16_t, b: gf16_t) -> bool;
+fn gf16_cmp(a: gf16_t, b: gf16_t) -> i32;
+
+// Predicates
+fn gf16_is_nan(g: gf16_t) -> bool;
+fn gf16_is_inf(g: gf16_t) -> bool;
+fn gf16_is_zero(g: gf16_t) -> bool;
+fn gf16_is_negative(g: gf16_t) -> bool;
+
+// φ-Math
+fn gf16_phi_quantize(x: f32) -> gf16_t;
+fn gf16_phi_dequantize(g: gf16_t) -> f32;
+
+// Utility
+fn gf16_fma(a: gf16_t, b: gf16_t, c: gf16_t) -> gf16_t;
+```
+
+### Constants
+
+```rust
+use goldenfloat_sys::*;
+
+pub const GF16_ZERO: gf16_t = 0x0000;
+pub const GF16_ONE: gf16_t = 0x3C00;
+pub const GF16_PINF: gf16_t = 0x7E00;
+pub const GF16_NINF: gf16_t = 0xFE00;
+pub const GF16_NAN: gf16_t = 0x7E01;
+pub const GF16_TRINITY: f64 = 3.0;
+```
+
+---
+
+## 🏅 Design Philosophy
 2. **Convert once** — Input → f32 compute → Output
 3. **Pure Zig** — No libc, no LLVM intrinsics
 4. **φ-first** — Derived from golden ratio, not compromise

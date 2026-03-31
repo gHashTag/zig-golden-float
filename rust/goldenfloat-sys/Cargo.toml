@@ -1,0 +1,36 @@
+[package]
+name = "goldenfloat-sys"
+version = "1.1.0"
+edition = "2021"
+authors = ["Trinity Project"]
+license = "MIT"
+description = "Rust sys crate for GoldenFloat C-ABI bindings"
+repository = "https://github.com/gHashTag/zig-golden-float"
+keywords = ["float16", "ml", "machine-learning", "phi", "golden-ratio", "ffi"]
+categories = ["no-std", "science", "embedded", "wasm"]
+
+[lib]
+name = "goldenfloat_sys"
+
+[build-dependencies]
+
+[dependencies]
+
+# This crate provides raw extern "C" bindings to libgoldenfloat.{so,dylib,dll}
+# Users link the actual library; this crate is just the FFI declarations.
+#
+# Build steps:
+# 1. Build Zig library: cd ../ && zig build shared
+# 2. This crate finds the built library automatically
+#
+# Users simply add `goldenfloat-sys` as a dependency:
+#
+# Cargo.toml for using crate:
+# [dependencies]
+# goldenfloat-sys = "1.1.0"
+#
+# Then use as:
+# use goldenfloat_sys::{gf16_from_f32, gf16_to_f32, gf16_add, ...};
+#
+# Or use safe wrappers (when created):
+# use goldenfloat::{GF16, GF16Add, GF16Mul, ...};

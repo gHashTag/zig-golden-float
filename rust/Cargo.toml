@@ -1,27 +1,13 @@
-[package]
-name = "gf16"
-version = "1.0.0"
-edition = "2021"
-authors = ["Trinity Project"]
-license = "MIT"
-description = "φ-optimized 16-bit floating point format for machine learning"
-repository = "https://github.com/gHashTag/zig-golden-float"
-readme = "README.md"
-keywords = ["float16", "ml", "machine-learning", "phi", "golden-ratio"]
-categories = ["no-std", "science", "embedded", "wasm"]
+[workspace]
+resolver = "2"
+members = ["gf16", "goldenfloat-sys"]
 
-[lib]
-name = "gf16"
-path = "src/lib.rs"
-
-[dependencies]
-# No dependencies! Pure integer operations.
-
-[features]
-default = ["std"]
-std = []
-no_std = []
-c-ffi = []  # Enable C FFI bindings (requires c/gf16.c to be compiled)
-
-[package.metadata.docs.rs]
-all-features = false
+# Workspace for GoldenFloat Rust crates
+#
+# Members:
+# - gf16: Pure Rust implementation of GF16 format
+# - goldenfloat-sys: Raw FFI bindings to libgoldenfloat C-ABI
+#
+# Usage:
+# cargo build -p gf16           # Build pure Rust crate
+# cargo build -p goldenfloat-sys # Build sys crate (requires zig build shared)
