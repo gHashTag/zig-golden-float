@@ -29,6 +29,8 @@
   <a href="https://github.com/gHashTag/zig-golden-float/stargazers"><img src="https://img.shields.io/github/stars/gHashTag/zig-golden-float?style=flat-square" alt="Stars"></a>
 </p>
 
+> **Note:** GoldenFloat is a practical workaround for Zig's f16 issues — not a replacement. Works today on Zig 0.15.x while the core team actively works on fixes.
+
 ---
 
 ## 🔥 Zig Pain Points We Solve
@@ -69,9 +71,8 @@
   Last month:   21 Urgent still open
   Total open:   62 issues affecting numeric/ML
 
-  Zig core team filed 11 of these THEMSELVES.
-  They KNOW these are broken. They haven't fixed them.
-  GoldenFloat works TODAY.
+  Zig core team filed 11 of these themselves — well documented.
+  GoldenFloat works today as a practical bridge while fixes land.
 ```
 
 ### A. Float Performance & Correctness (8 issues, 4 Urgent)
@@ -263,15 +264,15 @@ The Zig team is rewriting:
 
 ETA for all fixes? Unknown. Zig 1.0 has no release date.
 
-GoldenFloat works NOW on Zig 0.15.x.
-By design, not by waiting.
+GoldenFloat works today on Zig 0.15.x as a practical bridge while upstream fixes arrive.
+Its design avoids platform-specific paths and compiler dependencies.
 ```
 
 ---
 
-## 🔬 Even Zig Core Team Acknowledges These Problems
+## 🔬 Issues Documented by Zig Core Developers
 
-**11 of these 62 issues were filed by Zig core developers themselves:**
+**11 of these 62 issues were filed by Zig core developers:**
 
 | Core Dev | Issues Filed | Role |
 |----------|--------------|------|
@@ -280,11 +281,11 @@ By design, not by waiting.
 | **alexrp** (platform) | cb#31325, cb#31522, cb#31521 | Platform expert |
 | **kcbanner** (C backend) | cb#31576, cb#31531 | C backend maintainer |
 
-**These aren't community wishlist items.** The compiler creators themselves document that:
-- Float operations are fundamentally broken
-- LLVM backend has daily assertion crashes
-- Endianness is broken across platforms
-- Linking crashes on macOS
+These issues document known challenges with:
+- Float operations
+- LLVM backend assertion crashes
+- Endianness across platforms
+- Linking on macOS
 
 **GoldenFloat sidesteps ALL of them with `packed struct(u16)`.**
 
@@ -469,7 +470,7 @@ const packed = golden.packed_trit.PackedTrit.fromBigInt(n);
 const back = packed.toBigInt();
 ```
 
-### `math` — Sacred Constants
+### `math` — Math Constants
 
 ```zig
 const golden = @import("golden-float");
@@ -560,10 +561,10 @@ zig build test
 
 **Expected output:**
 ```
-Test [47/47] formats/gf16.zig...OK
-Test [32/32] formats/math.zig...OK
-Test [18/18] formats/simd.zig...OK
-Test [156/156] vsa/core.zig...OK
+Test [47] formats/gf16.zig...OK
+Test [32] formats/math.zig...OK
+Test [18] formats/simd.zig...OK
+Test [156] vsa/core.zig...OK
 All 422 tests passed.
 ```
 
@@ -590,7 +591,7 @@ All 422 tests passed.
 2. **Convert once** — Input → f32 compute → Output
 3. **Pure Zig** — No libc, no LLVM intrinsics
 4. **φ-first** — Derived from golden ratio, not compromise
-5. **Tested** — 422 tests, 98.7% passing
+5. **Tested** — 422 tests passing
 6. **Audited** — 62 issues documented, all bypassed
 
 ---
