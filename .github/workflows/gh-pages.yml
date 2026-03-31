@@ -1,0 +1,24 @@
+name: Deploy to GitHub Pages
+
+on:
+  workflow_dispatch:
+  workflow: gh-pages
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare gh-pages
+        run: |
+          mkdir -p gh-pages
+          cp docs/website/index.html gh-pages/index.html
+          
+      - name: Push to GitHub
+        run: |
+          git config user.email "playra@example.com"
+          git add gh-pages/
+          git commit -m "feat: add GitHub Pages website"
+          git push origin gh-pages
