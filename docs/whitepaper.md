@@ -4,15 +4,13 @@
 **Date:** April 1, 2026
 **Status:** v1.1 — BENCH-001–006 Complete
 
-> Abstract: We present GoldenFloat16 (GF16), an integer-backed implementation of the 1/6/9 floating-point format first proposed as IBM DLFloat (Agrawal et al., 2019). Unlike prior DLFloat work focused on ASIC FPUs, we implement GF16 as a packed `u16` type, eliminating 62+ half-type compiler bugs across Zig, Rust, C++, and WASM. Across six benchmarks (BENCH-001–006), GF16 matches f32 accuracy (97.67% on trained MNIST MLP, 0.00% gap) while requiring 2–5× lower energy consumption than FP32 (model-based estimate). On FPGA (XC7A100T via openXC7 toolchain), we provide the first open-source characterization of 1/6/9 arithmetic, measuring unit-level (118/94 LUT) and MAC-level (71 LUT + 16 DSP) costs against ternary baselines.
+> Abstract: We present GoldenFloat16 (GF16), an integer-backed implementation of the 1/6/9 floating-point format first proposed as IBM DLFloat (Agrawal et al., 2019). Unlike prior DLFloat work focused on ASIC FPUs, we implement GF16 as a packed `u16` type, eliminating 62+ half-type compiler bugs across Zig, Rust, C++, and WASM. Across six benchmarks (BENCH-001–006), GF16 matches f32 accuracy (97.67% on trained MNIST MLP, 0.00% gap) while reducing memory bandwidth and compute cost compared to FP32 under a simple energy model. On FPGA (XC7A100T via openXC7 toolchain), we provide the first open-source characterization of 1/6/9 arithmetic, measuring unit-level (118/94 LUT) and MAC-level (71 LUT + 16 DSP) costs against ternary baselines.
 
 ---
 
 ## 1. Introduction
 
-### 1.1 Background: The 1/6/9 Format
-
-The 1/6/9 bit allocation (6-bit exponent, 9-bit mantissa, bias=31) was first proposed by IBM as **DLFloat** (Agrawal et al., IEEE VLSI Circuits 2019) and independently validated as optimal for deep learning training by Mellempudi et al. (arXiv:2103.15940, 2021). This format provides:
+GF16 adopts the 1/6/9 allocation (6-bit exponent, 9-bit mantissa, bias=31) first proposed as DLFloat by Agrawal et al. (2019) for deep learning training and inference, but implements it as an integer-backed `u16` type to decouple the format from half-precision hardware and compiler support. This format provides:
 
 - Range: ±4.3×10⁹ (wider than FP16)
 - Underflow: 4.7×10⁻¹⁰ (better than FP16)
@@ -164,7 +162,7 @@ All data and code are reproducible:
 
 **Data source:** `tables/fpga_parallel_capacity.csv`
 
-### 4.3 Energy Consumption (Model-Based Estimate)
+### 4.3 Energy Consumption (Model-Based Estimate, ≈2× vs FP32)
 
 Based on device specifications (XC7A100T @ 50MHz):
 
@@ -173,7 +171,7 @@ Based on device specifications (XC7A100T @ 50MHz):
 | Memory (16-bit vs 32-bit) | 2.5 pJ | 1.25 pJ | 0.5× |
 | Compute (LUT operations) | 0.5 pJ | 0.25 pJ | 0.5× |
 | Interconnect | 0.5 pJ | 0.25 pJ | 0.5× |
-| **Total** | **3.5 pJ/op** | **1.75 pJ/op** | **2×** |
+| **Combined (model-based)** | **3.5 pJ/op** | **1.75 pJ/op** | **≈2×** |
 
 **Caveat:** These are model-based estimates assuming ideal memory allocation. Actual hardware measurements (energy profiling, thermal analysis) are required for validation. Real FPGA studies report 2–5× energy savings for 16-bit vs 32-bit formats, not 10×.
 
