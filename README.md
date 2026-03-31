@@ -575,6 +575,7 @@ All 422 tests passed.
 |----------|-----|
 | **Trinity Framework** | [github.com/gHashTag/trinity](https://github.com/gHashTag/trinity) |
 | **Trinity on X (Twitter)** | [x.com/t27_lang](https://x.com/t27_lang) |
+| **Trinity on Telegram** | [t.me/t27_lang](http://t.me/t27_lang) |
 | **Trinity Website** | [t27.ai](https://t27.ai) |
 | **IBM DLFloat Paper** | [research.ibm.com](https://research.ibm.com/publications/dlfloat-a-16-floating-point-format-designed-for-deep-learning-training-and-inference) |
 | **Zig 0.15 Docs** | [ziglang.org](https://ziglang.org/documentation/0.15.2/) |
@@ -603,7 +604,8 @@ MIT License — See [LICENSE](LICENSE) file for details.
 <p align="center">
   <a href="https://github.com/gHashTag/zig-golden-float"><strong>Star on GitHub</strong></a> &bull;
   <a href="https://github.com/gHashTag/trinity">Trinity Framework</a> &bull;
-  <a href="https://x.com/t27_lang">X/Twitter</a> &bull;
+  <a href="https://x.com/t27_lang">X</a> &bull;
+  <a href="http://t.me/t27_lang">Telegram</a> &bull;
   <a href="https://t27.ai">t27.ai</a>
 </p>
 
