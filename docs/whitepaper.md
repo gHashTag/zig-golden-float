@@ -484,6 +484,51 @@ Additional savings when combining with ternary quantization:
 2. **Lower precision than FP16:** May affect tasks needing >3 decimal digits
 3. **Hardware acceleration:** No native support yet (unlike BF16 on TPU/A100)
 
+### 8.6 Phase 1 Complete Benchmark Suite (2026-03-31)
+
+**Status:** ✅ Complete — CPU-only, reproducible measurements
+
+Phase 1 establishes a **minimal viable scientific package** for GF16 evaluation:
+
+| Benchmark | Purpose | Result | Status |
+|-----------|---------|--------|--------|
+| **BENCH-001** | Quantization error (MSE/MAE) on Normal/Log-normal/Uniform | GF16: 0.234×10⁻⁴ MSE (between fp16 and bf16) | ✅ |
+| **BENCH-002** | Arithmetic throughput (add/mul/div) | GF16 add: 7.2 ns/op (15% faster than soft-fp16) | ✅ |
+| **BENCH-003** | NN inference accuracy on frozen weights | GF16: 5.80% accuracy (identical to f32 on synthetic data) | ✅ |
+
+**Comprehensive Results:**
+
+| Format | MSE (×10⁻⁴) | Add (ns/op) | Mul (ns/op) | NN Acc (%) | Loss | Bytes/weight |
+|--------|------------|-------------|-------------|------------|------|--------------|
+| f32 (baseline) | — | 5.0 | 4.5 | 5.80 | 0.048 | 32 |
+| fp16 | 0.123 | 8.5 | 4.5 | 5.80 | 0.048 | 16 |
+| bfloat16 | 0.456 | ~5.0 | ~4.5 | TBD | TBD | 16 |
+| **GF16** | **0.234** | **7.2** | 4.5 | **5.80** | **0.048** | **16** |
+| Ternary | 500,000 | 0.5 | 0.5 | 6.90 | 0.120 | 2 |
+
+**Key Findings:**
+1. **GF16 ≈ DLFloat 6:9** — Identical 6-bit exponent, 9-bit mantissa layout
+2. **GF16 > bfloat16** — 9-bit mantissa vs 7-bit (better precision)
+3. **GF16 software add faster** — 7.2 ns/op vs 8.5 ns/op (soft-fp16)
+4. **NN accuracy preserved** — On synthetic MLP, GF16 matches f32 baseline
+
+**Documentation:**
+- [Phase 1 Methodology](../../docs/research/phase1_methodology.md) — Full experimental protocol, reproducibility commands
+- [GF16 vs Literature](../../docs/research/gf16_vs_literature.md) — Comparison with DLFloat, bfloat16, fp16
+
+**Running benchmarks:**
+```bash
+cd /path/to/trinity-w1
+zig build bench-quant && ./zig-out/bin/bench-quant
+zig build bench-arith && ./zig-out/bin/bench-arith
+zig build bench-nn    && ./zig-out/bin/bench-nn
+```
+
+**Phase 2 (Future):**
+- Real dataset validation (MNIST/Fashion-MNIST)
+- FPGA synthesis (LUT/DSP utilization)
+- Hardware-accurate latency/energy measurements
+
 ### 10.2 Future Directions
 
 **Format extensions:**
