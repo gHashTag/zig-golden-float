@@ -111,8 +111,8 @@ pub struct Gf16 {
 ### 3.2 Reproducibility
 
 All data and code are reproducible:
-- Source: https://github.com/gHashTag/trinity
-- FPGA synthesis: `fpga/openxc7-synth/*.v`
+- Source: https://github.com/gHashTag/zig-golden-float
+- FPGA synthesis: https://github.com/gHashTag/trinity/tree/main/fpga/openxc7-synth
 - Test validation: `tests/whitepaper_results.zig` (16 tests, all pass)
 
 ---
@@ -307,7 +307,7 @@ The 1/6/9 format was proven optimal for deep learning by Mellempudi et al. (2021
 | Whitepaper | `docs/whitepaper.md` | This document |
 | Results tables | `tables/*.csv` | CSV data files |
 | Test validation | `tests/whitepaper_results.zig` | Zig tests (16 pass) |
-| FPGA modules | `fpga/openxc7-synth/*.v` | Verilog sources |
+| FPGA modules | https://github.com/gHashTag/trinity/tree/main/fpga/openxc7-synth | Verilog sources |
 
 ---
 
@@ -329,7 +329,7 @@ The 1/6/9 format was proven optimal for deep learning by Mellempudi et al. (2021
 > "GF16 gives you 40× faster SIMD than f16 (56 vs 2,304 instructions) while bypassing 62 compiler bugs."
 
 **For FPGA engineers:**
-> "First open-source FPGA characterization of IBM DLFloat 1/6/9 arithmetic with direct ternary comparison."
+> "First open-source FPGA characterization of IBM DLFloat 1/6/9 arithmetic with direct ternary comparison. Verilog sources in trinity repo."
 
 **For ML researchers:**
 > "GF16 matches f32 accuracy on trained models (97.67%, 0.00% gap) — validates Mellempudi 2021 theoretical result."
@@ -343,7 +343,7 @@ The 1/6/9 format was proven optimal for deep learning by Mellempudi et al. (2021
 |------|----------|-------|------|
 | W1 | r/zig, r/rust | "62 Zig bugs bypassed with one u16 type" | README + demo |
 | W2 | r/MachineLearning | "Why your training gradients overflow: f16 vs GF16" | BENCH-004b results |
-| W3 | r/FPGA | "First open DLFloat synthesis: 118 LUT adder" | BENCH-005 tables |
+| W3 | r/FPGA | "First open DLFloat synthesis: 118 LUT adder" | FPGA Verilog (trinity repo) |
 | W4 | HN Show & Tell | "Full technical deep dive" | whitepaper.md |
 
 ### 10.4 Engagement Strategy
