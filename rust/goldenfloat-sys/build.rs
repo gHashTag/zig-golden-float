@@ -1,79 +1,50 @@
-//! build.rs — Find and link libgoldenfloat
+//! Build script for goldenfloat-sys
 //!
-//! This build script searches for libgoldenfloat in several locations:
-//! 1. `zig-out/lib/` relative to the workspace root (if built via `zig build shared`)
-//! 2. System library paths (if installed globally)
-//! 3. Environment variable `GOLDENFLOAT_LIB_DIR`
-
-use std::env;
-use std::path::PathBuf;
+//! This script searches for the libgoldenfloat shared library and prints
+//! cargo links to link against it.
 
 fn main() {
-    // Only link when not building docs
-    if env::var("CARGO_DOC_RS").is_ok() {
-        return;
-    }
-
-    let lib_name = "goldenfloat";
-
-    // Try to find the library in zig-out/lib (relative to workspace)
-    let workspace_root = workspace_root();
-    let zig_out_lib = workspace_root.join("zig-out/lib");
-
-    if zig_out_lib.exists() {
-        println!("cargo:rustc-link-search={}", zig_out_lib.display());
-        println!("cargo:rustc-link-lib=dylib={}", lib_name);
-        println!("cargo:rerun-if-changed={}", zig_out_lib.display());
-
-        // Also add the include path for users who need it
-        let zig_out_include = workspace_root.join("zig-out/include");
-        if zig_out_include.exists() {
-            println!("cargo:include={}", zig_out_include.display());
-        }
-        return;
-    }
-
-    // Try environment variable
-    if let Ok(lib_dir) = env::var("GOLDENFLOAT_LIB_DIR") {
-        println!("cargo:rustc-link-search={}", lib_dir);
-        println!("cargo:rustc-link-lib=dylib={}", lib_name);
-        return;
-    }
-
-    // Try system library (may be installed via package manager)
-    // This is a fallback; users should build via `zig build shared`
-    println!("cargo:rustc-link-lib=dylib={}", lib_name);
-    println!("cargo:warning=libgoldenfloat not found in zig-out/lib");
-    println!("cargo:warning=Run 'zig build shared' from the workspace root first");
-
-    // On macOS, also check Homebrew
-    #[cfg(target_os = "macos")]
-    {
-        let homebrew_lib = PathBuf::from("/usr/local/lib");
-        if homebrew_lib.exists() {
-            println!("cargo:rustc-link-search={}", homebrew_lib.display());
-        }
+    // Search for library in various locations
+    let lib_dir = find_library_dir();
+    
+    if let Some(dir) = lib_dir {
+        println!("cargo:rustc-link-search={}", dir);
+        println!("cargo:rustc-link-lib=goldenfloat");
+        println!("cargo:rerun-if-changed={}", dir.display());
+    } else {
+        println!("cargo:warning=libgoldenfloat not found. Build with 'zig build shared' in zig-golden-float root.");
+        println!("cargo:warning=Set GOLDENFLOAT_LIB_DIR environment variable to specify library location.");
     }
 }
 
-/// Find the workspace root by searching for `build.zig`
-fn workspace_root() -> PathBuf {
-    let path = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let mut current = PathBuf::from(&path);
-
-    loop {
-        if current.join("build.zig").exists() {
-            return current;
-        }
-
-        match current.parent() {
-            Some(parent) => {
-                current = parent.to_path_buf();
-            }
-            None => {
-                // Fallback to manifest directory
-                return PathBuf::from(path);
-            }
+fn find_library_dir() -> Option<std::path::PathBuf> {
+    use std::path::{Path, PathBuf};
+    
+    // 1. Check environment variable
+    if let Ok(dir) = std::env::var("GOLDENFLOAT_LIB_DIR") {
+        let path = PathBuf::from(dir);
+        if path.exists() {
+            return Some(path);
         }
     }
+    
+    // 2. Check zig-out/lib relative to manifest
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").ok()?;
+    let mut zig_out = PathBuf::from(manifest_dir);
+    zig_out.push("../../zig-out/lib");
+    if zig_out.exists() {
+        return Some(zig_out);
+    }
+    
+    // 3. Check system library paths
+    for &dir in &["/usr/local/lib", "/usr/lib"] {
+        let path = PathBuf::from(dir);
+        if path.join("libgoldenfloat.dylib").exists() 
+            || path.join("libgoldenfloat.so").exists() 
+            || path.join("goldenfloat.dll").exists() {
+            return Some(path.into());
+        }
+    }
+    
+    None
 }

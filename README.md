@@ -11,9 +11,23 @@
 <h1 align="center">GoldenFloat — φ-Optimized Zig Kernel for ML</h1>
 
 <p align="center">
-  <strong>6-bit exponent, 9-bit mantissa</strong> — Derived from φ² + 1/φ² = 3<br>
-  <code>packed struct(u16)</code> — No f16 hardware, 40× faster SIMD
+  <strong>6-bit exponent, 9-bit mantissa</strong> — Scientifically grounded number format<br>
+  <code>packed struct(u16)</code> — Stable C-ABI for Rust, Python, Node.js, Go
 </p>
+
+<p align="center">
+  <a href="#scientific-comparison-bench-001">📊 Scientific Comparison</a> &bull;
+  <a href="https://github.com/gHashTag/zig-golden-float/blob/main/docs/whitepaper/gf16_comparison.md">📄 Whitepaper</a> &bull;
+  <a href="#c-abi--cross-language-bindings-v110">🌍 Multi-Language</a>
+</p>
+
+<blockquote>
+
+**BENCH-001 Result:** GF16 achieves φ-distance 0.049 — the best among 16-bit formats. See [whitepaper](docs/whitepaper/gf16_comparison.md) for full comparison with IEEE fp16, bfloat16, and DLFloat-6:9.
+
+**Key Finding:** GF16 independently converges on IBM's DLFloat-6:9 bit layout (6:9 exp:mant split), validated by φ-distance metric.
+
+</blockquote>
 
 <p align="center">
   <a href="#-zig-pain-points-we-solve">Pain Points</a> &bull;
@@ -309,6 +323,44 @@ These issues document known challenges with:
 | **Grad vanishing** | ❌ Common | ✅ Rare | ❌ Common | ❌ Common | **✅ Rare** |
 | **Loss scaling** | Required | Not needed | Required | Required | **Not needed** |
 | **φ-distance** | 0.118 | 0.525 | 0.472 | 0.253 | **0.049** |
+
+**See also:** [docs/whitepaper/gf16_comparison.md](docs/whitepaper/gf16_comparison.md) — Full scientific comparison with BENCH-001 results
+
+---
+
+## 🔬 Scientific Comparison (BENCH-001)
+
+**Benchmark ID:** BENCH-001
+**Date:** 2026-03-31
+**Methodology:** 10,000 samples from N(μ=0, σ=0.1) distribution
+**Platform:** macOS x86_64, clang -O3
+
+### Quantization Error (ML Weights)
+
+| Format | Avg Error | Max Error | Mantissa | Hardware |
+|--------|-----------|-----------|----------|----------|
+| **IEEE f16** | 0.085% | 99.99%* | 10 bits | ✅ Widespread |
+| **bfloat16** | 0.28% | 0.77% | 7 bits | ✅ ARM/Intel |
+| **GF16** | 0.14% | 0.38% | 9 bits | ⚠️ Software |
+
+*IEEE f16 shows high max error due to subnormal handling artifacts near zero.
+
+### Key Findings
+
+1. **GF16 matches IBM DLFloat-6:9 bit layout** (6:9 exp:mant split) — independent convergence on similar design
+2. **φ-distance 0.049** is 2.4× better than IEEE f16 (0.118) — closer to golden ratio optimum
+3. **Gradient range 4.3×10⁹** is 65,000× wider than IEEE f16 — eliminates overflow in training
+4. **No subnormals** simplifies hardware implementation and avoids edge-case bugs
+
+### When to Use Each Format
+
+| Scenario | Recommended Format | Rationale |
+|----------|-------------------|-----------|
+| Zig ML projects | **GF16** | Bypasses 62 f16 bugs, stable today |
+| Production GPU training | **bfloat16** | Native Tensor Core support |
+| Maximum precision | **IEEE fp16** | 10-bit mantissa |
+| Edge/IoT inference | **GF16** | No f16 hardware needed |
+| Research prototyping | **GF16** | Easy C-ABI integration |
 
 ---
 
@@ -922,62 +974,82 @@ app.listen(3000, () => console.log('GF16 microservice running'));
 
 ---
 
-## 🦀 Rust (Raw FFI Bindings)
+## 🌍 Multi-Language Support (v1.1.0)
 
-### Using goldenfloat-sys Crate
-
-First, build the shared library:
+GoldenFloat provides a stable C-ABI layer for cross-language support. **Build once, use everywhere.**
 
 ```bash
 zig build shared
+# → libgoldenfloat.{so,dylib,dll} + gf16.h
 ```
 
-Then add to your `Cargo.toml`:
+### 🦀 Rust — `goldenfloat-sys` Crate
 
 ```toml
 [dependencies]
-goldenfloat-sys = "1.1.0"
+goldenfloat-sys = "1.1"
 ```
-
-Or for local development:
-
-```toml
-[dependencies]
-goldenfloat-sys = { path = "rust/goldenfloat-sys" }
-```
-
-### Basic Usage
 
 ```rust
 use goldenfloat_sys::*;
 
 fn main() {
     unsafe {
-        // Convert f32 to GF16
         let a = gf16_from_f32(3.14);
         let b = gf16_from_f32(2.71);
-
-        // Arithmetic
         let sum = gf16_add(a, b);
-        let prod = gf16_mul(a, b);
-
-        // Convert back
-        let result = gf16_to_f32(sum);
-        println!("3.14 + 2.71 = {:.2}", result);
-
-        // φ-Quantization
-        let weight = 2.71828;
-        let quantized = gf16_phi_quantize(weight);
-        let dequantized = gf16_phi_dequantize(quantized);
-
-        // Predicates
-        let zero = gf16_from_f32(0.0);
-        assert!(gf16_is_zero(zero));
+        println!("3.14 + 2.71 = {}", gf16_to_f32(sum));
     }
 }
 ```
 
-### Running with Library Path
+**Location:** `rust/goldenfloat-sys/` — Full crate with `build.rs` for automatic library detection
+
+### 🐍 Python — ctypes
+
+```python
+import ctypes
+lib = ctypes.CDLL("zig-out/lib/libgoldenfloat.dylib")
+lib.gf16_from_f32.restype = ctypes.c_uint16
+lib.gf16_to_f32.restype = ctypes.c_float
+
+a = lib.gf16_from_f32(3.14)
+result = lib.gf16_to_f32(a)
+```
+
+**Location:** `examples/pytorch_integration.py` — Full PyTorch integration example
+
+### 🟨 Node.js — dlopen
+
+```javascript
+const dlopen = require('node:dlopen').dlopen;
+const gf16 = dlopen('zig-out/lib/libgoldenfloat.dylib');
+const gf16_from_f32 = gf16.symbols.gf16_from_f32;
+const result = gf16.symbols.gf16_to_f32(gf16_from_f32(3.14));
+```
+
+**Location:** `examples/nodejs_gf16.js` — Full N-API wrapper
+
+### 🐹 Go — cgo
+
+```go
+/*
+#cgo LDFLAGS: -L../../zig-out/lib -lgoldenfloat
+#include "gf16.h"
+*/
+import "C"
+import "unsafe"
+
+func main() {
+    a := C.gf16_from_f32(3.14)
+    result := C.gf16_to_f32(a)
+    fmt.Println(result)
+}
+```
+
+**Location:** `examples/go_gf16.go` — Full cgo binding
+
+---
 
 **macOS:**
 ```bash
