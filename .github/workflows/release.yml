@@ -1,0 +1,173 @@
+name: Release Build Matrix
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          # Linux
+          - os: ubuntu-latest
+            target: x86_64-linux
+            archive: tar.gz
+            artifact: golden-float-x86_64-linux
+          - os: ubuntu-latest
+            target: aarch64-linux
+            archive: tar.gz
+            artifact: golden-float-aarch64-linux
+          # macOS
+          - os: macos-latest
+            target: x86_64-macos
+            archive: tar.gz
+            artifact: golden-float-x86_64-macos
+          - os: macos-latest
+            target: aarch64-macos
+            archive: tar.gz
+            artifact: golden-float-aarch64-macos
+          # Windows
+          - os: windows-latest
+            target: x86_64-windows
+            archive: zip
+            artifact: golden-float-x86_64-windows
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.15.0
+
+      - name: Build
+        run: |
+          zig build -Doptimize=ReleaseFast -Dtarget=${{ matrix.target }}
+          # Copy binary to clean location
+          mkdir -p artifacts
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cp zig-out/bin/golden-float.exe artifacts/golden-float.exe
+          else
+            cp zig-out/bin/golden-float artifacts/golden-float
+          fi
+        shell: bash
+
+      - name: Create Archive
+        run: |
+          cd artifacts
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            7z a ../${{ matrix.artifact }}.zip *
+          else
+            tar czf ../${{ matrix.artifact }}.tar.gz *
+          fi
+        shell: bash
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ matrix.artifact }}.${{ matrix.archive }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Homebrew formula update
+  homebrew:
+    name: Update Homebrew Tap
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Tap
+        uses: actions/checkout@v4
+        with:
+          repository: gHashTag/homebrew-golden-float
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Update Formula
+        run: |
+          TAG=${{ github.event.release.tag_name }}
+          VERSION=${TAG#v}
+          SHA256=$(curl -sL "https://github.com/gHashTag/zig-golden-float/archive/$TAG.tar.gz" | sha256sum | awk '{print $1}')
+
+          cat > Formula/golden-float.rb <<EOF
+          class GoldenFloat < Formula
+            desc "φ-optimized ML number formats for Zig"
+            homepage "https://github.com/gHashTag/zig-golden-float"
+            url "https://github.com/gHashTag/zig-golden-float/archive/\$TAG.tar.gz"
+            sha256 "\$SHA256"
+            license "MIT"
+
+            depends_on "zig" => :build
+
+            def install
+              system "zig", "build", "-Doptimize=ReleaseFast"
+              bin.install "zig-out/bin/golden-float"
+            end
+
+            test do
+              system "#{bin}/golden-float", "--version"
+            end
+          end
+          EOF
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/golden-float.rb
+          git commit -m "Update to $VERSION" || echo "No changes"
+          git push || echo "Nothing to push"
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+  # npm packages update
+  npm:
+    name: Update npm Packages
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package:
+          - linux-x64
+          - linux-arm64
+          - darwin-x64
+          - darwin-arm64
+          - win32-x64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish Platform Package
+        run: |
+          PKG=@golden-float/${{ matrix.package }}
+          # Download artifact from release
+          ARTIFACT=golden-float-${{ matrix.package }}.${{ matrix.package == 'win32-x64' && 'zip' || 'tar.gz' }}
+          wget https://github.com/gHashTag/zig-golden-float/releases/download/${{ github.event.release.tag_name }}/$ARTIFACT
+          # Extract and setup
+          mkdir -p package/bin
+          if [[ "$ARTIFACT" == *.zip ]]; then
+            unzip $ARTIFACT -d package/bin
+          else
+            tar xzf $ARTIFACT -C package/bin
+          fi
+          # Create package.json
+          cat > package/package.json <<EOF
+          {
+            "name": "$PKG",
+            "version": "${{ github.event.release.tag_name }}",
+            "os": ["$(echo $PKG | cut -d- -f1)"],
+            "cpu": ["$(echo $PKG | cut -d- -f2)"],
+            "bin": { "golden-float": "bin/golden-float" }
+          }
+          EOF
+          cd package
+          npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        shell: bash
