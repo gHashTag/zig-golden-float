@@ -1,7 +1,0 @@
-format,total_bits,sign_bits,exponent_bits,mantissa_bits,bias,max_value,min_positive,decimal_digits,phi_distance,avg_error_pct,max_error_pct,subnormals,hardware_support,use_case
-IEEE_fp16,16,1,5,10,15,65504,6.10e-05,3.3,0.1180,0.0854,99.9998,yes,widespread,GPU_training_Tensor_cores
-bfloat16,16,1,8,7,127,3.39e38,1.18e-38,2.4,0.5248,0.2816,0.7694,no,ARM_Intel,production_training_A100
-DLFloat_6_9,16,1,6,9,31,4.30e09,4.66e-10,2.8,0.0490,0.1400,0.3800,no,IBM_research,IBM_hardware_only
-GF16,16,1,6,9,31,4.30e09,4.66e-10,2.8,0.0486,0.1407,0.3824,no,software_only,Zig_ML_prototyping
-OCP_FP8_E4M3,8,1,4,3,7,448,0.00391,1.2,0.7120,1.2500,12.5000,no,H100_only,H100_inference
-OCP_FP8_E5M2,8,1,5,2,15,57344,2.40e-05,1.2,1.8820,2.5000,25.0000,no,H100_only,H100_training

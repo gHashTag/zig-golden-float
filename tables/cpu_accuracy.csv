@@ -1,0 +1,6 @@
+benchmark,format,accuracy_pct,loss,delta_vs_f32_pct,status
+BENCH-004b,f32,97.67,0.0773,0.00,PASS
+BENCH-004b,fp16,97.70,0.1533,0.03,PASS
+BENCH-004b,bf16,9.80,2.3026,-87.87,FAIL
+BENCH-004b,gf16,97.67,0.0774,0.00,PASS
+BENCH-004b,ternary,9.80,2.3027,-87.87,FAIL

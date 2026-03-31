@@ -1,0 +1,3 @@
+device,total_lut,total_dsp,format,lut_per_mac,dsp_per_mac,parallel_lut,parallel_dsp,bottleneck
+XC7A100T,63400,240,ternary_mac_16,52,0,1219,INF,logic
+XC7A100T,63400,240,gf16_mac_16,71,16,893,15,dsp

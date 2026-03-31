@@ -1,0 +1,3 @@
+benchmark,operation,ternary_lut,gf16_lut,ratio,ternary_ff,gf16_ff,ternary_dsp,gf16_dsp
+BENCH-005,add,2,118,59.0,2,47,0,0
+BENCH-005,mul,2,94,47.0,2,47,0,1
