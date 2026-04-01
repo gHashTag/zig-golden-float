@@ -22,11 +22,27 @@ pub const Spec = struct {
     composite: ?Composite,
     test_vectors: []TestVector,
     input_path: []const u8 = "unknown.tri",
+    // Level 5 (Data Structures) fields:
+    spec_type: ?[]const u8 = null,
+    types: []const TypeDef = &.{},
 
     pub fn deinit(self: *Spec, allocator: std.mem.Allocator) void {
         allocator.free(self.fields);
         allocator.free(self.test_vectors);
     }
+};
+
+pub const TypeField = struct {
+    name: []const u8,
+    type: []const u8,
+};
+
+pub const TypeDef = struct {
+    name: []const u8,
+    generic: ?[]const u8 = null,
+    variant: enum { struct_type, enum_type } = .struct_type,
+    fields: []const TypeField = &.{},
+    enum_values: []const []const u8 = &.{},
 };
 
 pub const Storage = struct {
@@ -122,6 +138,7 @@ pub const Op = struct {
     inputs: []const []const u8,
     outputs: []const []const u8,
     output: []const u8 = "",
+    description: []const u8 = "",
     intermediate_type: []const u8 = "",
     algorithm: []const u8,
     rounding: []const u8 = "",
@@ -288,7 +305,11 @@ const Parser = struct {
             end -= 1;
         }
 
-        return self.content[start..end];
+        const slice = self.content[start..end];
+        // Allocate a copy to ensure the key persists after parsing
+        const result = try self.allocator.dupe(u8, slice);
+        // Convert []u8 to []const u8 by casting
+        return @as([]const u8, result);
     }
 
     fn readValue(self: *Parser) ![]const u8 {
@@ -323,14 +344,17 @@ const Parser = struct {
             end -= 1;
         }
 
-        return self.content[start..end];
+        const slice = self.content[start..end];
+        // Allocate a copy to ensure the value persists after parsing
+        return self.allocator.dupe(u8, slice);
     }
 
     fn readUntil(self: *Parser, delimiter: u8) ![]const u8 {
         const start = self.pos;
         while (self.advance()) |ch| {
             if (ch == delimiter) {
-                return self.content[start .. self.pos - 1];
+                const slice = self.content[start .. self.pos - 1];
+                return self.allocator.dupe(u8, slice);
             }
         }
         return error.UnexpectedEndOfFile;
@@ -352,7 +376,7 @@ const Parser = struct {
             .version = 1,
             .level = 0,
             .storage = undefined,
-            .fields = undefined,
+            .fields = &.{},
             .exponent = undefined,
             .rounding = undefined,
             .phi = undefined,
@@ -362,7 +386,7 @@ const Parser = struct {
             .conversion = undefined,
             .ops = &.{},
             .composite = null,
-            .test_vectors = undefined,
+            .test_vectors = &.{},
         };
 
         while (try self.readKey()) |maybe_key| {
@@ -372,6 +396,17 @@ const Parser = struct {
                 spec.version = try self.parseInt(u8);
             } else if (std.mem.eql(u8, maybe_key, "level")) {
                 spec.level = try self.parseInt(u8);
+            } else if (std.mem.eql(u8, maybe_key, "type")) {
+                const type_val = try self.readValue();
+                spec.spec_type = type_val;
+            } else if (std.mem.eql(u8, maybe_key, "storage")) {
+                spec.format = try self.readValue();
+            } else if (std.mem.eql(u8, maybe_key, "version")) {
+                spec.version = try self.parseInt(u8);
+            } else if (std.mem.eql(u8, maybe_key, "level")) {
+                spec.level = try self.parseInt(u8);
+            } else if (std.mem.eql(u8, maybe_key, "type")) {
+                spec.spec_type = try self.readValue();
             } else if (std.mem.eql(u8, maybe_key, "storage")) {
                 spec.storage = try self.parseStorage();
             } else if (std.mem.eql(u8, maybe_key, "fields")) {
@@ -392,6 +427,14 @@ const Parser = struct {
                 _ = try self.parseConversion();
             } else if (std.mem.eql(u8, maybe_key, "ops")) {
                 spec.ops = try self.parseOpList();
+            } else if (std.mem.eql(u8, maybe_key, "types")) {
+                // types: is a section header, not a key-value pair
+                // Skip to next line for type definitions
+                self.skipWhitespaceAndComments();
+                if (self.peek()) |ch| {
+                    if (ch == ':') _ = self.advance();
+                }
+                spec.types = try self.parseTypes();
             } else if (std.mem.eql(u8, maybe_key, "composite")) {
                 spec.composite = try self.parseComposite();
             } else if (std.mem.eql(u8, maybe_key, "test_vectors")) {
@@ -405,12 +448,18 @@ const Parser = struct {
     }
 
     fn parseStorage(self: *Parser) !Storage {
+        const bits = self.parseInt(u8) catch 0;
+        const align_bytes = self.parseInt(u8) catch 1;
+        const endianness = self.readValue() catch "";
+        const underlying = self.readValue() catch "";
+        const encoding = self.readValue() catch "binary";
+
         return .{
-            .bits = try self.parseInt(u8),
-            .align_bytes = try self.parseInt(u8),
-            .endianness = try self.readValue(),
-            .underlying = try self.readValue(),
-            .encoding = self.readValue() catch "binary",
+            .bits = bits,
+            .align_bytes = align_bytes,
+            .endianness = endianness,
+            .underlying = underlying,
+            .encoding = encoding,
         };
     }
 
@@ -433,7 +482,6 @@ const Parser = struct {
             };
 
             while (try self.readKey()) |maybe_key| {
-
                 if (std.mem.eql(u8, maybe_key, "name")) {
                     field.name = try self.readValue();
                 } else if (std.mem.eql(u8, maybe_key, "bits")) {
@@ -474,7 +522,6 @@ const Parser = struct {
         var base: u8 = 2;
 
         while (try self.readKey()) |maybe_key| {
-
             if (std.mem.eql(u8, maybe_key, "bits")) {
                 _ = self.readValue() catch {};
             } else if (std.mem.eql(u8, maybe_key, "bias")) {
@@ -514,7 +561,6 @@ const Parser = struct {
         };
 
         while (try self.readKey()) |maybe_key| {
-
             if (std.mem.eql(u8, maybe_key, "zero")) {
                 special.zero = try self.parseExponentValue();
             } else if (std.mem.eql(u8, maybe_key, "subnormal")) {
@@ -538,7 +584,6 @@ const Parser = struct {
         };
 
         while (try self.readKey()) |maybe_key| {
-
             if (std.mem.eql(u8, maybe_key, "exponent")) {
                 value.exponent = try self.parseInt(u8);
             } else if (std.mem.eql(u8, maybe_key, "mantissa")) {
@@ -599,7 +644,6 @@ const Parser = struct {
         var similarity: []const u8 = "cosine";
 
         while (try self.readKey()) |maybe_key| {
-
             if (std.mem.eql(u8, maybe_key, "compatible")) {
                 const val = try self.readValue();
                 compatible = std.mem.eql(u8, val, "true");
@@ -629,7 +673,6 @@ const Parser = struct {
         var zig_name: []const u8 = "u16";
 
         while (try self.readKey()) |maybe_key| {
-
             if (std.mem.eql(u8, maybe_key, "c")) {
                 c_name = try self.readValue();
             } else if (std.mem.eql(u8, maybe_key, "rust")) {
@@ -658,7 +701,6 @@ const Parser = struct {
         defer to_steps.deinit(self.allocator);
 
         while (try self.readKey()) |maybe_key| {
-
             if (std.mem.eql(u8, maybe_key, "from_f32_steps")) {
                 while (true) {
                     self.skipWhitespaceAndComments();
@@ -741,7 +783,6 @@ const Parser = struct {
             };
 
             while (try self.readKey()) |maybe_key| {
-
                 if (std.mem.eql(u8, maybe_key, "inputs")) {
                     // Parse list of inputs
                     var inputs = std.ArrayList([]const u8).initCapacity(self.allocator, 0) catch unreachable;
@@ -765,6 +806,8 @@ const Parser = struct {
                     op.outputs = try outputs.toOwnedSlice(self.allocator);
                 } else if (std.mem.eql(u8, maybe_key, "output")) {
                     op.output = try self.readValue();
+                } else if (std.mem.eql(u8, maybe_key, "description")) {
+                    op.description = try self.readValue();
                 } else if (std.mem.eql(u8, maybe_key, "intermediate_type")) {
                     op.intermediate_type = try self.readValue();
                 } else if (std.mem.eql(u8, maybe_key, "algorithm")) {
@@ -865,7 +908,6 @@ const Parser = struct {
         var ternary_conv: ?Composite.TernaryConv = null;
 
         while (try self.readKey()) |maybe_key| {
-
             if (std.mem.eql(u8, maybe_key, "matmul")) {
                 matmul = try self.parseMatMul();
             } else if (std.mem.eql(u8, maybe_key, "ternary_conv")) {
@@ -897,7 +939,6 @@ const Parser = struct {
         var sparse: bool = false;
 
         while (try self.readKey()) |maybe_key| {
-
             if (std.mem.eql(u8, maybe_key, "sparse")) {
                 const val = try self.readValue();
                 sparse = std.mem.eql(u8, val, "true");
@@ -934,7 +975,6 @@ const Parser = struct {
             };
 
             while (try self.readKey()) |maybe_key| {
-
                 if (std.mem.eql(u8, maybe_key, "name")) {
                     vec.name = try self.readValue();
                 } else if (std.mem.eql(u8, maybe_key, "f32")) {
@@ -955,5 +995,159 @@ const Parser = struct {
         }
 
         return list.toOwnedSlice(self.allocator);
+    }
+
+    fn parseTypes(self: *Parser) ![]const TypeDef {
+        // Line-based parser for indentation-based type definitions
+        // This handles YAML-like structure where type names are at indent 2
+        // and their fields are nested at indent 6
+
+        var types = try std.ArrayList(TypeDef).initCapacity(self.allocator, 0);
+        errdefer types.deinit(self.allocator);
+
+        // Get current position (after "types:" key)
+        const start_pos = self.pos;
+
+        // Split remaining content into lines
+        var lines_it = std.mem.splitScalar(u8, self.content[start_pos..], '\n');
+
+        var current_type: ?TypeDef = null;
+        var current_fields: ?std.ArrayList(TypeField) = null;
+        var in_fields_section = false;
+
+        while (lines_it.next()) |raw_line| {
+            // Skip empty lines and comments
+            const trimmed = std.mem.trimLeft(u8, raw_line, " \t\r");
+            if (trimmed.len == 0 or trimmed[0] == '#') continue;
+
+            // Count indentation (2-space units)
+            const indent = countIndent(raw_line);
+
+            // Check for top-level section ending (ops:, composite:, etc.)
+            if (indent == 0) {
+                if (std.mem.indexOfScalar(u8, trimmed, ':')) |colon_idx| {
+                    const key = trimmed[0..colon_idx];
+                    if (std.mem.eql(u8, key, "ops") or std.mem.eql(u8, key, "composite") or
+                        std.mem.eql(u8, key, "test_vectors") or std.mem.eql(u8, key, "description") or
+                        std.mem.eql(u8, key, "storage") or std.mem.eql(u8, key, "level") or
+                        std.mem.eql(u8, key, "format") or std.mem.eql(u8, key, "version") or
+                        std.mem.eql(u8, key, "type"))
+                    {
+                        // Save current type if exists
+                        if (current_type) |*t| {
+                            if (current_fields) |*f| {
+                                t.fields = try f.toOwnedSlice(self.allocator);
+                            }
+                            try types.append(self.allocator, t.*);
+                            current_type = null;
+                            current_fields = null;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // Type definition at indent 1 (2 spaces): "Entry:" or "HashTable:"
+            if (indent == 1) {
+                // Save previous type
+                if (current_type) |*t| {
+                    if (current_fields) |*f| {
+                        t.fields = try f.toOwnedSlice(self.allocator);
+                    }
+                    try types.append(self.allocator, t.*);
+                }
+
+                // Parse new type name (e.g., "Entry:" -> "Entry")
+                if (std.mem.lastIndexOfScalar(u8, trimmed, ':')) |colon_idx| {
+                    const type_name = std.mem.trimRight(u8, trimmed[0..colon_idx], " \t");
+                    current_type = TypeDef{
+                        .name = try self.allocator.dupe(u8, type_name),
+                        .variant = .struct_type,
+                    };
+                    current_fields = std.ArrayList(TypeField).initCapacity(self.allocator, 0) catch unreachable;
+                    in_fields_section = false;
+                }
+            }
+
+            // "fields:" property at indent 2 (4 spaces)
+            if (indent == 2 and std.mem.startsWith(u8, trimmed, "fields:")) {
+                in_fields_section = true;
+                continue;
+            }
+
+            // "generic:" property at indent 2 (4 spaces)
+            if (indent == 2 and std.mem.startsWith(u8, trimmed, "generic:")) {
+                if (current_type) |*t| {
+                    const generic_val = std.mem.trim(u8, trimmed["generic:".len..], " \t\r");
+                    t.generic = try self.allocator.dupe(u8, generic_val);
+                }
+                continue;
+            }
+
+            // Field definition at indent 3 (6 spaces): "- name: key"
+            if (indent == 3 and in_fields_section and current_fields != null and std.mem.startsWith(u8, trimmed, "-")) {
+                var field_line = trimmed[1..]; // Skip "-"
+                field_line = std.mem.trimLeft(u8, field_line, " \t");
+
+                // Parse "name: key" part
+                if (std.mem.indexOfScalar(u8, field_line, ':')) |name_colon| {
+                    const name_value = std.mem.trim(u8, field_line[name_colon + 1 ..], " \t\r");
+
+                    // Look ahead on next line for "type: <type>" (indent 4)
+                    var field_type: []const u8 = "";
+
+                    if (lines_it.next()) |next_raw| {
+                        const next_trimmed = std.mem.trimLeft(u8, next_raw, " \t\r");
+                        const next_indent = countIndent(next_raw);
+
+                        // Check if next line is "- name:" -> end of this field
+                        if (next_indent == 3 and std.mem.startsWith(u8, next_trimmed, "-")) {
+                            // No type on next line, use default (empty)
+                            field_type = "";
+                        } else if (next_indent >= 3 and std.mem.startsWith(u8, next_trimmed, "type:")) {
+                            // Found "type:" on next line (could be indent 3 or 4)
+                            const type_line = next_trimmed["type:".len..];
+                            field_type = std.mem.trim(u8, type_line, " \t\r\"");
+                        }
+                    }
+
+                    if (field_type.len == 0) field_type = "auto";
+
+                    if (current_fields) |*f| {
+                        try f.append(self.allocator, .{
+                            .name = try self.allocator.dupe(u8, name_value),
+                            .type = try self.allocator.dupe(u8, field_type),
+                        });
+                    }
+                }
+            }
+        }
+
+        // Save last type
+        if (current_type) |*t| {
+            if (current_fields) |*f| {
+                t.fields = try f.toOwnedSlice(self.allocator);
+            }
+            try types.append(self.allocator, t.*);
+        }
+
+        // Update parser position to end of types section
+        const end_pos = if (lines_it.index) |idx| start_pos + idx else start_pos;
+        self.pos = end_pos;
+
+        return try types.toOwnedSlice(self.allocator);
+    }
+
+    /// Count indentation level (2-space units)
+    fn countIndent(line: []const u8) usize {
+        var count: usize = 0;
+        for (line) |ch| {
+            if (ch == ' ') {
+                count += 1;
+            } else {
+                break;
+            }
+        }
+        return count / 2;
     }
 };
