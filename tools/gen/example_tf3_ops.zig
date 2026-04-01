@@ -18,12 +18,12 @@ pub const Trit = enum(i8) {
 /// Trit multiplication lookup table (3x3)
 pub fn tritMul(a: Trit, b: Trit) Trit {
     const lookup = [3][3]Trit{
-        .{ .plus_one, .zero, .minus_one },     // -1 * {-1, 0, +1}
-        .{ .zero, .zero, .zero },              //  0 * {-1, 0, +1}
-        .{ .minus_one, .zero, .plus_one },     // +1 * {-1, 0, +1}
+        .{ .plus_one, .zero, .minus_one }, // -1 * {-1, 0, +1}
+        .{ .zero, .zero, .zero }, //  0 * {-1, 0, +1}
+        .{ .minus_one, .zero, .plus_one }, // +1 * {-1, 0, +1}
     };
 
-    const ai = @intFromEnum(a) + 1;  // -1->0, 0->1, +1->2
+    const ai = @intFromEnum(a) + 1; // -1->0, 0->1, +1->2
     const bi = @intFromEnum(b) + 1;
     return lookup[ai][bi];
 }
@@ -41,15 +41,21 @@ pub fn tritAddCarry(a: Trit, b: Trit) struct { sum: Trit, carry: Trit } {
     // +1 + +1 = +2  => sum=-1(-1), carry=+1
 
     const lookup = [3][3]struct { sum: Trit, carry: Trit }{
-        .{ .{ .sum = .plus_one,  .carry = .minus_one },   // -1 + -1
-           .{ .sum = .minus_one, .carry = .zero },        // -1 +  0
-           .{ .sum = .zero,      .carry = .zero } },       // -1 + +1
-        .{ .{ .sum = .minus_one, .carry = .zero },        //  0 + -1
-           .{ .sum = .zero,      .carry = .zero },        //  0 +  0
-           .{ .sum = .plus_one,  .carry = .zero } },      //  0 + +1
-        .{ .{ .sum = .zero,      .carry = .zero },        // +1 + -1
-           .{ .sum = .plus_one,  .carry = .zero },        // +1 +  0
-           .{ .sum = .minus_one, .carry = .plus_one } },  // +1 + +1
+        .{
+            .{ .sum = .plus_one, .carry = .minus_one }, // -1 + -1
+            .{ .sum = .minus_one, .carry = .zero }, // -1 +  0
+            .{ .sum = .zero, .carry = .zero },
+        }, // -1 + +1
+        .{
+            .{ .sum = .minus_one, .carry = .zero }, //  0 + -1
+            .{ .sum = .zero, .carry = .zero }, //  0 +  0
+            .{ .sum = .plus_one, .carry = .zero },
+        }, //  0 + +1
+        .{
+            .{ .sum = .zero, .carry = .zero }, // +1 + -1
+            .{ .sum = .plus_one, .carry = .zero }, // +1 +  0
+            .{ .sum = .minus_one, .carry = .plus_one },
+        }, // +1 + +1
     };
 
     const ai = @intFromEnum(a) + 1;
@@ -74,9 +80,9 @@ pub fn vsaBind(comptime N: usize, a: [N]Trit, b: [N]Trit) [N]Trit {
     for (0..N) |i| {
         // Ternary XOR-like: permute a by b
         result[i] = switch (@intFromEnum(b[i])) {
-            -1 => a[i],           // -1: identity
-            0  => a[i],           //  0: identity
-            1  => @bitCast(@as(u2, undefined)), // +1: invert (simplified)
+            -1 => a[i], // -1: identity
+            0 => a[i], //  0: identity
+            1 => @bitCast(@as(u2, undefined)), // +1: invert (simplified)
         };
     }
     return result;

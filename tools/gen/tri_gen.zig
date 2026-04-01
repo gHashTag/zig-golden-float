@@ -653,7 +653,15 @@ fn genStructTypes(
 
     // Generate types
     for (spec.types) |td| {
-        if (td.generic) |generic| {
+        // Handle enum type definitions (e.g., Color = enum { Red, Black })
+        if (td.enum_values.len > 0 and td.variant == .enum_type) {
+            try writer.print("pub const {s} = enum {{\n", .{ td.name });
+            for (td.enum_values, 0..) |val, i| {
+                if (i > 0) try writer.print(", ", .{});
+                try writer.print("{s}", .{val});
+            }
+            try writer.print("}};\n\n", .{});
+        } else if (td.generic) |generic| {
             // Transform generic syntax: [T] -> comptime T: type
             const generic_params = try transformGenericParams(alloc, generic);
             try writer.print("pub fn {s}({s}) type {{\n", .{ td.name, generic_params });
