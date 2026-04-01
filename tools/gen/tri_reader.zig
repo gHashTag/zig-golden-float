@@ -1084,6 +1084,29 @@ const Parser = struct {
                 continue;
             }
 
+            // "enum:" property at indent 2 (4 spaces)
+            if (indent == 2 and std.mem.startsWith(u8, trimmed, "enum:")) {
+                if (current_type) |*t| {
+                    const enum_line = trimmed["enum:".len..];
+                    const enum_val = std.mem.trim(u8, enum_line, " \t\r");
+                    // Parse "[Red, Black]" -> ["Red", "Black"]
+                    if (enum_val.len > 2 and enum_val[0] == '[' and enum_val[enum_val.len - 1] == ']') {
+                        const values_str = enum_val[1 .. enum_val.len - 1];
+                        var values = try std.ArrayList([]const u8).initCapacity(self.allocator, 0);
+                        var iter = std.mem.splitScalar(u8, values_str, ',');
+                        while (iter.next()) |v| {
+                            const trimmed_val = std.mem.trim(u8, v, " \t");
+                            if (trimmed_val.len > 0) {
+                                try values.append(self.allocator, try self.allocator.dupe(u8, trimmed_val));
+                            }
+                        }
+                        t.enum_values = try values.toOwnedSlice(self.allocator);
+                        t.variant = .enum_type;
+                    }
+                }
+                continue;
+            }
+
             // Field definition at indent 3 (6 spaces): "- name: key"
             if (indent == 3 and in_fields_section and current_fields != null and std.mem.startsWith(u8, trimmed, "-")) {
                 var field_line = trimmed[1..]; // Skip "-"
