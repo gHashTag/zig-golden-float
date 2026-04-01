@@ -1,4 +1,6 @@
 .zig-cache/
+zig-out/
+zig/
 rust/target/
 rust/*.rs
 rust/test_nan

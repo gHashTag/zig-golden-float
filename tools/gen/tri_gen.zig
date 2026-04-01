@@ -655,7 +655,7 @@ fn genStructTypes(
     for (spec.types) |td| {
         // Handle enum type definitions (e.g., Color = enum { Red, Black })
         if (td.enum_values.len > 0 and td.variant == .enum_type) {
-            try writer.print("pub const {s} = enum {{\n", .{ td.name });
+            try writer.print("pub const {s} = enum {{\n", .{td.name});
             for (td.enum_values, 0..) |val, i| {
                 if (i > 0) try writer.print(", ", .{});
                 try writer.print("{s}", .{val});
