@@ -1,0 +1,51 @@
+# geo_hash2d.tri — 2D Geohash spatial index
+format: GEO_HASH_2D
+version: 1
+level: 5
+type: data_structure
+
+types:
+  GeoCoord:
+    fields:
+      - name: lat
+        type: f64
+      - name: lon
+        type: f64
+  GeoHash:
+    fields:
+      - name: hash
+        type: u64
+      - name: precision
+        type: u8
+  BoundingBox:
+    fields:
+      - name: min_lat
+        type: f64
+      - name: max_lat
+        type: f64
+      - name: min_lon
+        type: f64
+      - name: max_lon
+        type: f64
+
+ops:
+  encode:
+    inputs: [GeoCoord, u8]
+    output: GeoHash
+    description: "Encode lat/lon to geohash with given precision"
+  decode:
+    inputs: [GeoHash]
+    output: BoundingBox
+    description: "Decode geohash to bounding box"
+  neighbors:
+    inputs: [GeoHash]
+    output: "[8]GeoHash"
+    description: "Get 8 adjacent geohash cells"
+  distance:
+    inputs: [GeoCoord, GeoCoord]
+    output: f64
+    description: "Haversine distance in meters"
+  commonPrefix:
+    inputs: [GeoHash, GeoHash]
+    output: u8
+    description: "Common prefix length (proximity measure)"

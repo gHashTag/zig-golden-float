@@ -1,0 +1,61 @@
+# hash_table.tri — Pilot migration from Trinity tri_hash_table.tri
+# Format: zig-golden-float Level 5 (Data Structures)
+format: HASH_TABLE
+version: 1
+level: 5
+type: data_structure
+
+description: |
+  Open-addressing hash table with linear probing.
+  Integer keys, i64 values. Allocator-aware.
+
+storage:
+  underlying: struct
+  alignment: 8
+
+types:
+  Entry:
+    fields:
+      - name: key
+        type: usize
+      - name: value
+        type: i64
+      - name: used
+        type: bool
+
+  HashTable:
+    fields:
+      - name: buckets
+        type: "[]Entry"
+      - name: capacity
+        type: usize
+      - name: size
+        type: usize
+      - name: allocator
+        type: std.mem.Allocator
+
+ops:
+  init:
+    inputs: [std.mem.Allocator, usize]
+    output: "!HashTable"
+    description: "Create hash table with initial capacity"
+  deinit:
+    inputs: ["*HashTable"]
+    output: void
+    description: "Free all buckets"
+  put:
+    inputs: ["*HashTable", usize, i64]
+    output: "!void"
+    description: "Insert or update key-value pair"
+  get:
+    inputs: ["*const HashTable", usize]
+    output: "?i64"
+    description: "Lookup value by key, null if missing"
+  remove:
+    inputs: ["*HashTable", usize]
+    output: bool
+    description: "Remove entry by key, return true if found"
+  count:
+    inputs: ["*const HashTable"]
+    output: usize
+    description: "Return number of stored entries"
