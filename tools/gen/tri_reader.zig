@@ -25,6 +25,7 @@ pub const Spec = struct {
     // Level 5 (Data Structures) fields:
     spec_type: ?[]const u8 = null,
     types: []const TypeDef = &.{},
+    // constants: stored as slice of ConstDef (deferred for MVP)
 
     pub fn deinit(self: *Spec, allocator: std.mem.Allocator) void {
         allocator.free(self.fields);
