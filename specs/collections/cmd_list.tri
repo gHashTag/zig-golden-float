@@ -1,0 +1,45 @@
+# cmd_list.tri — Command list (undo/redo) for TVM pipeline
+format: CMD_LIST
+version: 1
+level: 5
+type: data_structure
+
+types:
+  Command:
+    fields:
+      - name: tag
+        type: u8
+      - name: payload
+        type: "[32]u8"
+      - name: timestamp
+        type: i64
+  CmdList:
+    fields:
+      - name: commands
+        type: "[]Command"
+      - name: cursor
+        type: usize
+      - name: len
+        type: usize
+      - name: allocator
+        type: std.mem.Allocator
+
+ops:
+  init:
+    inputs: [std.mem.Allocator, usize]
+    output: "!CmdList"
+  push:
+    inputs: ["*CmdList", Command]
+    output: "!void"
+  undo:
+    inputs: ["*CmdList"]
+    output: "?Command"
+  redo:
+    inputs: ["*CmdList"]
+    output: "?Command"
+  clear:
+    inputs: ["*CmdList"]
+    output: void
+  deinit:
+    inputs: ["*CmdList"]
+    output: void

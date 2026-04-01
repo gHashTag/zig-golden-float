@@ -1,0 +1,39 @@
+# list.tri — Dynamic array (ArrayList)
+format: ARRAY_LIST
+version: 1
+level: 5
+type: data_structure
+
+types:
+  ArrayList:
+    generic: [T]
+    fields:
+      - name: items
+        type: "[]T"
+      - name: capacity
+        type: usize
+      - name: allocator
+        type: std.mem.Allocator
+
+ops:
+  init:
+    inputs: [std.mem.Allocator]
+    output: "ArrayList(T)"
+  append:
+    inputs: ["*ArrayList(T)", T]
+    output: "!void"
+  get:
+    inputs: ["*const ArrayList(T)", usize]
+    output: T
+  set:
+    inputs: ["*ArrayList(T)", usize, T]
+    output: void
+  pop:
+    inputs: ["*ArrayList(T)"]
+    output: "?T"
+  len:
+    inputs: ["*const ArrayList(T)"]
+    output: usize
+  deinit:
+    inputs: ["*ArrayList(T)"]
+    output: void

@@ -1,0 +1,22 @@
+# skiplist_impl.tri — Algorithm spec for skip list
+format: SKIP_LIST_IMPL
+version: 1
+level: 5
+type: data_structure
+
+depends_on:
+  - skip_list.tri
+
+algorithms:
+  random_level:
+    description: "Generate random level: while coin < P and lvl < MAX: lvl++"
+    complexity: "O(MAX_LEVEL)"
+  search_path:
+    description: "For each level top→bottom, advance while next.key < target"
+    complexity: "O(log n) expected"
+  insert_after_search:
+    description: "Splice new node into each level <= random_level using update[]"
+    complexity: "O(log n) expected"
+  delete_with_path:
+    description: "Unlink node from each level, shrink list level if empty"
+    complexity: "O(log n) expected"

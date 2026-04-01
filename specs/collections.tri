@@ -1,0 +1,60 @@
+# collections.tri — Stack, Queue, RingBuffer
+format: COLLECTIONS
+version: 1
+level: 5
+type: data_structure
+
+types:
+  Stack:
+    generic: [T]
+    fields:
+      - name: items
+        type: "[]T"
+      - name: len
+        type: usize
+      - name: allocator
+        type: std.mem.Allocator
+  Queue:
+    generic: [T]
+    fields:
+      - name: items
+        type: "[]T"
+      - name: head
+        type: usize
+      - name: tail
+        type: usize
+      - name: len
+        type: usize
+      - name: allocator
+        type: std.mem.Allocator
+  RingBuffer:
+    generic: [T]
+    fields:
+      - name: buffer
+        type: "[]T"
+      - name: read_idx
+        type: usize
+      - name: write_idx
+        type: usize
+      - name: capacity
+        type: usize
+
+ops:
+  stack_push:
+    inputs: ["*Stack(T)", T]
+    output: "!void"
+  stack_pop:
+    inputs: ["*Stack(T)"]
+    output: "?T"
+  queue_enqueue:
+    inputs: ["*Queue(T)", T]
+    output: "!void"
+  queue_dequeue:
+    inputs: ["*Queue(T)"]
+    output: "?T"
+  ring_write:
+    inputs: ["*RingBuffer(T)", T]
+    output: bool
+  ring_read:
+    inputs: ["*RingBuffer(T)"]
+    output: "?T"

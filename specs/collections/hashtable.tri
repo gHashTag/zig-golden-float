@@ -1,0 +1,47 @@
+# hashtable.tri — Hash table with separate chaining (alt)
+format: HASH_TABLE_CHAINED
+version: 1
+level: 5
+type: data_structure
+
+types:
+  Entry:
+    generic: [K, V]
+    fields:
+      - name: key
+        type: K
+      - name: value
+        type: V
+      - name: next
+        type: "?*Entry(K, V)"
+  HashMap:
+    generic: [K, V]
+    fields:
+      - name: buckets
+        type: "[]?*Entry(K, V)"
+      - name: size
+        type: usize
+      - name: capacity
+        type: usize
+      - name: allocator
+        type: std.mem.Allocator
+
+ops:
+  init:
+    inputs: [std.mem.Allocator, usize]
+    output: "!HashMap(K, V)"
+  put:
+    inputs: ["*HashMap(K, V)", K, V]
+    output: "!void"
+  get:
+    inputs: ["*const HashMap(K, V)", K]
+    output: "?V"
+  remove:
+    inputs: ["*HashMap(K, V)", K]
+    output: bool
+  contains:
+    inputs: ["*const HashMap(K, V)", K]
+    output: bool
+  deinit:
+    inputs: ["*HashMap(K, V)"]
+    output: void

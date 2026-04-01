@@ -1,0 +1,50 @@
+# linked_list.tri — Doubly-linked list
+format: LINKED_LIST
+version: 1
+level: 5
+type: data_structure
+
+types:
+  Node:
+    generic: [T]
+    fields:
+      - name: data
+        type: T
+      - name: prev
+        type: "?*Node(T)"
+      - name: next
+        type: "?*Node(T)"
+  LinkedList:
+    generic: [T]
+    fields:
+      - name: head
+        type: "?*Node(T)"
+      - name: tail
+        type: "?*Node(T)"
+      - name: len
+        type: usize
+      - name: allocator
+        type: std.mem.Allocator
+
+ops:
+  init:
+    inputs: [std.mem.Allocator]
+    output: "LinkedList(T)"
+  prepend:
+    inputs: ["*LinkedList(T)", T]
+    output: "!void"
+  append:
+    inputs: ["*LinkedList(T)", T]
+    output: "!void"
+  remove:
+    inputs: ["*LinkedList(T)", "*Node(T)"]
+    output: T
+  popFirst:
+    inputs: ["*LinkedList(T)"]
+    output: "?T"
+  popLast:
+    inputs: ["*LinkedList(T)"]
+    output: "?T"
+  deinit:
+    inputs: ["*LinkedList(T)"]
+    output: void

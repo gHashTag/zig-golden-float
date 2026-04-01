@@ -1,0 +1,50 @@
+# rb_tree.tri — Red-Black Tree
+format: RB_TREE
+version: 1
+level: 5
+type: data_structure
+
+types:
+  Color:
+    enum: [Red, Black]
+  Node:
+    generic: [K, V]
+    fields:
+      - name: key
+        type: K
+      - name: value
+        type: V
+      - name: color
+        type: Color
+      - name: left
+        type: "?*Node(K, V)"
+      - name: right
+        type: "?*Node(K, V)"
+      - name: parent
+        type: "?*Node(K, V)"
+  RBTree:
+    generic: [K, V]
+    fields:
+      - name: root
+        type: "?*Node(K, V)"
+      - name: allocator
+        type: std.mem.Allocator
+      - name: size
+        type: usize
+
+ops:
+  init:
+    inputs: [std.mem.Allocator]
+    output: "RBTree(K, V)"
+  insert:
+    inputs: ["*RBTree(K, V)", K, V]
+    output: "!void"
+  search:
+    inputs: ["*const RBTree(K, V)", K]
+    output: "?V"
+  delete:
+    inputs: ["*RBTree(K, V)", K]
+    output: bool
+  deinit:
+    inputs: ["*RBTree(K, V)"]
+    output: void

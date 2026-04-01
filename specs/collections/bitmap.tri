@@ -1,0 +1,41 @@
+# bitmap.tri — Fixed-size bitmap for resource tracking
+format: BITMAP
+version: 1
+level: 5
+type: data_structure
+
+types:
+  Bitmap:
+    fields:
+      - name: bits
+        type: "[]u64"
+      - name: num_bits
+        type: usize
+      - name: allocator
+        type: std.mem.Allocator
+
+ops:
+  init:
+    inputs: [std.mem.Allocator, usize]
+    output: "!Bitmap"
+  set:
+    inputs: ["*Bitmap", usize]
+    output: void
+  clear:
+    inputs: ["*Bitmap", usize]
+    output: void
+  isSet:
+    inputs: ["*const Bitmap", usize]
+    output: bool
+  toggle:
+    inputs: ["*Bitmap", usize]
+    output: void
+  countOnes:
+    inputs: ["*const Bitmap"]
+    output: usize
+  findFirstSet:
+    inputs: ["*const Bitmap"]
+    output: "?usize"
+  deinit:
+    inputs: ["*Bitmap"]
+    output: void

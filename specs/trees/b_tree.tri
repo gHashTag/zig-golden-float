@@ -1,0 +1,46 @@
+# b_tree.tri — B-Tree of order M
+format: B_TREE
+version: 1
+level: 5
+type: data_structure
+
+types:
+  Node:
+    generic: [K, V, comptime M: usize]
+    fields:
+      - name: keys
+        type: "[M]K"
+      - name: values
+        type: "[M]V"
+      - name: children
+        type: "[M + 1]?*Node"
+      - name: n
+        type: usize
+      - name: leaf
+        type: bool
+  BTree:
+    generic: [K, V, comptime M: usize]
+    fields:
+      - name: root
+        type: "?*Node(K, V, M)"
+      - name: allocator
+        type: std.mem.Allocator
+      - name: size
+        type: usize
+
+ops:
+  init:
+    inputs: [std.mem.Allocator]
+    output: "BTree(K, V, M)"
+  insert:
+    inputs: ["*BTree(K, V, M)", K, V]
+    output: "!void"
+  search:
+    inputs: ["*const BTree(K, V, M)", K]
+    output: "?V"
+  delete:
+    inputs: ["*BTree(K, V, M)", K]
+    output: bool
+  deinit:
+    inputs: ["*BTree(K, V, M)"]
+    output: void

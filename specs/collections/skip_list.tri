@@ -1,0 +1,50 @@
+# skip_list.tri — Probabilistic skip list
+format: SKIP_LIST
+version: 1
+level: 5
+type: data_structure
+
+constants:
+  MAX_LEVEL: 16
+  PROBABILITY: 0.5
+
+types:
+  Node:
+    generic: [K, V]
+    fields:
+      - name: key
+        type: K
+      - name: value
+        type: V
+      - name: forward
+        type: "[MAX_LEVEL]?*Node(K, V)"
+      - name: level
+        type: u8
+  SkipList:
+    generic: [K, V]
+    fields:
+      - name: header
+        type: "*Node(K, V)"
+      - name: level
+        type: u8
+      - name: size
+        type: usize
+      - name: allocator
+        type: std.mem.Allocator
+
+ops:
+  init:
+    inputs: [std.mem.Allocator]
+    output: "!SkipList(K, V)"
+  insert:
+    inputs: ["*SkipList(K, V)", K, V]
+    output: "!void"
+  search:
+    inputs: ["*const SkipList(K, V)", K]
+    output: "?V"
+  delete:
+    inputs: ["*SkipList(K, V)", K]
+    output: bool
+  deinit:
+    inputs: ["*SkipList(K, V)"]
+    output: void
