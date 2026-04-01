@@ -651,6 +651,12 @@ fn genStructTypes(
     try writer.print("// Level {d} Data Structures\n", .{spec.level});
     try writer.print("\nconst std = @import(\"std\");\n\n", .{});
 
+    // Generate constants
+    for (spec.constants) |c| {
+        try writer.print("pub const {s} = {s};\n", .{ c.name, c.value });
+    }
+    if (spec.constants.len > 0) try writer.print("\n", .{});
+
     // Generate types
     for (spec.types) |td| {
         // Handle enum type definitions (e.g., Color = enum { Red, Black })

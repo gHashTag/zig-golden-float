@@ -25,7 +25,7 @@ pub const Spec = struct {
     // Level 5 (Data Structures) fields:
     spec_type: ?[]const u8 = null,
     types: []const TypeDef = &.{},
-    // constants: stored as slice of ConstDef (deferred for MVP)
+    constants: []const ConstDef = &.{},
 
     pub fn deinit(self: *Spec, allocator: std.mem.Allocator) void {
         allocator.free(self.fields);
@@ -44,6 +44,11 @@ pub const TypeDef = struct {
     variant: enum { struct_type, enum_type } = .struct_type,
     fields: []const TypeField = &.{},
     enum_values: []const []const u8 = &.{},
+};
+
+pub const ConstDef = struct {
+    name: []const u8,
+    value: []const u8, // Stored as string for flexibility (int, float, etc.)
 };
 
 pub const Storage = struct {
@@ -428,6 +433,13 @@ const Parser = struct {
                 _ = try self.parseConversion();
             } else if (std.mem.eql(u8, maybe_key, "ops")) {
                 spec.ops = try self.parseOpList();
+            } else if (std.mem.eql(u8, maybe_key, "constants")) {
+                // constants: is a section header
+                self.skipWhitespaceAndComments();
+                if (self.peek()) |ch| {
+                    if (ch == ':') _ = self.advance();
+                }
+                spec.constants = try self.parseConstants();
             } else if (std.mem.eql(u8, maybe_key, "types")) {
                 // types: is a section header, not a key-value pair
                 // Skip to next line for type definitions
@@ -996,6 +1008,61 @@ const Parser = struct {
         }
 
         return list.toOwnedSlice(self.allocator);
+    }
+
+    fn parseConstants(self: *Parser) ![]const ConstDef {
+        // Parse constants: section
+        // Format: indent 2 (4 spaces): NAME: value
+        // Example:
+        //   MAX_LEVEL: 16
+        //   PROBABILITY: 0.5
+
+        var constants = try std.ArrayList(ConstDef).initCapacity(self.allocator, 0);
+        errdefer constants.deinit(self.allocator);
+
+        // Get current position (after "constants:" key)
+        const start_pos = self.pos;
+
+        // Split remaining content into lines
+        var lines_it = std.mem.splitScalar(u8, self.content[start_pos..], '\n');
+
+        while (lines_it.next()) |raw_line| {
+            // Skip empty lines and comments
+            const trimmed = std.mem.trimLeft(u8, raw_line, " \t\r");
+            if (trimmed.len == 0 or trimmed[0] == '#') continue;
+
+            // Count indentation (2-space units)
+            const indent = countIndent(raw_line);
+
+            // Check for top-level section ending (ops:, composite:, types:, etc.)
+            if (indent == 0) {
+                if (std.mem.indexOfScalar(u8, trimmed, ':')) |colon_idx| {
+                    const key = trimmed[0..colon_idx];
+                    if (std.mem.eql(u8, key, "ops") or std.mem.eql(u8, key, "composite") or
+                        std.mem.eql(u8, key, "test_vectors") or std.mem.eql(u8, key, "description") or
+                        std.mem.eql(u8, key, "storage") or std.mem.eql(u8, key, "level") or
+                        std.mem.eql(u8, key, "format") or std.mem.eql(u8, key, "version") or
+                        std.mem.eql(u8, key, "type") or std.mem.eql(u8, key, "types"))
+                    {
+                        break;
+                    }
+                }
+            }
+
+            // Constant definition at indent 1 (2 spaces): "MAX_LEVEL: 16"
+            if (indent == 1) {
+                if (std.mem.indexOfScalar(u8, trimmed, ':')) |colon_idx| {
+                    const const_name = std.mem.trimRight(u8, trimmed[0..colon_idx], " \t");
+                    const const_value = std.mem.trim(u8, trimmed[colon_idx + 1 ..], " \t\r");
+                    try constants.append(self.allocator, .{
+                        .name = try self.allocator.dupe(u8, const_name),
+                        .value = try self.allocator.dupe(u8, const_value),
+                    });
+                }
+            }
+        }
+
+        return constants.toOwnedSlice(self.allocator);
     }
 
     fn parseTypes(self: *Parser) ![]const TypeDef {
