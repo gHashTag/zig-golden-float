@@ -1,0 +1,205 @@
+# TF3-9 Format Specification (Source of Truth)
+# Ternary Float: 3-trit exponent, 9-trit mantissa for ternary neural networks
+# Level 0 + Level 1 + Level 2: Format + Operations + Composite + VSA
+
+format: TF3_9
+version: 1
+level: 2
+
+storage:
+  bits: 16
+  align_bytes: 2
+  endianness: little
+  underlying: u16
+  encoding: balanced_ternary
+
+trit_encoding:
+  minus_one: 0b10
+  zero: 0b00
+  plus_one: 0b01
+  invalid: 0b11
+  bits_per_trit: 2
+
+fields:
+  - name: sign
+    bits: 1
+    position_msb: 15
+    trit_value: true
+  - name: exponent
+    bits: 6
+    position_msb: 14
+    trit_count: 3
+    encoding: balanced_ternary
+  - name: mantissa
+    bits: 9
+    position_msb: 8
+    trit_count: 9
+    encoding: balanced_ternary
+
+exponent:
+  bits: 6
+  trits: 3
+  bias: 3
+  max: 13
+  min: -13
+  base: 3
+  special:
+    zero:
+      exponent: 0
+      mantissa: 0
+    inf:
+      exponent: 13
+      mantissa: 0
+    nan:
+      exponent: 13
+      mantissa_nonzero: true
+
+ternary:
+  trit_values: [-1, 0, +1]
+  encoding: balanced
+  bits_per_trit: 2
+  total_trits: 13
+
+rounding:
+  mode: ties_to_zero
+  source_type: f32
+  overflow_policy: saturate_to_inf
+  underflow_policy: flush_to_zero
+
+phi:
+  total_bits: 12
+  exponent_trits: 3
+  mantissa_trits: 9
+  target_ratio: 0.6180339
+  ratio: 0.25
+  distance: 0.3680339
+
+vsa:
+  compatible: true
+  bind_arity: 2
+  bundle_arity: 3
+  similarity: cosine
+
+abi:
+  c:
+    typename: uint16_t
+    trit_typename: int8_t
+  rust:
+    typename: u16
+    trit_typename: i8
+  zig:
+    typename: u16
+    trit_typename: i8
+
+conversion:
+  from_f32_steps:
+    - extract_sign_exponent_mantissa
+    - quantize_to_ternary
+    - encode_trits_to_bits
+  to_f32_steps:
+    - decode_bits_to_trits
+    - compute_ternary_value
+    - build_f32_bits
+
+ops:
+  trit_add:
+    domain: trit
+    inputs: [trit, trit]
+    output: trit
+    carry_output: trit
+    table:
+      "-1,-1": [1, -1]
+      "-1,0": [-1, 0]
+      "-1,1": [0, 0]
+      "0,-1": [-1, 0]
+      "0,0": [0, 0]
+      "0,1": [1, 0]
+      "1,-1": [0, 0]
+      "1,0": [1, 0]
+      "1,1": [-1, 1]
+
+  trit_mul:
+    domain: trit
+    inputs: [trit, trit]
+    output: trit
+    table:
+      "-1,-1": 1
+      "-1,0": 0
+      "-1,1": -1
+      "0,-1": 0
+      "0,0": 0
+      "0,1": 0
+      "1,-1": -1
+      "1,0": 0
+      "1,1": 1
+
+  dot:
+    inputs: [TF3[N], TF3[N]]
+    output: i32
+    element_op: trit_mul
+    reduction: sum
+    bounds: [-N, N]
+
+  vsa_bind:
+    vsa_compatible: true
+    inputs: [TF3[N], TF3[N]]
+    output: TF3[N]
+    type: xor_like
+    invertible: true
+    algorithm: cyclic_shift
+
+  vsa_bundle:
+    vsa_compatible: true
+    inputs: [TF3[N], TF3[N], TF3[N]]
+    output: TF3[N]
+    type: ternary_majority
+    capacity_estimate: 0.1
+
+composite:
+  matmul:
+    inputs:
+      A: TF3[M, K]
+      B: TF3[K, N]
+    output: TF3[M, N]
+    accumulator: i32
+    inner_op: dot
+    tiling:
+      block_m: 16
+      block_n: 16
+      block_k: 32
+
+  ternary_conv:
+    inputs:
+      input: TF3[H, W, C_in]
+      weights: TF3[K, K, C_in, C_out]
+    output: TF3[H, W, C_out]
+    algorithm: im2col_matmul
+    sparse: true
+
+hardware:
+  target: xc7a100t
+  clock_mhz: 200
+  pipeline_stages: 2
+  stage_1: trit_decode
+  stage_2: dot_product_accumulate
+  resources:
+    luts: ~50
+    dsps: 0
+    bram: 0
+
+test_vectors:
+  - name: zero
+    f32: 0.0
+    raw_hex: "0000"
+  - name: one
+    f32: 1.0
+    raw_hex: "0155"
+  - name: minus_one
+    f32: -1.0
+    raw_hex: "8555"
+  - name: pi
+    f32: 3.1415927
+    raw_hex: "07aa"
+  - name: max_pos
+    f32: 1093.0
+    raw_hex: "7fff"

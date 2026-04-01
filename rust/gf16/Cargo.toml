@@ -1,0 +1,24 @@
+[package]
+name = "gf16"
+version = "1.1.0"
+edition = "2021"
+authors = ["Trinity Project"]
+license = "MIT"
+description = "Pure Rust implementation of GF16 (Golden Float16) format"
+repository = "https://github.com/gHashTag/zig-golden-float"
+keywords = ["float16", "ml", "machine-learning", "phi", "golden-ratio"]
+categories = ["no-std", "science", "embedded", "wasm"]
+
+[lib]
+name = "gf16"
+
+[features]
+default = ["std"]
+std = []
+no_std = []
+c-ffi = ["goldenfloat-sys"]
+
+[dependencies]
+
+# C-FFI bindings (optional, workspace member)
+goldenfloat-sys = { version = "1.1.0", optional = true, path = "../goldenfloat-sys" }

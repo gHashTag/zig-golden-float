@@ -1,0 +1,213 @@
+# GF16 & TF3 Operations Specification (Source of Truth)
+# All arithmetic operations for GoldenFloat formats
+# Level 1: Operations (derived from src/formats/golden_float16.zig)
+
+format: OPS
+version: 1
+level: 1
+parent_specs: [gf16.tri, tf3.tri]
+
+# ═════════════════════════════════════════════════════════════════════
+# GF16 OPERATIONS
+# ═════════════════════════════════════════════════════════════════════
+
+gf16:
+  # Core conversion operations
+  from_f32:
+    inputs: [f32]
+    output: GF16
+    algorithm: normalize_and_encode
+    intermediate_type: f32
+    steps:
+      - extract_sign_bit
+      - normalize_to_0_5_to_1_range
+      - compute_exponent_with_bias_31
+      - round_mantissa_to_9_bits
+      - pack_into_u16
+
+  to_f32:
+    inputs: [GF16]
+    output: f32
+    algorithm: decode_and_denormalize
+    special_cases: [zero, inf, nan]
+    steps:
+      - unpack_fields
+      - check_special_cases
+      - unbiased_exponent = exp - 31
+      - mantissa_scaled = mant / 512 + 0.5
+      - value = mantissa_scaled * 2^unbiased_exponent
+      - apply_sign
+
+  # Arithmetic operations (via f32 intermediate)
+  add:
+    inputs: [GF16, GF16]
+    output: GF16
+    intermediate_type: f32
+    algorithm: decode_f32_add_reencode
+    rounding: ties_to_even
+    commutative: true
+    associative_approx: true
+    overflow_policy: saturate_to_inf
+
+  sub:
+    inputs: [GF16, GF16]
+    output: GF16
+    intermediate_type: f32
+    algorithm: decode_f32_sub_reencode
+    rounding: ties_to_even
+    commutative: false
+
+  mul:
+    inputs: [GF16, GF16]
+    output: GF16
+    intermediate_type: f32
+    algorithm: decode_f32_mul_reencode
+    rounding: ties_to_even
+    commutative: true
+    associative_approx: true
+
+  div:
+    inputs: [GF16, GF16]
+    output: GF16
+    intermediate_type: f32
+    algorithm: decode_f32_div_reencode
+    rounding: ties_to_even
+    commutative: false
+    div_by_zero: returns_inf
+
+  # Unary operations
+  neg:
+    inputs: [GF16]
+    output: GF16
+    algorithm: flip_sign_bit
+    cost: O(1)
+
+  abs:
+    inputs: [GF16]
+    output: GF16
+    algorithm: clear_sign_bit
+    cost: O(1)
+
+  # Constructors
+  zero:
+    inputs: []
+    output: GF16
+    encoding: "0x0000"
+    constexpr: true
+
+  one:
+    inputs: []
+    output: GF16
+    encoding: "0x3C00"
+    constexpr: false  # uses fromF32(1.0)
+
+  # φ-weighted quantization operations
+  phi_quantize:
+    inputs: [f32]
+    output: GF16
+    algorithm: multiply_by_phi_inv_sq_then_encode
+    phi_multiplier: 1/PHI_SQ ≈ 0.381966
+    purpose: better_weight_distribution_for_ML
+
+  phi_dequantize:
+    inputs: [GF16]
+    output: f32
+    algorithm: decode_then_multiply_by_phi_sq
+    phi_multiplier: PHI_SQ ≈ 2.618034
+    purpose: restore_original_scale
+
+# ═════════════════════════════════════════════════════════════════════
+# TF3 OPERATIONS
+# ═════════════════════════════════════════════════════════════════════
+
+tf3:
+  # Core conversion operations
+  from_f32:
+    inputs: [f32]
+    output: TF3
+    algorithm: normalize_and_encode_ternary
+    intermediate_type: f32
+    base: 3
+    steps:
+      - extract_sign_bit
+      - normalize_to_1_3_to_1_range
+      - compute_exponent_with_bias_31
+      - round_mantissa_to_11_bits
+      - pack_into_u18
+
+  to_f32:
+    inputs: [TF3]
+    output: f32
+    algorithm: decode_and_denormalize_ternary
+    base: 3
+    special_cases: [zero, inf, nan]
+    steps:
+      - unpack_fields
+      - check_special_cases
+      - unbiased_exponent = exp - 31
+      - mantissa_scaled = mant / 2047
+      - value = mantissa_scaled * 3^unbiased_exponent
+      - apply_sign
+
+  # Ternary-specific operations
+  get_sign:
+    inputs: [TF3]
+    output: i8  # returns {-1, 0, +1}
+    algorithm: extract_ternary_sign
+    mapping:
+      sign=1, mant=0 → -1
+      sign=0, mant=0 → 0
+      sign=0, mant>0 → +1
+
+  # Constructors
+  zero:
+    inputs: []
+    output: TF3
+    encoding: "0x00000"
+    constexpr: true
+
+  one:
+    inputs: []
+    output: TF3
+    constexpr: false  # uses fromF32(1.0)
+
+# ═════════════════════════════════════════════════════════════════════
+# IMPLEMENTATION VERIFICATION
+# ═════════════════════════════════════════════════════════════════════
+
+verification:
+  source_file: src/formats/golden_float16.zig
+  gf16_operations_count: 12
+  tf3_operations_count: 6
+  total_tests: 8+
+
+test_coverage:
+  - GF16 zero and one
+  - GF16 roundtrip (f32 → GF16 → f32)
+  - GF16 arithmetic (add, sub, mul, div)
+  - GF16 phi quantization
+  - TF3 zero and one
+  - TF3 ternary sign extraction
+
+# ═════════════════════════════════════════════════════════════════════
+# CONSTANTS (from sacred_types.zig)
+# ═════════════════════════════════════════════════════════════════════
+
+constants:
+  PHI: 1.6180339887498948482
+  PHI_SQ: 2.6180339887498948484  # φ × φ
+  PHI_INV_SQ: 0.3819660112501051  # 1/φ²
+  TRINITY: 3.0  # φ² + 1/φ² = 3
+
+# ═════════════════════════════════════════════════════════════════════
+# VERSION HISTORY
+# ═════════════════════════════════════════════════════════════════════
+
+changelog:
+  - version: 1
+    date: 2026-03-31
+    changes:
+      - Initial specification from golden_float16.zig
+      - All 12 GF16 operations documented
+      - All 6 TF3 operations documented
+      - Sacred constants added
