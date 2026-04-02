@@ -3,8 +3,8 @@
 cmake_minimum_required(VERSION 3.15)
 project(goldenfloat VERSION 1.0.0 LANGUAGES CXX)
 
-# Option to use nlohmann/json for conformance tests
-option(USE_NLOHMANN_JSON "Use nlohmann/json for conformance tests" ON)
+# Option to use nlohmann/json for conformance tests (NOT USED - tests use simple JSON parsing)
+# option(USE_NLOHMANN_JSON "Use nlohmann/json for conformance tests" OFF)
 
 # Find GoldenFloat shared library
 find_library(GOLDENFLOAT NAMES goldenfloat PATHS
@@ -22,8 +22,8 @@ endif()
 
 # Include directory for header-only wrapper
 include_directories(
-    "${CMAKE_SOURCE_DIR}/../include"
-    "${CMAKE_SOURCE_DIR}/include"
+    "${CMAKE_SOURCE_DIR}/../src/c"
+    "${CMAKE_SOURCE_DIR}/../../src/c"
 )
 
 message(STATUS "Found GoldenFloat: ${GOLDENFLOAT}")
@@ -65,7 +65,7 @@ endif()
 
 # ============================================================================
 # Optional: Install Targets
-// ============================================================================
+# ============================================================================
 
 option(GOLDENFLOAT_INSTALL "Install GoldenFloat C++ bindings" ON)
 

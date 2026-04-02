@@ -25,8 +25,8 @@
 #include <iostream>
 #include <stdexcept>
 
-// Include C-ABI header
-#include "../../src/c/gf16.h"
+// Include C-ABI header (configured via CMakeLists.txt include_directories())
+#include "gf16.h"
 
 namespace goldenfloat {
 
