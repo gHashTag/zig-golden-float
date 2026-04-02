@@ -1,0 +1,34 @@
+[project]
+name = "goldenfloat"
+version = "1.0.0"
+description = "GoldenFloat GF16 format — φ-optimized 16-bit floating point for Python"
+requires-python = ">=3.8"
+readme = "README.md"
+license = {text = "MIT License"}
+authors = [
+    {name = "Trinity Project", email = "noreply@github.com"}
+]
+keywords = ["gf16", "goldenfloat", "quantization", "floating-point", "machine-learning"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/gHashTag/zig-golden-float"
+Repository = "https://github.com/gHashTag/zig-golden-float.git"
+Documentation = "https://github.com/gHashTag/zig-golden-float/blob/main/python/README.md"
+Issues = "https://github.com/gHashTag/zig-golden-float/issues"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

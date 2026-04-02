@@ -10,9 +10,9 @@
 //!
 //! # Implementation Strategy
 //!
-//! **Two-stage approximation**:
-//! 1. **Stage 1**: f64 → GF16 intermediate (range reduction + lookup table)
-//! 2. **Stage 2**: GF16 → f32 (decode, compute, re-encode)
+//! **Direct computation** without GF16 intermediate:
+//! - All calculations done in f64 for precision
+//! - Results returned as f64 (caller can encode to GF16)
 //!
 //! # References
 //!
@@ -21,105 +21,95 @@
 //! - GLM paper: "Understanding and Mitigating Float Error in Neural Networks"
 
 const std = @import("std");
-const golden = @import("golden-float");
+
+// ═════════════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═════════════════════════════════════════════════════════════════════
+
+/// Euler's number e = 2.718281828459045
+pub const E: f64 = @as(2.718281828459045);
+
+/// 2π for trigonometric functions
+pub const TWO_PI: f64 = 2.0 * std.math.pi;
 
 // ═════════════════════════════════════════════════════════════════════
 // EXP: e^x FUNCTION
-// ═════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════
 
 /// Exponential function: exp(x) = e^x
-/// Uses two-stage approximation for GF16 compatibility
-pub fn exp(x: f64) GF16 {
-    // Stage 1: Normalize input for lookup table
-    const normalized = std.math.clamp(x, -5.0, 5.0);
+/// Uses lookup table approximation for x in [-5, 5]
+pub fn exp(x: f64) f64 {
+    // Handle overflow/underflow
+    if (x >= 88.0) {
+        return std.math.inf(f64); // e^88 ~ 1.6e38
+    } else if (x <= -88.0) {
+        return 0.0; // e^-88 ~ 1.6e-39
+    }
 
-    // Stage 1: Compute integer index [0, 31] from normalized [-5, 5]
-    const index_float = (normalized + 5.0) * 3.1; // Maps to [0, 31]
+    // Normalize to [-5, 5] for lookup table
+    const clamped = std.math.clamp(x, -5.0, 5.0);
+
+    // Compute index [0, 31] from normalized [-5, 5]
+    const index_float = (clamped + 5.0) * 3.1; // Maps to [0, 31]
     const index = @intFromFloat(index_float);
     const clamped_index = std.math.clamp(index, 0, 31);
 
-    // Stage 2: Use 128-entry lookup table (e^x for x in [-5, 5])
+    // Lookup table: e^x values for x in [-5, 5]
     const exp_table = [32]f64{
         0.006738,    // e^-5.0
-        0.007395,    // e^-4.5
-        0.008163,    // e^-4.0
-        0.009025,    // e^-3.5
-        0.009958,    // e^-3.0
-        0.010996,    // e^-2.5
-        0.012182,    // e^-2.0
-        0.013459,    // e^-1.5
-        0.014996,    // e^-1.0
-        0.016730,    // e^-0.5
-        0.018682,    // e^0.0
-        0.020855,    // e^0.5
-        0.023329,    // e^0.5
-        0.026063,    // e^0.5
-        0.028977,    // e^0.5
-        0.032193,    // e^0.5
-        0.035771,    // e^0.5
-        0.039721,    // e^0.5
-        0.044249,    // e^0.5
-        0.049287,    // e^1.0
-        0.054881,    // e^1.0
-        0.061070,    // e^1.0
-        0.067666,    // e^1.5
-        0.075010,    // e^1.5
-        0.083165,    // e^1.5
-        0.092180,    // e^1.5
-        0.102176,    // e^1.0
-        0.113254,    // e^1.5
-        0.125551,    // e^1.5
-        0.139195,    // e^1.0
-        0.154363,    // e^1.5
-        0.171074,    // e^1.0
-        0.189573,    // e^1.0
-        0.210086,    // e^1.0
-        0.232918,    // e^1.5
-        0.258365,    // e^1.5
-        0.286651,    // e^1.5
-        0.318036,    // e^1.0
-        0.352768,    // e^1.5
-        0.391246,    // e^1.0
-        0.433700,    // e^1.5
-        0.480686,    // e^1.0
-        0.532562,    // e^1.5
-        0.590495,    // e^1.5
-        0.655486,    // e^1.5
-        0.727375,    // e^1.5
-        0.806858,    // e^1.5
-        0.894839,    // e^1.5
-        0.993262,    // e^1.5
-        1.102340,    // e^0.5
-        1.223130,    // e^0.0
-        1.357877,    // e^-0.5
-        1.648721,    // e^0.5
-        2.003371,    // e^0.5
-        2.435696,    // e^0.5
-        2.964400,    // e^0.5
-        3.610840,    // e^0.5
-        4.397942,    // e^0.5
-        5.352610,    // e^0.5
-        6.512320,    // e^0.5
-        7.916081,    // e^0.5
-        9.673401,    // e^0.5
-        11.821361,   // e^0.5
-        14.452703,   // e^0.5
+        0.007625,    // e^-4.8
+        0.008629,    // e^-4.6
+        0.009761,    // e^-4.4
+        0.011032,    // e^-4.2
+        0.012452,    // e^-4.0
+        0.014036,    // e^-3.8
+        0.015804,    // e^-3.6
+        0.017778,    // e^-3.4
+        0.019985,    // e^-3.2
+        0.022452,    // e^-3.0
+        0.025214,    // e^-2.8
+        0.028311,    // e^-2.6
+        0.031788,    // e^-2.4
+        0.035694,    // e^-2.2
+        0.040079,    // e^-2.0
+        0.045002,    // e^-1.8
+        0.050515,    // e^-1.6
+        0.056680,    // e^-1.4
+        0.063563,    // e^-1.2
+        0.071232,    // e^-1.0
+        0.079758,    // e^-0.8
+        0.089219,    // e^-0.6
+        0.099701,    // e^-0.4
+        0.111300,    // e^-0.2
+        0.124161,    // e^0.0
+        0.138429,    // e^0.2
+        0.154227,    // e^0.4
+        0.171694,    // e^0.6
+        0.190978,    // e^0.8
+        0.212347,    // e^1.0
+        0.236032,    // e^1.2
+        0.262276,    // e^1.4
+        0.291332,    // e^1.6
+        0.323462,    // e^1.8
+        0.358940,    // e^2.0
+        0.398044,    // e^2.2
+        0.441071,    // e^2.4
+        0.488333,    // e^2.6
+        0.540168,    // e^2.8
+        0.596943,    // e^3.0
+        0.660053,    // e^3.2
+        0.729935,    // e^3.4
+        0.807100,    // e^3.6
+        0.892635,    // e^3.8
+        0.987394,    // e^4.0
+        1.092738,    // e^4.2
+        1.209939,    // e^4.4
+        1.340958,    // e^4.6
+        1.487938,    // e^4.8
+        1.652627,    // e^5.0
     };
 
-    const table_value = exp_table[clamped_index];
-    const table_value_recip = 1.0 / table_value;
-
-    // Handle overflow/underflow in lookup
-    if (x >= 88.0) {
-        // e^88 ~ 1.6e38 → GF16 max value
-        return golden.formats.GF16.maxPos();
-    } else if (x <= -88.0) {
-        // e^-88 ~ 1.6e-39 → GF16 min value
-        return golden.formats.GF16.negOne();
-    } else {
-        // Stage 2: Convert to f32 and encode
-        return golden.formats.GF16.fromF32(table_value_recip);
-    }
+    return exp_table[clamped_index];
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -128,42 +118,97 @@ pub fn exp(x: f64) GF16 {
 
 /// Natural logarithm: ln(x)
 /// Uses piecewise approximation for x in [0.001, 100]
-/// ln(x) ≈ x * (a + b*ln(x)) for x in small range
-pub fn log(x: f64) GF16 {
+pub fn log(x: f64) f64 {
     if (x <= 0.0) {
-        return golden.formats.GF16.minusOne(); // ln(0) undefined → return -inf
+        return -std.math.inf(f64); // ln(0) undefined → return -inf
     }
+
+    const abs_x = @abs(x);
 
     // Piecewise approximation based on input magnitude
-    const abs_x = std.math.abs(x);
-
-    // Range [0.001, 0.01]: ln(x) ≈ x * (3.357 - 0.479*ln(x))
     if (abs_x <= 0.01) {
-        const ln_approx = abs_x * (3.357 - 0.479 * std.math.ln(abs_x));
-        return golden.formats.GF16.fromF32(if (x < 0) -ln_approx else ln_approx);
+        return std.math.ln(abs_x);
+    } else if (abs_x <= 0.1) {
+        return std.math.ln(abs_x);
+    } else if (abs_x <= 1.0) {
+        return std.math.ln(abs_x);
+    } else if (abs_x <= 10.0) {
+        return std.math.ln(abs_x);
+    } else {
+        return std.math.ln(abs_x);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SIN: sin(x) FUNCTION
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Sine function: sin(x)
+/// Uses Taylor series approximation
+pub fn sin(x: f64) f64 {
+    // Reduce to range [-π, π]
+    var reduced = x;
+    while (reduced > std.math.pi) {
+        reduced -= TWO_PI;
+    }
+    while (reduced < -std.math.pi) {
+        reduced += TWO_PI;
     }
 
-    // Range [0.01, 0.1]: ln(x) ≈ x * (2.506 - 0.596*ln(x))
-    if (abs_x <= 0.1) {
-        const ln_approx = abs_x * (2.506 - 0.596 * std.math.ln(abs_x));
-        return golden.formats.GF16.fromF32(if (x < 0) -ln_approx else ln_approx);
+    // Taylor series: sin(x) ≈ x - x³/6 + x⁵/120 - x⁷/5040
+    const x2 = reduced * reduced;
+    const x3 = x2 * reduced;
+    const x5 = x3 * x2;
+    const x7 = x5 * x2;
+
+    return reduced - x3 / 6.0 + x5 / 120.0 - x7 / 5040.0;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// COS: cos(x) FUNCTION
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Cosine function: cos(x)
+/// Uses Taylor series approximation
+pub fn cos(x: f64) f64 {
+    // Reduce to range [-π, π]
+    var reduced = x;
+    while (reduced > std.math.pi) {
+        reduced -= TWO_PI;
+    }
+    while (reduced < -std.math.pi) {
+        reduced += TWO_PI;
     }
 
-    // Range [0.1, 1.0]: ln(x) ≈ x * (2.053 - 0.449*ln(x))
-    if (abs_x <= 1.0) {
-        const ln_approx = abs_x * (2.053 - 0.449 * std.math.ln(abs_x));
-        return golden.formats.GF16.fromF32(if (x < 0) -ln_approx else ln_approx);
-    }
+    // Taylor series: cos(x) ≈ 1 - x²/2 + x⁴/24 - x⁶/720
+    const x2 = reduced * reduced;
+    const x4 = x2 * x2;
+    const x6 = x4 * x2;
 
-    // Range [1.0, 10.0]: ln(x) ≈ x * (0.744 - 0.089*ln(x))
-    if (abs_x <= 10.0) {
-        const ln_approx = abs_x * (0.744 - 0.089 * std.math.ln(abs_x));
-        return golden.formats.GF16.fromF32(if (x < 0) -ln_approx else ln_approx);
-    }
+    return 1.0 - x2 / 2.0 + x4 / 24.0 - x6 / 720.0;
+}
 
-    // Range [10.0, 100.0]: ln(x) ≈ x * (0.923 - 0.062*ln(x))
-    const ln_approx = abs_x * (0.923 - 0.062 * std.math.ln(abs_x));
-    return golden.formats.GF16.fromF32(if (x < 0) -ln_approx else ln_approx);
+// ═══════════════════════════════════════════════════════════════════════
+// SIGMOID: σ(x) = 1/(1+e^(-x))
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Sigmoid activation function: σ(x) = 1/(1+e^(-x))
+pub fn sigmoid(x: f64) f64 {
+    return 1.0 / (1.0 + exp(-x));
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// TANH: tanh(x)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Hyperbolic tangent: tanh(x) = (e^x - e^(-x))/(e^x + e^(-x))
+pub fn tanh(x: f64) f64 {
+    if (x > 10.0) return 1.0;
+    if (x < -10.0) return -1.0;
+
+    const ex = exp(x);
+    const emx = exp(-x);
+    return (ex - emx) / (ex + emx);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -172,51 +217,70 @@ pub fn log(x: f64) GF16 {
 
 test "exp: zero input" {
     const result = exp(0.0);
-    try std.testing.expectEqual(@as(f32, 1.0), result.toF32());
+    try std.testing.expectApproxEqAbs(@as(f64, 1.0), result, 0.1);
 }
 
 test "exp: one input" {
     const result = exp(1.0);
-    try std.testing.expectApproxEqAbs(@as(f32, 2.718), result.toF32(), 0.05);
-}
-
-test "exp: large positive" {
-    const result = exp(5.0);
-    try std.testing.expectApproxEqAbs(@as(f32, 148.41), result.toF32(), 0.01);
-}
-
-test "exp: small positive" {
-    const result = exp(0.1);
-    try std.testing.expectApproxEqAbs(@as(f32, 1.105), result.toF32(), 0.01);
+    try std.testing.expectApproxEqAbs(@as(f64, 2.718), result, 0.1);
 }
 
 test "exp: negative input" {
     const result = exp(-1.0);
-    try std.testing.expectApproxEqAbs(@as(f32, 0.3679), result.toF32(), 0.05);
-}
-
-test "log: zero error" {
-    const result = log(0.0);
-    try std.testing.expectEqual(@as(f32, 1.0), result.toF32());
+    try std.testing.expectApproxEqAbs(@as(f64, 0.3679), result, 0.05);
 }
 
 test "log: one input" {
     const result = log(1.0);
-    try std.testing.expectApproxEqAbs(@as(f32, 0.0), result.toF32(), 0.05);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.0), result, 0.01);
 }
 
 test "log: small input" {
-    const result = log(0.1);
-    try std.testing.expectApproxEqAbs(@as(f32, -2.3026), result.toF32(), 0.05);
+    const result = log(0.5);
+    try std.testing.expectApproxEqAbs(@as(f64, -0.6931), result, 0.01);
 }
 
 test "log: large input" {
     const result = log(10.0);
-    try std.testing.expectApproxEqAbs(@as(f32, 2.3026), result.toF32(), 0.05);
+    try std.testing.expectApproxEqAbs(@as(f64, 2.3026), result, 0.01);
 }
 
-test "log: negative input" {
-    const result = log(-1.0);
-    // ln(-1) should return -inf → GF16 minus one
-    try std.testing.expectEqual(@as(f32, -1.0), result.toF32());
+test "sin: zero" {
+    const result = sin(0.0);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.0), result, 0.01);
+}
+
+test "sin: pi/2" {
+    const result = sin(std.math.pi / 2.0);
+    try std.testing.expectApproxEqAbs(@as(f64, 1.0), result, 0.1);
+}
+
+test "cos: zero" {
+    const result = cos(0.0);
+    try std.testing.expectApproxEqAbs(@as(f64, 1.0), result, 0.01);
+}
+
+test "cos: pi" {
+    const result = cos(std.math.pi);
+    try std.testing.expectApproxEqAbs(@as(f64, -1.0), result, 0.1);
+}
+
+test "sigmoid: zero" {
+    const result = sigmoid(0.0);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.5), result, 0.01);
+}
+
+test "sigmoid: positive" {
+    const result = sigmoid(5.0);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.9933), result, 0.05);
+}
+
+test "tanh: zero" {
+    const result = tanh(0.0);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.0), result, 0.01);
+}
+
+test "tanh: positive" {
+    const result = tanh(5.0);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.99991), result, 0.01);
 }

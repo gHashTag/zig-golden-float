@@ -96,8 +96,23 @@ pub fn build(b: *std.Build) void {
         .root_module = formats_tests_root,
     });
 
+    // ─────────────────────────────────────────────────────────────────
+    // Tests — transcendental functions (Wave 4B)
+    // ─────────────────────────────────────────────────────────────────
+    const transcendent_tests_root = b.createModule(.{
+        .root_source_file = b.path("src/math/transcendental.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const transcendent_tests = b.addTest(.{
+        .name = "transcendent-tests",
+        .root_module = transcendent_tests_root,
+    });
+
     const run_tests = b.addRunArtifact(formats_tests);
+    const run_transcendent_tests = b.addRunArtifact(transcendent_tests);
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&run_tests.step);
+    test_step.dependOn(&run_transcendent_tests.step);
     test_step.dependOn(&run_c_abi_tests.step);
 }
