@@ -407,7 +407,7 @@ impl Add for Gf16 {
     fn add(self, rhs: Self) -> Gf16 {
         #[cfg(feature = "c-abi")]
         {
-            let raw = unsafe { sys::gf16_add(self.0, rhs.0) };
+            let raw = unsafe { sys::gf16_add(sys::gf16_t(self.0), sys::gf16_t(rhs.0)) };
             Gf16(raw.0)
         }
         #[cfg(not(feature = "c-abi"))]
@@ -423,7 +423,7 @@ impl Sub for Gf16 {
     fn sub(self, rhs: Self) -> Gf16 {
         #[cfg(feature = "c-abi")]
         {
-            let raw = unsafe { sys::gf16_sub(self.0, rhs.0) };
+            let raw = unsafe { sys::gf16_sub(sys::gf16_t(self.0), sys::gf16_t(rhs.0)) };
             Gf16(raw.0)
         }
         #[cfg(not(feature = "c-abi"))]
@@ -439,7 +439,7 @@ impl Mul for Gf16 {
     fn mul(self, rhs: Self) -> Gf16 {
         #[cfg(feature = "c-abi")]
         {
-            let raw = unsafe { sys::gf16_mul(self.0, rhs.0) };
+            let raw = unsafe { sys::gf16_mul(sys::gf16_t(self.0), sys::gf16_t(rhs.0)) };
             Gf16(raw.0)
         }
         #[cfg(not(feature = "c-abi"))]
@@ -455,7 +455,7 @@ impl Div for Gf16 {
     fn div(self, rhs: Self) -> Gf16 {
         #[cfg(feature = "c-abi")]
         {
-            let raw = unsafe { sys::gf16_div(self.0, rhs.0) };
+            let raw = unsafe { sys::gf16_div(sys::gf16_t(self.0), sys::gf16_t(rhs.0)) };
             Gf16(raw.0)
         }
         #[cfg(not(feature = "c-abi"))]
@@ -471,7 +471,7 @@ impl Neg for Gf16 {
     fn neg(self) -> Gf16 {
         #[cfg(feature = "c-abi")]
         {
-            let raw = unsafe { sys::gf16_neg(self.0) };
+            let raw = unsafe { sys::gf16_neg(sys::gf16_t(self.0)) };
             Gf16(raw.0)
         }
         #[cfg(not(feature = "c-abi"))]
@@ -647,13 +647,13 @@ mod tests {
         let test_values: [f32; 10] = [
             0.0, 0.5, 1.0, 2.0, 3.14, 10.0, -0.5, -1.0, -2.0, -3.14,
         ];
-        const max_error: f32 = 0.05; // Allow 5% error for GF16 precision
+        const MAX_ERROR: f32 = 0.05; // Allow 5% error for GF16 precision
 
         for val in &test_values {
             let gf = Gf16::from_f32(*val);
             let back = gf.to_f32();
             let error = (val - back).abs() / (val.abs() + 0.001);
-            if error > max_error {
+            if error > MAX_ERROR {
                 break; // Accept GF16 precision limits
             }
         }
@@ -763,9 +763,12 @@ mod tests {
 
     #[test]
     fn test_phi_constants() {
-        // Check φ ≈ 1.618
+        // Compute φ precisely: (1 + √5) / 2
+        let expected_phi = (1.0f64 + 5.0f64.sqrt()) / 2.0;
         let epsilon = 1e-10;
-        assert!((Gf16::phi() - 1.618).abs() < epsilon);
+
+        // Check φ ≈ (1 + √5) / 2
+        assert!((Gf16::phi() - expected_phi).abs() < epsilon);
 
         // Check φ² + 1/φ² = 3
         assert!((Gf16::phi_sq() + Gf16::phi_inv_sq() - 3.0).abs() < epsilon);
