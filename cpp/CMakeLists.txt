@@ -3,12 +3,16 @@
 cmake_minimum_required(VERSION 3.15)
 project(goldenfloat VERSION 1.0.0 LANGUAGES CXX)
 
+# Option to use nlohmann/json for conformance tests
+option(USE_NLOHMANN_JSON "Use nlohmann/json for conformance tests" ON)
+
 # Find GoldenFloat shared library
 find_library(GOLDENFLOAT NAMES goldenfloat PATHS
+    "${CMAKE_SOURCE_DIR}/../../zig-out/lib"
     "${CMAKE_SOURCE_DIR}/../zig-out/lib"
-    "${CMAKE_SOURCE_DIR}/../zig-out/bin"
-    "${CMAKE_SOURCE_DIR}/../build"
-    "${CMAKE_BINARY_DIR}/../zig-out/lib"
+    "${CMAKE_SOURCE_DIR}/../../zig-out/bin"
+    "${CMAKE_SOURCE_DIR}/../../build"
+    "${CMAKE_SOURCE_DIR}/../../zig-out/lib"
     NO_DEFAULT_PATH
 )
 

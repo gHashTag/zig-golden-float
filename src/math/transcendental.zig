@@ -217,7 +217,7 @@ pub fn tanh(x: f64) f64 {
 
 test "exp: zero input" {
     const result = exp(0.0);
-    try std.testing.expectApproxEqAbs(@as(f64, 1.0), result, 0.1);
+    try std.testing.expectApproxEqAbs(1.0, result, 0.1);
 }
 
 test "exp: one input" {

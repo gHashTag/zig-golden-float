@@ -1,0 +1,88 @@
+name: Bindings Status Badge
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  status:
+    name: Check Bindings Status
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Count languages
+        id: count
+        run: |
+          zig_count=$(find zig-out -name "*.dylib" 2>/dev/null | wc -l)
+          rust_count=$(find rust/goldenfloat-sys -name "*.rs" 2>/dev/null | wc -l)
+          python_count=$(find python -name "*.py" 2>/dev/null | wc -l)
+          cpp_count=$(find cpp/include -name "*.hpp" 2>/dev/null | wc -l)
+          go_count=$(find go -name "*.go" 2>/dev/null | wc -l)
+          total=$((zig_count + rust_count + python_count + cpp_count + go_count))
+          echo "zig=$zig_count rust=$rust_count python=$python_count cpp=$cpp_count go=$go_count total=$total" >> $GITHUB_OUTPUT
+
+      - name: Generate badge
+        uses: actions/github-script@v7
+        with:
+          script: |
+            # Read counts from previous step
+            source $GITHUB_ENV_STEPS_COUNT.outputs
+            # Generate badge based on total languages
+            # Max languages: 5 (zig, rust, python, cpp, go)
+            if [ "$total" -ge 5 ]; then
+              percentage=100
+              color=brightgreen
+              label="5/5"
+            elif [ "$total" -ge 4 ]; then
+              percentage=80
+              color=yellow
+              label="4/5"
+            elif [ "$total" -ge 3 ]; then
+              percentage=60
+              color=orange
+              label="3/5"
+            elif [ "$total" -ge 2 ]; then
+              percentage=40
+              color=red
+              label="2/5"
+            elif [ "$total" -ge 1 ]; then
+              percentage=20
+              color=darkred
+              label="1/5"
+            else
+              percentage=0
+              color=gray
+              label="0/5"
+            fi
+            # Save badge data for next step
+            echo "percentage=$percentage" >> $GITHUB_ENV_STEPS_BADGE.outputs
+            echo "color=$color" >> $GITHUB_ENV_STEPS_BADGE.outputs
+            echo "label=$label" >> $GITHUB_ENV_STEPS_BADGE.outputs
+        env:
+          STEPS_COUNT: ${{ steps.count.outputs }}
+
+      - name: Update badge
+        uses: actions/github-script@v7
+        with:
+          script: |
+            source $GITHUB_ENV_STEPS_BADGE.outputs
+            # Generate badge using shields.io
+            echo "::set-output name=badge_url::https://img.shields.io/badge/Languages-$color/5/5?label=$label"
+
+      - name: Commit badge data
+        uses: stefanzweifel/shields-badge-updater-action@v1
+        with:
+          label: bindings-status
+          color: ${{ steps.badge-update.outputs.color }}
+          status: ${{ steps.badge-update.outputs.label }}
+          token: ${{ secrets.GH_TOKEN }}
+          schema-url: |
+            {
+              "message": "GoldenFloat Language Bindings",
+              "namespace": "gHashTag-zig-golden-float",
+              "badge_name": "languages-5/5",
+              "color": "#2c3e50"
+            }

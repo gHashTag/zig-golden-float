@@ -1,0 +1,95 @@
+name: Test Multi-Language Bindings
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test-bindings:
+    name: Test Bindings (${{ matrix.language }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: zig
+            os: ubuntu-latest
+          - language: rust
+            os: ubuntu-latest
+          - language: cpp
+            os: ubuntu-latest
+          - language: go
+            os: ubuntu-latest
+          - language: python
+            os: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Zig
+        uses: goto-bus/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Build shared library
+        run: zig build shared
+
+      - name: Test Zig
+        if: matrix.language == 'zig'
+        run: zig build test
+
+      - name: Install Rust
+        if: matrix.language == 'rust'
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Test Rust
+        if: matrix.language == 'rust'
+        run: |
+          cd rust/goldenfloat-sys
+          cargo test --verbose
+
+      - name: Install Python
+        if: matrix.language == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Test Python
+        if: matrix.language == 'python'
+        run: |
+          cd python
+          pip install -e . -q
+          python -m goldenfloat.tests.test_gf16
+
+      - name: Install CMake
+        if: matrix.language == 'cpp'
+        uses: jwlawson/actions-setup-cmake@v2
+
+      - name: Install nlohmann/json
+        if: matrix.language == 'cpp'
+        run: sudo apt-get install -y nlohmann-json3-dev
+
+      - name: Test C++
+        if: matrix.language == 'cpp'
+        run: |
+          cd cpp
+          mkdir -p build
+          cmake -S . -B build
+          cmake --build build --target test_gf16
+          ./build/test_gf16
+
+      - name: Install Go
+        if: matrix.language == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Test Go
+        if: matrix.language == 'go'
+        run: |
+          cd go/goldenfloat
+          go test -v ./...
