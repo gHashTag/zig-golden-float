@@ -1,5 +1,20 @@
 # GoldenFloat Language Bindings Specification
 
+## Status: Complete ✅
+
+All 5 target languages (Python, C++, Go, Rust, Zig) now have full bindings.
+
+## Binding Locations
+
+| Language | Path | Type |
+|----------|------|------|
+| Zig | `src/` | Native |
+| C | `include/gf16.h` | Canonical ABI |
+| Rust | `rust/goldenfloat-sys/` | FFI wrapper |
+| Python | `python/goldenfloat/` | ctypes bridge |
+| C++ | `cpp/include/goldenfloat/` | Header-only |
+| Go | `go/goldenfloat/` | cgo wrapper |
+
 ## C-ABI Surface (Canonical Source)
 
 ### Level 1: Core Operations
@@ -38,3 +53,17 @@ Every language binding MUST implement:
 - Predicates: `is_nan`, `is_inf`, `is_zero`, `is_negative`
 - Constants: `zero`, `one`, `p_inf`, `n_inf`, `nan`
 - φ-Math: `phi_quantize`, `phi_dequantize`, `phi`, `trinity`
+
+## Running All Tests
+
+```bash
+# Run via test script
+./scripts/test_bindings.sh
+
+# Or run individually:
+zig build shared                 # Build library
+cd rust/goldenfloat-sys && cargo test
+cd python && python -m goldenfloat.tests.test_gf16
+cd cpp && mkdir build && cmake -S . -B build && cmake --build . && ./build/test_gf16
+cd go/goldenfloat && go test -v ./...
+```
