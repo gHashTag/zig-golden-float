@@ -32,6 +32,20 @@ from ._binding import (
     goldenfloat_trinity,
 )
 
+# Try to load conformance vectors from shared dataset
+_VECTORS = None
+try:
+    import json
+    import os
+    vectors_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..", "conformance", "vectors.json"
+    )
+    if os.path.exists(vectors_path):
+        with open(vectors_path) as f:
+            _VECTORS = json.load(f)
+except Exception:
+    pass
+
 
 class Gf16:
     """
