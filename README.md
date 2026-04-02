@@ -649,10 +649,10 @@ All 422 tests passed.
 |----------|--------|----------|-------|-------|
 | Zig | Complete | Native | Yes | Core implementation |
 | C | Complete | `include/gf16.h` | Yes | Canonical ABI |
-| Rust | Stable | `rust/goldenfloat-sys` | Yes | Published crate |
-| Python | In Progress | `python/goldenfloat` | Pending | ctypes bridge |
-| C++ | Planned | Header-only | Pending | `cpp/include/goldenfloat/` |
-| Go | Planned | cgo wrapper | Pending | `go/goldenfloat/` |
+| Rust | Complete | `rust/goldenfloat-sys` | Yes | Published crate |
+| Python | Complete | `python/goldenfloat` | Yes | ctypes bridge |
+| C++ | Complete | Header-only | Yes | `cpp/include/goldenfloat/` |
+| Go | Complete | cgo wrapper | Yes | `go/goldenfloat/` |
 
 See `LANGUAGE_BINDINGS.md` for specification.
 
