@@ -28,8 +28,28 @@ pub const Spec = struct {
     constants: []const ConstDef = &.{},
 
     pub fn deinit(self: *Spec, allocator: std.mem.Allocator) void {
+        // Free field definitions
         allocator.free(self.fields);
         allocator.free(self.test_vectors);
+
+        // Free Level 5 (data structures) fields
+        if (self.spec_type) |t| allocator.free(t);
+        for (self.types) |td| {
+            allocator.free(td.name);
+            if (td.generic) |g| allocator.free(g);
+            for (td.fields) |f| {
+                allocator.free(f.name);
+                allocator.free(f.type);
+            }
+            allocator.free(td.fields);
+            if (td.variant == .enum_type) allocator.free(td.enum_values);
+        }
+        allocator.free(self.types);
+        for (self.constants) |c| {
+            allocator.free(c.name);
+            allocator.free(c.value);
+        }
+        allocator.free(self.constants);
     }
 };
 
@@ -368,12 +388,20 @@ const Parser = struct {
 
     fn parseInt(self: *Parser, comptime T: type) !T {
         const str = try self.readValue();
+        defer self.allocator.free(str);
         return std.fmt.parseInt(T, str, 10);
     }
 
     fn parseFloat(self: *Parser) !f64 {
         const str = try self.readValue();
+        defer self.allocator.free(str);
         return std.fmt.parseFloat(f64, str);
+    }
+
+    /// Consume a value and free it, for use when value is discarded
+    fn consumeValue(self: *Parser) void {
+        const value = self.readValue() catch return;
+        self.allocator.free(value);
     }
 
     fn parseSpec(self: *Parser) !Spec {
@@ -397,7 +425,7 @@ const Parser = struct {
 
         while (try self.readKey()) |maybe_key| {
             if (std.mem.eql(u8, maybe_key, "format")) {
-                spec.format = try self.readValue();
+                self.consumeValue();
             } else if (std.mem.eql(u8, maybe_key, "version")) {
                 spec.version = try self.parseInt(u8);
             } else if (std.mem.eql(u8, maybe_key, "level")) {
@@ -406,7 +434,7 @@ const Parser = struct {
                 const type_val = try self.readValue();
                 spec.spec_type = type_val;
             } else if (std.mem.eql(u8, maybe_key, "storage")) {
-                spec.format = try self.readValue();
+                self.consumeValue();
             } else if (std.mem.eql(u8, maybe_key, "version")) {
                 spec.version = try self.parseInt(u8);
             } else if (std.mem.eql(u8, maybe_key, "level")) {
@@ -453,7 +481,7 @@ const Parser = struct {
             } else if (std.mem.eql(u8, maybe_key, "test_vectors")) {
                 spec.test_vectors = try self.parseTestVectors();
             } else {
-                _ = self.readValue() catch {};
+                self.consumeValue();
             }
         }
 
@@ -508,7 +536,7 @@ const Parser = struct {
                 } else if (std.mem.eql(u8, maybe_key, "encoding")) {
                     field.encoding = try self.readValue();
                 } else {
-                    _ = self.readValue() catch {};
+                    self.consumeValue();
                 }
 
                 self.skipWhitespaceAndComments();
@@ -536,13 +564,13 @@ const Parser = struct {
 
         while (try self.readKey()) |maybe_key| {
             if (std.mem.eql(u8, maybe_key, "bits")) {
-                _ = self.readValue() catch {};
+                self.consumeValue();
             } else if (std.mem.eql(u8, maybe_key, "bias")) {
-                _ = self.readValue() catch {};
+                self.consumeValue();
             } else if (std.mem.eql(u8, maybe_key, "max")) {
-                _ = self.readValue() catch {};
+                self.consumeValue();
             } else if (std.mem.eql(u8, maybe_key, "min")) {
-                _ = self.readValue() catch {};
+                self.consumeValue();
             } else if (std.mem.eql(u8, maybe_key, "trits")) {
                 trits = try self.parseInt(u8);
             } else if (std.mem.eql(u8, maybe_key, "base")) {
@@ -550,7 +578,7 @@ const Parser = struct {
             } else if (std.mem.eql(u8, maybe_key, "special")) {
                 special = try self.parseExponentSpecial();
             } else {
-                _ = self.readValue() catch {};
+                self.consumeValue();
             }
         }
 
@@ -583,7 +611,7 @@ const Parser = struct {
             } else if (std.mem.eql(u8, maybe_key, "nan")) {
                 special.nan = try self.parseExponentValue();
             } else {
-                _ = self.readValue() catch {};
+                self.consumeValue();
             }
         }
 
@@ -604,7 +632,7 @@ const Parser = struct {
             } else if (std.mem.eql(u8, maybe_key, "mantissa_nonzero")) {
                 value.mantissa_nonzero = true;
             } else {
-                _ = self.readValue() catch {};
+                self.consumeValue();
             }
         }
 
@@ -667,7 +695,7 @@ const Parser = struct {
             } else if (std.mem.eql(u8, maybe_key, "similarity")) {
                 similarity = try self.readValue();
             } else {
-                _ = self.readValue() catch {};
+                self.consumeValue();
             }
         }
 
@@ -695,7 +723,7 @@ const Parser = struct {
             } else if (std.mem.eql(u8, maybe_key, "zig")) {
                 zig_name = try self.readValue();
             } else {
-                _ = self.readValue() catch {};
+                self.consumeValue();
             }
         }
 
@@ -751,7 +779,7 @@ const Parser = struct {
                     }
                 }
             } else {
-                _ = self.readValue() catch {};
+                self.consumeValue();
             }
         }
 
@@ -846,7 +874,7 @@ const Parser = struct {
                 } else if (std.mem.eql(u8, maybe_key, "bounds")) {
                     op.bounds = try self.readValue();
                 } else {
-                    _ = self.readValue() catch {};
+                    self.consumeValue();
                 }
 
                 self.skipWhitespaceAndComments();
@@ -873,7 +901,7 @@ const Parser = struct {
             }
 
             const key = try self.readValue(); // "a,b"
-            _ = self.readValue() catch {}; // ':'
+            self.consumeValue(); // ':'
 
             // Parse value or array
             if (self.peek()) |ch| {
@@ -926,7 +954,7 @@ const Parser = struct {
             } else if (std.mem.eql(u8, maybe_key, "ternary_conv")) {
                 ternary_conv = try self.parseTernaryConv();
             } else {
-                _ = self.readValue() catch {};
+                self.consumeValue();
             }
         }
 
@@ -956,7 +984,7 @@ const Parser = struct {
                 const val = try self.readValue();
                 sparse = std.mem.eql(u8, val, "true");
             } else {
-                _ = self.readValue() catch {};
+                self.consumeValue();
             }
         }
 
@@ -995,7 +1023,7 @@ const Parser = struct {
                 } else if (std.mem.eql(u8, maybe_key, "raw_hex")) {
                     vec.raw_hex = try self.readValue();
                 } else {
-                    _ = self.readValue() catch {};
+                    self.consumeValue();
                 }
 
                 self.skipWhitespaceAndComments();

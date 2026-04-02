@@ -616,11 +616,11 @@ fn transformGenericParams(alloc: std.mem.Allocator, generic: []const u8) ![]cons
         const trimmed = std.mem.trim(u8, param, " \t");
         if (trimmed.len == 0) continue;
 
-        if (!first) try buf.append(alloc, ',');
+        if (!first) try buf.appendSlice(alloc, ", ");
         first = false;
 
-        // Check if param already has "comptime" prefix
-        if (std.mem.startsWith(u8, trimmed, "comptime")) {
+        // Check if param already has "comptime " prefix (with space for precise matching)
+        if (std.mem.startsWith(u8, trimmed, "comptime ")) {
             try buf.appendSlice(alloc, trimmed);
         } else {
             try buf.appendSlice(alloc, "comptime ");

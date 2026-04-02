@@ -8,7 +8,7 @@ fn main() {
     let lib_dir = find_library_dir();
     
     if let Some(dir) = lib_dir {
-        println!("cargo:rustc-link-search={}", dir);
+        println!("cargo:rustc-link-search={}", dir.display());
         println!("cargo:rustc-link-lib=goldenfloat");
         println!("cargo:rerun-if-changed={}", dir.display());
     } else {
@@ -18,8 +18,8 @@ fn main() {
 }
 
 fn find_library_dir() -> Option<std::path::PathBuf> {
-    use std::path::{Path, PathBuf};
-    
+    use std::path::PathBuf;
+
     // 1. Check environment variable
     if let Ok(dir) = std::env::var("GOLDENFLOAT_LIB_DIR") {
         let path = PathBuf::from(dir);

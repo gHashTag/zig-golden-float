@@ -125,68 +125,63 @@ impl Gf16 {
     /// Create from f32 (via C-ABI)
     pub fn from_f32(x: f32) -> Self {
         let raw = unsafe { sys::gf16_from_f32(x) };
-        Self(raw)
+        Self(raw.0)
     }
 
     /// Convert to f32 (via C-ABI)
     pub fn to_f32(&self) -> f32 {
-        unsafe { sys::gf16_to_f32(self.0) }
+        unsafe { sys::gf16_to_f32(sys::gf16_t(self.0)) }
     }
 
     /// Zero constant
     pub fn zero() -> Self {
-        Self(sys::GF16_ZERO)
+        Self(sys::GF16_ZERO.0)
     }
 
     /// One constant
     pub fn one() -> Self {
-        Self(sys::GF16_ONE)
+        Self(sys::GF16_ONE.0)
     }
 
     /// Positive infinity
     pub fn p_inf() -> Self {
-        Self(sys::GF16_PINF)
+        Self(sys::GF16_PINF.0)
     }
 
     /// Negative infinity
     pub fn n_inf() -> Self {
-        Self(sys::GF16_NINF)
+        Self(sys::GF16_NINF.0)
     }
 
     /// NaN constant
     pub fn nan() -> Self {
-        Self(sys::GF16_NAN)
+        Self(sys::GF16_NAN.0)
     }
 
     /// Check if value is zero (handles signed zeros)
     pub fn is_zero(&self) -> bool {
-        unsafe { sys::gf16_is_zero(self.0) }
+        unsafe { sys::gf16_is_zero(sys::gf16_t(self.0)) }
     }
 
     /// Check if value is NaN
     pub fn is_nan(&self) -> bool {
-        unsafe { sys::gf16_is_nan(self.0) }
+        unsafe { sys::gf16_is_nan(sys::gf16_t(self.0)) }
     }
 
     /// Check if value is infinity (positive or negative)
     pub fn is_inf(&self) -> bool {
-        unsafe { sys::gf16_is_inf(self.0) }
-    }
-
-    /// Check if value is subnormal
-    pub fn is_subnormal(&self) -> bool {
-        unsafe { sys::gf16_is_subnormal(self.0) }
+        unsafe { sys::gf16_is_inf(sys::gf16_t(self.0)) }
     }
 
     /// Check if value is negative
     pub fn is_negative(&self) -> bool {
-        unsafe { sys::gf16_is_negative(self.0) }
+        unsafe { sys::gf16_is_negative(sys::gf16_t(self.0)) }
     }
 
     /// Absolute value
     pub fn abs(&self) -> Self {
-        let raw = unsafe { sys::gf16_abs(self.0) };
-        Self(raw)
+        let raw = unsafe { sys::gf16_abs(sys::gf16_t(self.0)) };
+        Self(raw.0)
     }
 
     /// φ-quantize a float value
@@ -194,45 +189,45 @@ impl Gf16 {
     /// **Formula:** x × (1/φ²) then quantize
     pub fn phi_quantize(x: f32) -> Self {
         let raw = unsafe { sys::gf16_phi_quantize(x) };
-        Self(raw)
+        Self(raw.0)
     }
 
     /// φ-dequantize back to float
     ///
     /// **Formula:** to_f32(g) × φ²
     pub fn phi_dequantize(&self) -> f32 {
-        unsafe { sys::gf16_phi_dequantize(self.0) }
+        unsafe { sys::gf16_phi_dequantize(sys::gf16_t(self.0)) }
     }
 
     /// Minimum of two values
     pub fn min(&self, other: &Self) -> Self {
-        let raw = unsafe { sys::gf16_min(self.0, other.0) };
-        Self(raw)
+        let raw = unsafe { sys::gf16_min(sys::gf16_t(self.0), sys::gf16_t(other.0)) };
+        Self(raw.0)
     }
 
     /// Maximum of two values
     pub fn max(&self, other: &Self) -> Self {
-        let raw = unsafe { sys::gf16_max(self.0, other.0) };
-        Self(raw)
+        let raw = unsafe { sys::gf16_max(sys::gf16_t(self.0), sys::gf16_t(other.0)) };
+        Self(raw.0)
     }
 
     /// Three-way comparison
     ///
     /// Returns: -1 if self < other, 0 if equal, 1 if self > other
     pub fn cmp(&self, other: &Self) -> i32 {
-        unsafe { sys::gf16_cmp(self.0, other.0) }
+        unsafe { sys::gf16_cmp(sys::gf16_t(self.0), sys::gf16_t(other.0)) }
     }
 
     /// Fused multiply-add: self × rhs + add
     pub fn fma(&self, rhs: &Self, add: &Self) -> Self {
-        let raw = unsafe { sys::gf16_fma(self.0, rhs.0, add.0) };
-        Self(raw)
+        let raw = unsafe { sys::gf16_fma(sys::gf16_t(self.0), sys::gf16_t(rhs.0), sys::gf16_t(add.0)) };
+        Self(raw.0)
     }
 
     /// Copy sign from source to self
     pub fn copysign(&self, source: &Self) -> Self {
-        let raw = unsafe { sys::gf16_copysign(self.0, source.0) };
-        Self(raw)
+        let raw = unsafe { sys::gf16_copysign(sys::gf16_t(self.0), sys::gf16_t(source.0)) };
+        Self(raw.0)
     }
 }
 
@@ -338,11 +333,6 @@ impl Gf16 {
         self.0 == GF16_ZERO || self.0 == GF16_NZERO
     }
 
-    /// Check if subnormal
-    pub fn is_subnormal(&self) -> bool {
-        self.exp_biased() == 0 && self.mantissa() != 0
-    }
-
     /// Check if negative
     pub fn is_negative(&self) -> bool {
         self.sign() != 0
@@ -355,12 +345,14 @@ impl Gf16 {
 
     /// φ-quantize (pure Rust fallback)
     pub fn phi_quantize(x: f32) -> Self {
-        Self::from_f32(x * sys::GF16_PHI_INV_SQ as f32)
+        const PHI_INV_SQ: f32 = 0.3819660112501051; // 1/φ²
+        Self::from_f32(x * PHI_INV_SQ)
     }
 
     /// φ-dequantize (pure Rust fallback)
     pub fn phi_dequantize(&self) -> f32 {
-        self.to_f32() * sys::GF16_PHI_SQ as f32
+        const PHI_SQ: f32 = 2.6180339887498948; // φ²
+        self.to_f32() * PHI_SQ
     }
 
     /// Minimum of two values
@@ -416,7 +408,7 @@ impl Add for Gf16 {
         #[cfg(feature = "c-abi")]
         {
             let raw = unsafe { sys::gf16_add(self.0, rhs.0) };
-            Gf16(raw)
+            Gf16(raw.0)
         }
         #[cfg(not(feature = "c-abi"))]
         {
@@ -432,7 +424,7 @@ impl Sub for Gf16 {
         #[cfg(feature = "c-abi")]
         {
             let raw = unsafe { sys::gf16_sub(self.0, rhs.0) };
-            Gf16(raw)
+            Gf16(raw.0)
         }
         #[cfg(not(feature = "c-abi"))]
         {
@@ -448,7 +440,7 @@ impl Mul for Gf16 {
         #[cfg(feature = "c-abi")]
         {
             let raw = unsafe { sys::gf16_mul(self.0, rhs.0) };
-            Gf16(raw)
+            Gf16(raw.0)
         }
         #[cfg(not(feature = "c-abi"))]
         {
@@ -464,7 +456,7 @@ impl Div for Gf16 {
         #[cfg(feature = "c-abi")]
         {
             let raw = unsafe { sys::gf16_div(self.0, rhs.0) };
-            Gf16(raw)
+            Gf16(raw.0)
         }
         #[cfg(not(feature = "c-abi"))]
         {
@@ -480,7 +472,7 @@ impl Neg for Gf16 {
         #[cfg(feature = "c-abi")]
         {
             let raw = unsafe { sys::gf16_neg(self.0) };
-            Gf16(raw)
+            Gf16(raw.0)
         }
         #[cfg(not(feature = "c-abi"))]
         {
@@ -497,7 +489,7 @@ impl PartialEq for Gf16 {
     fn eq(&self, other: &Self) -> bool {
         #[cfg(feature = "c-abi")]
         {
-            unsafe { sys::gf16_eq(self.0, other.0) }
+            unsafe { sys::gf16_eq(sys::gf16_t(self.0), sys::gf16_t(other.0)) }
         }
         #[cfg(not(feature = "c-abi"))]
         {
@@ -512,7 +504,7 @@ impl PartialOrd for Gf16 {
     fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
         #[cfg(feature = "c-abi")]
         {
-            let cmp = unsafe { sys::gf16_cmp(self.0, other.0) };
+            let cmp = unsafe { sys::gf16_cmp(sys::gf16_t(self.0), sys::gf16_t(other.0)) };
             match cmp {
                 -1 => Some(core::cmp::Ordering::Less),
                 0 => Some(core::cmp::Ordering::Equal),
@@ -574,25 +566,53 @@ impl From<Gf16> for f32 {
 // φ-Math Constants
 // ═══════════════════════════════════════════════════════════════════════
 
+#[cfg(feature = "c-abi")]
 impl Gf16 {
     /// Golden ratio φ = (1 + √5) / 2
     pub fn phi() -> f64 {
-        sys::GF16_PHI
+        unsafe { sys::goldenfloat_phi() }
     }
 
     /// φ²
     pub fn phi_sq() -> f64 {
-        sys::GF16_PHI_SQ
+        let phi = Self::phi();
+        phi * phi
     }
 
     /// 1/φ²
     pub fn phi_inv_sq() -> f64 {
-        sys::GF16_PHI_INV_SQ
+        1.0 / Self::phi_sq()
     }
 
     /// Trinity identity: φ² + 1/φ² = 3
     pub fn trinity() -> f64 {
-        sys::GF16_TRINITY
+        unsafe { sys::goldenfloat_trinity() }
+    }
+}
+
+#[cfg(not(feature = "c-abi"))]
+impl Gf16 {
+    /// Golden ratio φ = (1 + √5) / 2 (pure Rust fallback)
+    pub fn phi() -> f64 {
+        const PHI: f64 = 1.6180339887498948482;
+        PHI
+    }
+
+    /// φ² (pure Rust fallback)
+    pub fn phi_sq() -> f64 {
+        const PHI_SQ: f64 = 2.6180339887498948482;
+        PHI_SQ
+    }
+
+    /// 1/φ² (pure Rust fallback)
+    pub fn phi_inv_sq() -> f64 {
+        const PHI_INV_SQ: f64 = 0.381966011250105151;
+        PHI_INV_SQ
+    }
+
+    /// Trinity identity: φ² + 1/φ² = 3 (pure Rust fallback)
+    pub fn trinity() -> f64 {
+        3.0
     }
 }
 
