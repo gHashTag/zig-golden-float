@@ -7,7 +7,7 @@ package goldenfloat
 
 /*
 #cgo LDFLAGS: -L../../zig-out/lib -lgoldenfloat
-#cgo CFLAGS: -I../../include
+#cgo CFLAGS: -I../../src/c
 */
 import "C"
 
