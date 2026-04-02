@@ -643,6 +643,21 @@ All 422 tests passed.
 
 ---
 
+## Language Bindings Status
+
+| Language | Status | Bindings | Tests | Notes |
+|----------|--------|----------|-------|-------|
+| Zig | Complete | Native | Yes | Core implementation |
+| C | Complete | `include/gf16.h` | Yes | Canonical ABI |
+| Rust | Stable | `rust/goldenfloat-sys` | Yes | Published crate |
+| Python | In Progress | `python/goldenfloat` | Pending | ctypes bridge |
+| C++ | Planned | Header-only | Pending | `cpp/include/goldenfloat/` |
+| Go | Planned | cgo wrapper | Pending | `go/goldenfloat/` |
+
+See `LANGUAGE_BINDINGS.md` for specification.
+
+---
+
 ## 🌍 C-ABI — Cross-Language Bindings (v1.1.0)
 
 GoldenFloat provides a stable C-ABI layer for cross-language support (Rust, Python, Node.js, C/C++, Go).

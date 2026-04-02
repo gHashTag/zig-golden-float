@@ -1,0 +1,213 @@
+# Transcendental Functions Specification (Source of Truth)
+# Wave 4B: Add critical transcendental functions to GF16 kernel
+# Single source of truth for generating exp, log implementations
+
+format: TRANSCENDENTAL
+version: 1
+level: 1
+
+description: |
+  Transcendental functions for ML operations.
+  These functions are critical for neural network activations and loss functions:
+  - exp(x) for softmax, sigmoid activation
+  - log(x) for cross-entropy loss calculation
+  - sin(x), cos(x) for future modules (not blocking)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# EXP: e^x FUNCTION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+exp:
+  name: exp
+  inputs: [f64]
+  output: GF16
+  algorithm: two_stage_approximation
+  description: "Exponential function: exp(x) = e^x"
+
+  range:
+    min: -88.0
+    max: 88.0
+    clamp: true
+
+  implementation:
+    stage1:
+      description: "Normalize input for lookup table"
+      operation: "clamp(x, -5.0, 5.0)"
+
+    stage2:
+      description: "Compute integer index [0, 31] from normalized [-5, 5]"
+      operation: "index = (normalized + 5.0) * 3.1"
+
+    stage3:
+      description: "Use 128-entry lookup table (e^x for x in [-5, 5])"
+      operation: "table_lookup[index]"
+
+  overflow:
+    condition: "x >= 88.0"
+    action: "return GF16.maxPos()"
+    description: "e^88 ~ 1.6e38 → GF16 max value"
+
+  underflow:
+    condition: "x <= -88.0"
+    action: "return GF16.negOne()"
+    description: "e^-88 ~ 1.6e-39 → GF16 min value"
+
+  test_vectors:
+    - name: zero_input
+      input: 0.0
+      expected: 1.0
+      tolerance: 0.01
+
+    - name: one_input
+      input: 1.0
+      expected: 2.718
+      tolerance: 0.05
+
+    - name: large_positive
+      input: 5.0
+      expected: 148.41
+      tolerance: 0.01
+
+    - name: small_positive
+      input: 0.1
+      expected: 1.105
+      tolerance: 0.01
+
+    - name: negative_input
+      input: -1.0
+      expected: 0.3679
+      tolerance: 0.05
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LOG: ln(x) FUNCTION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+log:
+  name: log
+  inputs: [f64]
+  output: GF16
+  algorithm: piecewise_approximation
+  description: "Natural logarithm: ln(x)"
+
+  domain:
+    min: 0.001
+    max: 100.0
+    zero_handling: "return GF16.minusOne()"
+
+  implementation:
+    piecewise:
+      - range: [0.001, 0.01]
+        formula: "x * (3.357 - 0.479*ln(x))"
+
+      - range: [0.01, 0.1]
+        formula: "x * (2.506 - 0.596*ln(x))"
+
+      - range: [0.1, 1.0]
+        formula: "x * (2.053 - 0.449*ln(x))"
+
+      - range: [1.0, 10.0]
+        formula: "x * (0.744 - 0.089*ln(x))"
+
+      - range: [10.0, 100.0]
+        formula: "x * (0.923 - 0.062*ln(x))"
+
+  error_handling:
+    condition: "x <= 0.0"
+    action: "return GF16.minusOne()"
+    description: "ln(0) undefined → return -inf"
+
+  test_vectors:
+    - name: zero_error
+      input: 0.0
+      expected: -1.0
+      tolerance: 0.01
+
+    - name: one_input
+      input: 1.0
+      expected: 0.0
+      tolerance: 0.05
+
+    - name: small_input
+      input: 0.1
+      expected: -2.3026
+      tolerance: 0.05
+
+    - name: large_input
+      input: 10.0
+      expected: 2.3026
+      tolerance: 0.05
+
+    - name: negative_input
+      input: -1.0
+      expected: -1.0
+      tolerance: 0.01
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SIN: sin(x) FUNCTION (Future - Not Blocking)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+sin:
+  name: sin
+  inputs: [f64]
+  output: GF16
+  algorithm: taylor_series
+  description: "Sine function: sin(x)"
+  priority: P1
+  blocking: false
+
+  taylor_series:
+    terms: 5
+    formula: "x - x^3/6 + x^5/120 - x^7/5040 + x^9/362880"
+
+  range_reduction:
+    period: "2*PI"
+    algorithm: "x = x % (2*PI)"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# COS: cos(x) FUNCTION (Future - Not Blocking)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+cos:
+  name: cos
+  inputs: [f64]
+  output: GF16
+  algorithm: taylor_series
+  description: "Cosine function: cos(x)"
+  priority: P1
+  blocking: false
+
+  taylor_series:
+    terms: 5
+    formula: "1 - x^2/2 + x^4/24 - x^6/720 + x^8/40320"
+
+  range_reduction:
+    period: "2*PI"
+    algorithm: "x = x % (2*PI)"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# IMPLEMENTATION VERIFICATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+verification:
+  source_file: src/math/transcendental.zig
+  functions_count: 4
+  total_tests: 10+
+
+test_coverage:
+  - exp: zero, one, large positive, small positive, negative
+  - log: zero error, one, small, large, negative
+  - sin: (future)
+  - cos: (future)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VERSION HISTORY
+# ═══════════════════════════════════════════════════════════════════════════════
+
+changelog:
+  - version: 1
+    date: 2026-04-02
+    changes:
+      - Initial specification for Wave 4B
+      - exp function with two-stage approximation
+      - log function with piecewise approximation
+      - sin/cos stubs for future implementation

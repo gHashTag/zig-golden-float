@@ -5,7 +5,7 @@
 format: OPS
 version: 1
 level: 1
-parent_specs: [gf16.tri, tf3.tri]
+parent_specs: [gf16.tri, tf3.tri, transcentental.tri]
 
 # ═════════════════════════════════════════════════════════════════════
 # GF16 OPERATIONS
@@ -115,6 +115,49 @@ gf16:
     algorithm: decode_then_multiply_by_phi_sq
     phi_multiplier: PHI_SQ ≈ 2.618034
     purpose: restore_original_scale
+
+  # Transcendental operations (Wave 4B)
+  exp:
+    inputs: [f64]
+    output: GF16
+    algorithm: two_stage_approximation
+    intermediate_type: f64
+    description: "Exponential function: exp(x) = e^x"
+    purpose: softmax, sigmoid activation
+    range:
+      min: -88.0
+      max: 88.0
+      clamp: true
+
+  log:
+    inputs: [f64]
+    output: GF16
+    algorithm: piecewise_approximation
+    intermediate_type: f64
+    description: "Natural logarithm: ln(x)"
+    purpose: cross-entropy loss calculation
+    domain:
+      min: 0.001
+      max: 100.0
+      zero_handling: "return GF16.minusOne()"
+
+  sin:
+    inputs: [f64]
+    output: GF16
+    algorithm: taylor_series
+    intermediate_type: f64
+    description: "Sine function: sin(x)"
+    priority: P1
+    blocking: false
+
+  cos:
+    inputs: [f64]
+    output: GF16
+    algorithm: taylor_series
+    intermediate_type: f64
+    description: "Cosine function: cos(x)"
+    priority: P1
+    blocking: false
 
 # ═════════════════════════════════════════════════════════════════════
 # TF3 OPERATIONS
