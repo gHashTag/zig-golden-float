@@ -27,7 +27,7 @@ const std = @import("std");
 // ═════════════════════════════════════════════════════════════════════
 
 /// Euler's number e = 2.718281828459045
-pub const E: f64 = @as(2.718281828459045);
+pub const E: f64 = 2.718281828459045;
 
 /// 2π for trigonometric functions
 pub const TWO_PI: f64 = 2.0 * std.math.pi;
@@ -51,8 +51,8 @@ pub fn exp(x: f64) f64 {
 
     // Compute index [0, 31] from normalized [-5, 5]
     const index_float = (clamped + 5.0) * 3.1; // Maps to [0, 31]
-    const index = @intFromFloat(index_float);
-    const clamped_index = std.math.clamp(index, 0, 31);
+    const index = @as(usize, @intFromFloat(index_float));
+    const clamped_index = @min(index, 31);
 
     // Lookup table: e^x values for x in [-5, 5]
     const exp_table = [32]f64{
