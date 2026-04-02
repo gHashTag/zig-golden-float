@@ -26,7 +26,7 @@
 #include <stdexcept>
 
 // Include C-ABI header
-#include <gf16.h>
+#include "../../src/c/gf16.h"
 
 namespace goldenfloat {
 
