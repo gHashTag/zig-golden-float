@@ -653,6 +653,7 @@ All 422 tests passed.
 | Python | Complete | `python/goldenfloat` | Yes | ctypes bridge |
 | C++ | Complete | Header-only | Yes | `cpp/include/goldenfloat/` |
 | Go | Complete | cgo wrapper | Yes | `go/goldenfloat/` |
+| CI | Planned | Zig runner | `tools/test_bindings.zig` | Builds shared + runs all tests |
 
 See `LANGUAGE_BINDINGS.md` for specification.
 
