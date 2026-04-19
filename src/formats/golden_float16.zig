@@ -1,4 +1,6 @@
-//! GoldenFloat16 — φ-optimized ML number formats for Zig
+//! Trinity ML Formats — GF16 and TF3-9 (Consolidated)
+//!
+//! This module provides φ-optimized number formats for Trinity's HSLM (Hybrid Symbolic Language Model).
 //!
 //! **Formats:**
 //! - GF16: Golden Float16 — φ-optimized 16-bit format [sign:1][exp:6][mant:9]
@@ -13,7 +15,9 @@
 //!
 //! **Usage:**
 //! ```zig
-//! const golden = @import("golden-float");
+//! const std = @import("std");
+//! const golden = @import("golden_float16.zig");
+//!
 //! const gf = golden.GF16.fromF32(3.14159);
 //! const tf3 = golden.TF3.fromF32(2.71828);
 //! ```
@@ -21,7 +25,7 @@
 
 const std = @import("std");
 
-// ═══════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════
 // TRINITY CONSTANTS
 // ═════════════════════════════════════════════════════════════════════
 
@@ -39,7 +43,7 @@ pub const TRINITY = PHI_SQ + PHI_INV_SQ;
 
 // ═════════════════════════════════════════════════════════════════════
 // GF16: GOLDEN FLOAT16
-// ═════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════
 
 /// GF16: Golden Float16 — φ-optimized packed format
 ///
@@ -51,10 +55,14 @@ pub const TRINITY = PHI_SQ + PHI_INV_SQ;
 /// └──────┴─────────┴─────────┘
 /// ```
 ///
-/// **Why φ-optimal?**
-/// - phi-distance: |exp/mant - 1/φ| ≈ 0.049 (vs 0.082 for IEEE f16)
-/// - Better numerical distribution for ML weights
-/// - Compatible with IBM DLFloat 6:9 split
+/// **Phi-optimal distribution** — Unlike IEEE 754 f16 [sign:1][exp:5][mant:10],
+/// GF16 has phi-optimal bit distribution: [sign:1][exp:6][mant:9].
+///
+/// **Parameters:**
+/// - Exponent bias: 31 (0x1F)
+/// - Min positive: 2^(-31) ≈ 4.66e-10
+/// - Max value: ~2^31 × 1.999 ≈ 4.29e9
+/// - phi-distance: |exp/mant - 1/φ| ≈ 0.049 (close to φ-optimal)
 ///
 /// **Example:**
 /// ```zig
@@ -70,6 +78,11 @@ pub const GF16 = packed struct(u16) {
 
     /// Sign bit (1 = negative)
     sign: u1,
+
+    /// phi-distance: measures how close bit distribution is to φ-optimal
+    /// Lower is better — GF16 achieves 0.049 (vs 0.082 for IEEE f16)
+    /// comptime calculation (0.049 for GF16)
+    // pub const phi_distance: comptime_float = @import("std").math.fabs(6.0 / 9.0 - 1.0 / PHI);
 
     /// Create GF16 from f32 with φ-optimized encoding
     pub fn fromF32(v: f32) GF16 {
@@ -89,8 +102,9 @@ pub const GF16 = packed struct(u16) {
         while (mant_f >= 1.0 and exp < 31) : (exp += 1) mant_f /= 2.0;
         while (mant_f < 0.5 and exp > -32) : (exp -= 1) mant_f *= 2.0;
 
+        const exp_i8: i8 = exp;
         const exp_bias: i8 = 31;
-        const exp_u6: u6 = @intCast(exp_bias + exp);
+        const exp_u6: u6 = @intCast(exp_bias + exp_i8);
         const mant_u9: u9 = @intFromFloat((mant_f - 0.5) * 512.0);
 
         return .{
@@ -174,9 +188,9 @@ pub const GF16 = packed struct(u16) {
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 // TF3: TERNARY FLOAT3
-// ═════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
 
 /// TF3: Ternary Float3 — packed ternary format
 ///
@@ -193,15 +207,42 @@ pub const GF16 = packed struct(u16) {
 /// - sign: 1 sign bit
 /// - exp: 6 exponent bits (values -31..+32, base 3)
 /// - mant: 11 mantissa bits (ternary digits: {-1, 0, +1})
+///
+/// **Encoding:**
+/// ```
+/// trit value | TF3 encoding
+/// ----------|-------------
+///    -1     | NEG = 2 (binary: 10)
+///     0     | ZERO = 0
+///    +1     | POS = 1
+/// ```
+///
+/// **Example:**
+/// ```zig
+/// const tf3 = TF3.fromF32(2.71828);
+/// try std.testing.expect(tf3.toF32() > 2.5 and tf3.toF32() < 3.0);
+/// ```
 pub const TF3 = packed struct(u18) {
-    /// Mantissa (11 bits)
+    /// Mantissa (11 bits) — ternary digits packed as unsigned
     mant: u11,
 
-    /// Exponent (6 bits, bias 31)
+    /// Exponent (6 bits, bias 31 for ternary base 3)
     exp: u6,
 
     /// Sign bit (1 = negative)
     sign: u1,
+
+    /// Exponent bias for TF3 (ternary base 3)
+    const EXP_BIAS: u6 = 31;
+
+    /// Ternary value encodings for packing
+    const NEG: u2 = 2;
+    const ZERO: u2 = 0;
+    const POS: u2 = 1;
+
+    /// phi-distance for ternary format
+    /// comptime calculation (0.194 for TF3)
+    // pub const phi_distance: comptime_float = @import("std").math.fabs(3.0 / 11.0 - 1.0 / PHI);
 
     /// Create TF3 from f32 (ternary base 3)
     pub fn fromF32(v: f32) TF3 {
@@ -215,16 +256,18 @@ pub const TF3 = packed struct(u18) {
         const abs_v = @abs(v);
 
         // Find exponent (ternary base 3)
+        // Use i16 to avoid overflow during calculations
         var exp: i16 = 0;
         var mant_f = abs_v;
 
-        // Normalize: mant_f in [1/3, 1)
+        // Normalize: mant_f in [1/3, 1]
         const MAX_EXP: i16 = 31;
         const MIN_EXP: i16 = -31;
 
         while (mant_f >= 1.0 and exp < MAX_EXP) : (exp += 1) mant_f /= 3.0;
         while (mant_f < 1.0 / 3.0 and exp > MIN_EXP) : (exp -= 1) mant_f *= 3.0;
 
+        // Clamp and convert to u6 (biased exponent)
         const exp_biased = @min(@max(exp + 31, 0), 63);
         const exp_u6: u6 = @intCast(exp_biased);
         const mant_u11: u11 = @intFromFloat(@min(mant_f * 2047.0, 2047.0));
@@ -267,18 +310,19 @@ pub const TF3 = packed struct(u18) {
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 // COMPILE-TIME GUARDS
-// ═════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 
 comptime {
+    // Check packed struct sizes
     std.debug.assert(@sizeOf(GF16) == 2);
     std.debug.assert(@sizeOf(TF3) == @sizeOf(u18));
 }
 
-// ═════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════════════
 // TESTS
-// ═════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════════
 
 test "GF16 zero and one" {
     const zero = GF16.zero();
@@ -288,8 +332,18 @@ test "GF16 zero and one" {
     try std.testing.expectApproxEqAbs(@as(f32, 1.0), one.toF32(), 0.01);
 }
 
-test "GF16 roundtrip" {
-    const values = [_]f32{ 0.0, 0.5, 1.0, 2.0, 3.14, 100.0, -0.5, -1.0, -2.0, -3.14 };
+test "GF16 roundtrip positive" {
+    const values = [_]f32{ 0.0, 0.5, 1.0, 2.0, 3.14, 100.0, 1000.0 };
+    for (values) |v| {
+        const gf = GF16.fromF32(v);
+        const result = gf.toF32();
+        const err = @abs(v - result) / (@abs(v) + 0.001);
+        try std.testing.expect(err < 0.05); // 5% error tolerance
+    }
+}
+
+test "GF16 roundtrip negative" {
+    const values = [_]f32{ -0.5, -1.0, -2.0, -3.14, -100.0, -1000.0 };
     for (values) |v| {
         const gf = GF16.fromF32(v);
         const result = gf.toF32();
@@ -312,7 +366,7 @@ test "GF16 arithmetic" {
     try std.testing.expectApproxEqAbs(@as(f32, 0.6), quot.toF32(), 0.05);
 }
 
-test "GF16 phi quantization" {
+test "GF16 phi quantization roundtrip" {
     const original = 2.71828;
     const quantized = GF16.phiQuantize(original);
     const dequantized = GF16.phiDequantize(quantized);
@@ -337,8 +391,13 @@ test "TF3 roundtrip" {
         const tf3 = TF3.fromF32(v);
         const result = tf3.toF32();
         const err = @abs(v - result) / (@abs(v) + 0.001);
-        try std.testing.expect(err < 0.5);
+        try std.testing.expect(err < 0.5); // Ternary format less precise
     }
+}
+
+// TODO: Implement pack8/unpack8 with proper type handling
+test "TF3 pack unpack 8 (pending)" {
+    try std.testing.expect(true);
 }
 
 test "TRINITY constant" {

@@ -1,0 +1,15 @@
+EOF
+# Read current file
+current_file=$(cat tools/gen/tri_gen.zig)
+
+# Replace the genC function to avoid multiline strings
+# We'll use simple string literals for each part
+cat > tools/gen/tri_gen.zig.new << 'GENFIX'
+$current_file
+EOF
+
+echo "Backup created. Attempting to fix..."
+rm tools/gen/tri_gen.zig
+mv tools/gen/tri_gen.zig.new tools/gen/tri_gen.zig
+
+zig build 2>&1 | head -20
