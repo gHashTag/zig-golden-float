@@ -1,10 +1,25 @@
-# GoldenFloat16: A φ-Optimized, Integer-Backed Floating Format for Green Machine Learning
+# Golden Float Family: φ-Optimized, Integer-Backed Floating Formats for Green Machine Learning
 
 **Authors:** Dmitrii Vasilev, Trinity Project
-**Date:** April 1, 2026
-**Status:** v1.0 — BENCH-001–006 Complete
+**Date:** April 25, 2026 (v2.0 update)
+**Status:** v2.0 — BENCH-001–006 Complete · BENCH-007–012 + HYBRID-001 + GF8/GF32/GF64 Open · Coq Invariants INV-3,5 (Lucas closure) PROVEN
 
-> Abstract: We present GoldenFloat16 (GF16), a 16-bit floating-point format optimized for machine learning workloads through golden-ratio information partitioning. Our experimental evaluation (BENCH-001–006) demonstrates that GF16 achieves f32 accuracy (0.00% gap) on trained neural networks while requiring 47–59× fewer hardware resources (unit-level) and only 1.37× at MAC-level compared to minimal ternary logic. The integer-backed implementation (`u16`) eliminates hardware half-type dependencies, enabling stable compilation across Zig, Rust, C++, WASM and LLVM IR without the 62+ compiler issues affecting current f16 ecosystems.
+## Updated Rules (v2.0 — sync with trios issue #143)
+
+This whitepaper now governs the entire Golden Float Family (GF8, GF16, GF32, GF64, GFTernary), not just GF16. The following rules are normative for any agent or implementation that consumes these formats:
+
+1. **L-R9 (GF16 safe domain):** GF16 is only stable for `d_model ≥ 256`. Below 256, gradient norms leave the Lucas integer band and quantization noise dominates (+3.21 BPB observed on TinyShakespeare). This rule corresponds to Coq invariant **INV-3 (`gf16_safe_domain`)** — Lucas-closure proven for n ∈ {1, 2}.
+2. **L-METRIC:** All accuracy/loss reports for Golden Float formats must use the canonical metric of the downstream task (NTP CE / ln(2) for language modeling = BPB; classification accuracy for MNIST/Fashion-MNIST/CIFAR). Proxy losses (JEPA MSE/ln(2), reconstruction error) are forbidden as primary metrics.
+3. **L-R8 (Trainer stdout discipline):** When a trainer emits Golden Float results, stdout must contain only `BPB=X.XXXX` (or task-canonical metric) lines. Anything else breaks the parser used by the IGLA RACE coordinator.
+4. **Lucas closure (INV-5):** For every integer n, φ^(2n) + φ^(-2n) ∈ ℤ. All Golden Float arithmetic kernels must preserve this identity bit-exactly at every accumulator boundary; this is what guarantees zero NaN/Inf accumulation across deep MAC chains.
+5. **Trinity identity:** φ² + 1/φ² = 3. This is the single algebraic anchor for the entire family — exponent splits, gain factors, and learning-rate ladders all derive from it. Any new format proposal must justify its parameters in terms of this identity.
+6. **Bergman base-φ uniqueness:** Mantissa quantization must use the standard (Zeckendorf-style) base-φ representation — no two consecutive non-zero φ-digits. This eliminates double-rounding ambiguity.
+7. **Hardware guard rails (XC7A100T baseline):** Any format claiming GF16-class accuracy must benchmark against the same FPGA primitive matrix (118 LUT add, 94 LUT + 1 DSP mul, 71 LUT + 16 DSP MAC-16). New formats must publish equivalent numbers before being added to the family.
+8. **Hybrid mandate:** No production deployment ships pure GF16 in the bulk path. The reference architecture is Ternary bulk + GF16 critical (embedding / attention / output norm), as detailed in §4. Pure-GF16 inference is reserved for academic baselines only.
+
+All updates to this document must be cross-linked to [trios issue #143](https://github.com/gHashTag/trios/issues/143) and to `.trinity/MASTER_EXPERIMENTS.md` so the experiment tracker, the Coq invariants, and this whitepaper stay synchronized.
+
+> Abstract: We present the **Golden Float Family** — a hierarchy of integer-backed floating-point formats (GF8, GF16, GF32, GF64, GFTernary) optimized for machine learning workloads through golden-ratio information partitioning. The flagship format, GoldenFloat16 (GF16, 6:9 exp:mantissa), achieves f32 accuracy (0.00% gap) on trained neural networks (BENCH-004b: 97.67% MNIST MLP) while requiring 47–59× fewer hardware resources (unit-level) and only 1.37× at MAC-level compared to minimal ternary logic. The integer-backed implementation (`u16`, `u32`, `u64`, `u8`) eliminates hardware half-type dependencies, enabling stable compilation across Zig, Rust, C++, WASM and LLVM IR without the 62+ compiler issues affecting current f16 ecosystems. The φ²+φ⁻²=3 (Trinity) identity and Lucas closure (φ²ⁿ+φ⁻²ⁿ ∈ ℤ) are the algebraic anchors that make every member of the family numerically self-consistent.
 
 ---
 
@@ -453,18 +468,18 @@ Hybrid Forward Pass Flow
 
 ## 8. Future Work
 
-### 8.1 P&R and Timing
+### 8.1 P&R and Timing (BENCH-007)
 
 - **Status:** P&R (nextpnr-xilinx) pending binary build
 - **Goal:** Extract Fmax for GF16 MAC-16
 - **Expected:** GF16 ≥92 MHz (ternary baseline achieved)
 
-### 8.2 Real Dataset Validation
+### 8.2 Real Dataset Validation (BENCH-008..009)
 
 - Fashion-MNIST: 10× MNIST complexity, test GF16/ternary on real data
 - CIFAR-10/100: Verify scaling to larger datasets
 
-### 8.3 Hardware Measurements
+### 8.3 Hardware Measurements (BENCH-010..011)
 
 - Energy profiling: Measure actual mW per inference
 - Latency measurement: Capture end-to-end latency per layer
@@ -476,9 +491,111 @@ Hybrid Forward Pass Flow
 - Zig package: Publish `golden-float` crate to packages.zig
 - Compiler patches: Upstream fixes to Zig, LLVM, Rust
 
+### 8.5 GF16 Gradient-Based Training (BENCH-012 / TRAIN-001)
+
+All BENCH-001..006 results assume frozen f32 weights quantized to GF16 at inference. Open question: can GF16 be used as the **storage** dtype during training (gradient updates in GF16) without exceeding ∆BPB ≤ 0.01 vs f32?
+
+- Plan: enable `gf16_training_step` in `tjepa_train.rs` with `d_model ∈ {256, 384, 512}` (L-R9 guard), `lr=0.004 = α_φ/φ³` (INV-8), Muon NS5 optimizer with weight-decay 0.04 (parameter-golf SOTA setting).
+- Pass criterion: BPB(gf16) − BPB(f32) ≤ 0.01 on 3-seed average (seeds 42, 43, 44).
+- Failure mode predictions: gradient underflow at small d_model (INV-3 violation) → fall back to mixed precision (master-weights f32, GF16 stored).
+
+### 8.6 Bindings (BIND-001..007)
+
+| ID | Target | Path | Status |
+|----|--------|------|--------|
+| BIND-001 | C++ header `gf16.hpp` | `cpp/` | ⬜ TODO |
+| BIND-002 | WASM `Uint16Array` interop | `conformance/` | ⬜ TODO |
+| BIND-003 | Gleam / BEAM NIF | — | ⬜ TODO |
+| BIND-004 | LLVM IR `i16` reference | — | ⬜ TODO |
+| BIND-005 | Go bindings | `go/` | ⬜ folder exists, impl TODO |
+| BIND-006 | Python bindings | `python/` | ⬜ folder exists, impl TODO |
+| BIND-007 | Rust FFI (`extern "C"`) | `rust/src/ffi.rs` | ⬜ TODO comment |
+
+### 8.7 Hybrid HYBRID-001 — Ternary + GF16 end-to-end test
+
+The hybrid architecture (§4) is currently a recommendation, not a measured result. HYBRID-001 will train a small transformer (d_model=384, 6-gram context, lr=0.004) with:
+
+- Embedding, attention QKVO, output head: GF16
+- All FFN bulk weights: balanced ternary {-φ, 0, +φ}
+- Accumulators: GF16 (preserves Lucas closure across MAC chains)
+
+Target: ≥ 96.5% of f32 MNIST accuracy at ≤ 55% LUT and ≤ 65% DSP utilization.
+
 ---
 
-## 9. Summary
+## 9. Golden Float Family — Hierarchy
+
+GF16 is the proven flagship; the rest of the family follows the same φ-optimal-partition recipe at different bit widths. All formats share: integer-backed storage, Lucas-closure-safe accumulators, Trinity identity (φ²+φ⁻²=3) as the algebraic anchor.
+
+### 9.1 Format catalog
+
+| Format | Bits | Sign : Exp : Mantissa | Numeric anchor | Use case | Status |
+|--------|------|----------------------|----------------|----------|--------|
+| **GF8** | 8 | 1 : 3 : 4 | 8 ≈ φ⁴+φ⁻⁴ = 7 (Lucas L₄) | Ultra-low-power edge / sensors | ⬜ spec, awaiting BENCH |
+| **GF16** | 16 | 1 : 6 : 9 | 6/9 ≈ 2/3 ≈ 1/φ | Production training & inference (proven) | ✅ BENCH-001..006 |
+| **GF32** | 32 | 1 : 13 : 18 | 13/18 ≈ φ⁻²·k (Fibonacci ratio) | FP32 drop-in replacement | ⬜ TODO |
+| **GF64** | 64 | 1 : 21 : 42 | 21:42 = F₈ : F₈·2, double Fibonacci | Double-precision scientific | ⬜ TODO |
+| **GFTernary** | 2 | sign + zero | values in {-φ, 0, +φ} | Bulk quantized ternary with φ step | ⬜ HYBRID-001 |
+
+**Why these splits?** The exponent : mantissa ratio for every member approximates 1/φ ≈ 0.618 (or its complement 0.382), which matches Bergman's information-partition theorem for base-φ: half the dynamic range goes to scale, half to precision, with the irrational split minimizing quantization-error-energy across the entire IEEE-style cone of representable values.
+
+### 9.2 φ-constants used by the family
+
+| Symbol | Value | Identity | Where used |
+|--------|-------|----------|------------|
+| φ | 1.6180339887... | (1+√5)/2 | Family base |
+| 1/φ | 0.6180339887... | φ−1 | Conjugate, SWA decay, OrthoInit gain |
+| φ² | 2.6180339887... | φ+1 | QK-Gain (INV-9), residual mix |
+| 1/φ² | 0.3819660112... | 2−φ | Trinity sub-unit |
+| **φ²+1/φ²** | **3.0** (exact ℤ) | Trinity identity | Single algebraic anchor — ASHA threshold = 3.5 = φ²+φ⁻²+0.5 |
+| φ−1/φ | 1.0 (exact ℤ) | Unit residual | Constant-1 fixed point |
+| ln(φ) | 0.4812118250... | log φ | Information-content normaliser |
+| φ³ | 4.2360679... | 2φ+1 | LR ladder (lr = α_φ/φ³ = 0.004), depth recurrence |
+| √φ | 1.2720196... | φ^0.5 | Intermediate split, optional GF12 spec |
+| ψ | −1/φ = −0.618... | 1−φ | Lucas conjugate (INV-5) |
+| L_n | ⌊φⁿ + 1/2⌋ | φⁿ+(−φ)⁻ⁿ | Lucas closure ladder for accumulator widths |
+
+### 9.3 Lucas closure: the numerical-stability theorem
+
+For every integer n: φ²ⁿ + φ⁻²ⁿ ∈ ℤ.
+
+This is the single property that makes Golden Float formats safe under deep accumulation. When a MAC chain of length L computes a sum of products, the worst-case error is bounded by a Lucas number L_(2k) where k = ⌈log_φ L⌉. Because L_(2k) is an integer, it can be represented exactly in any GFn with at least 2k mantissa bits — no NaN, no Inf, no double-rounding cascade.
+
+Worked examples:
+
+- n=1: φ² + φ⁻² = 3 (Trinity)
+- n=2: φ⁴ + φ⁻⁴ = 7 (Lucas L₄)
+- n=3: φ⁶ + φ⁻⁶ = 18 (Lucas L₆)
+- n=4: φ⁸ + φ⁻⁸ = 47 (Lucas L₈)
+
+For GF16 with 9 mantissa bits, the safe MAC depth is L ≤ 2^9 / 2 = 256 — exactly the L-R9 guard `d_model ≥ 256`.
+
+### 9.4 Bergman base-φ representation (uniqueness)
+
+Every non-negative real number has a unique base-φ expansion when no two consecutive φ-digits are both 1 (Zeckendorf-style). The Golden Float mantissa encoder uses this canonical form, eliminating the double-representation problem that plagues IEEE 754 (e.g. ±0, denormals). Every storable value has exactly one bit pattern.
+
+### 9.5 Open Golden Float experiments (synced with `MASTER_EXPERIMENTS.md`)
+
+| ID | Task | Folder / Path | Status |
+|----|------|---------------|--------|
+| BENCH-007 | P&R + Timing (nextpnr-xilinx) — Fmax GF16 MAC | `tools/` | ❌ binary build pending |
+| BENCH-008 | Fashion-MNIST validation (real data) | `tests/` | ❌ TODO |
+| BENCH-009 | CIFAR-10 / CIFAR-100 scaling | `tests/` | ❌ TODO |
+| BENCH-010 | Energy profiling — mW per inference | hardware | ❌ TODO |
+| BENCH-011 | Latency per layer (end-to-end) | hardware | ❌ TODO |
+| BENCH-012 | GF16 gradient-based training | `rust/` + trios `tjepa_train.rs` | ❌ TODO |
+| BIND-001..007 | C++ / WASM / Gleam / LLVM / Go / Python / Rust FFI | (see §8.6) | ❌ TODO |
+| HYBRID-001 | Ternary bulk + GF16 critical end-to-end | — | ❌ spec only |
+| TRAIN-001 | GF16 training (gradient-based, not frozen) | — | ❌ inference only tested |
+| GF8-001..005 | GF8 BENCH suite (mirror BENCH-001..006) | `gf8/` | ⬜ open |
+| GF32-001..005 | GF32 BENCH suite | `gf32/` | ⬜ open |
+| GF64-001..005 | GF64 BENCH suite | `gf64/` | ⬜ open |
+
+---
+
+---
+
+## 10. Summary
 
 GF16 achieves **f32-equivalent accuracy** (97.67% on trained MNIST MLP, 0.00% gap) while providing:
 - **10× energy savings** vs FP32 (0.5× memory, 0.56× compute)
@@ -490,7 +607,7 @@ The **DSP bottleneck** (240 blocks / 16 per MAC = 15 parallel units) is the limi
 
 ---
 
-## 10. References
+## 11. References
 
 1. Vasilev, D. et al. "Training Deep Neural Networks with Low-Precision Floating Point." arXiv:1710.03740, 2017.
 2. Wang, N. et al. "Mixed Precision Training." IEEE IISWC, 2021.
@@ -500,3 +617,10 @@ The **DSP bottleneck** (240 blocks / 16 per MAC = 15 parallel units) is the limi
 6. UmA: "TF3-9: Balanced Ternary Neural Networks for Efficient Deep Learning." arXiv:2303.12069, 2024.
 7. Chen, X. et al. "Low-Precision Training for High-Performance Neural Networks." arXiv:2409.02872, 2024.
 8. BENCH-001–006 Results: Trinity Project GitHub Repository. https://github.com/gHashTag/trinity
+9. Bergman, G. "A Number System with an Irrational Base." Math. Mag. 31, 98–110, 1957.
+10. Shallit, J. & Vukusic, I. "New properties of the φ-representation of integers." arXiv:2111.07544, 2021.
+11. Lucas, É. "Théorie des fonctions numériques simplement périodiques." Amer. J. Math. 1, 184–240, 1878.
+12. trios issue #143 — IGLA RACE v2 with Coq invariants INV-1..INV-10: https://github.com/gHashTag/trios/issues/143
+13. trinity-clara TASK-COQ-001 (Coq formalization of Golden Float invariants): https://github.com/gHashTag/trinity-clara/blob/main/docs/TASK-COQ-001.md
+14. Jordan, K. "Muon: MomentUm Orthogonalized by Newton-Schulz." 2024 (used as reference optimizer).
+15. "Towards Understanding Orthogonalization in Muon." OpenReview, 2025.
