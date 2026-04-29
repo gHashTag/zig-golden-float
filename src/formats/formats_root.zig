@@ -172,41 +172,18 @@ fn fp16ToF32(x: u16) f32 {
 }
 
 // Software bf16 encode/decode (Brain Float 16)
+
+// BUG-001-BF16 FIX: Canonical top-16 bits with round-to-nearest-even
+// This matches IEEE-754 bf16 spec without custom exponent clamping
 fn f32ToBf16(a: f32) u16 {
     if (a == 0) return 0;
     if (std.math.isInf(a)) return 0x7F80; // Infinity (all ones)
     if (std.math.isNan(a)) return 0x7FC0; // NaN
 
-    const sign_bit: u16 = if (a < 0) 0x8000 else 0;
-    const abs_a = if (a < 0) -a else a;
-
-    const frexp_result = std.math.frexp(abs_a);
-    const m_val = frexp_result.significand;
-    var e = frexp_result.exponent - 127;
-
-    if (e < -7) {
-        // Denormalized range -> flush to zero
-        return sign_bit;
-    }
-
-    e = @min(e, 7);
-    if (e <= 0 and m_val < 0.5) {
-        return sign_bit; // Subnormal -> zero
-    }
-
-    const mant_f = (m_val - 1.0) * 256.0; // 2^8
-    var mant_i = @as(i32, @intFromFloat(mant_f));
-
-    if (mant_i == 256) {
-        mant_i = 255;
-        e += 1;
-        if (e >= 7) return 0x7F80; // Overflow
-    }
-
-    const mant_bits: u16 = @as(u16, @intCast(mant_i)) & 0x00FF;
-    const e_bits: u16 = @as(u16, @intCast(e)) << 7;
-
-    return sign_bit | e_bits | mant_bits;
+    // Canonical fix: take top 16 bits with round-to-nearest-even
+    const bits = @as(u32, @bitCast(a));
+    const rounding: u32 = ((bits >> 16) & 1) + 0x7FFF;
+    return @as(u16, @intCast((bits + rounding) >> 16));
 }
 
 fn bf16ToF32(x: u16) f32 {
