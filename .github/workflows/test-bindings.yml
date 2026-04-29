@@ -36,7 +36,7 @@ jobs:
           version: 0.15.2
 
       - name: Build shared library
-        run: zig build shared
+        run: zig build
 
       - name: Test Zig
         if: matrix.language == 'zig'
@@ -90,6 +90,8 @@ jobs:
 
       - name: Test Go
         if: matrix.language == 'go'
+        env:
+          CGO_ENABLED: 1
         run: |
           cd go/goldenfloat
           go test -v ./...

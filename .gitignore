@@ -2,5 +2,6 @@
 zig-out/
 zig/
 rust/target/
+cpp/build/
 rust/*.rs
 rust/test_nan

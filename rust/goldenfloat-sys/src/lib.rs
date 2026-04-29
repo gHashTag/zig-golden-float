@@ -24,6 +24,7 @@ use core::ffi::c_char;
 /// GF16 value type (transparent u16 wrapper)
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[allow(non_camel_case_types)]
 pub struct gf16_t(pub u16);
 
 // ═════════════════════════════════════════════════════════════════════
