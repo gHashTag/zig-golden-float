@@ -30,6 +30,68 @@ pub const ExpMin: u16 = 0;
 // GF16 → f32 (decode)
 // ═══════════════════════════════════════════════════════════════════
 
+fn f32ToGf8(x: f32) u8 {
+    if (x == 0.0) return 0;
+    if (std.math.isInf(x)) return if (x > 0) 0xFF else 0xFE;
+    if (std.math.isNan(x)) return 0xFF;
+
+    const sign_bit = if (x < 0) 0x80 else 0;
+    const abs_x = if (x < 0) -x else x;
+
+    // GF8: 1:3:4 (1 бит знак, 3 бита экспонента, 4 бита мантисса)
+    // Bias = L₄ = 7 (8 - 1)
+    const frexp = std.math.frexp(abs_x);
+    var m = frexp.significand * 2.0;
+    var e = frexp.exponent - 1;
+
+    // Denormals для GF8
+    if (e < 0) {
+        e = 0;
+        m = 0.5 + frexp.significand; // 0.5 * (0.5 to 1.5) для субнормал
+    }
+
+    // Нормализация: (0.5 + 0.5 * m) * 2^(e - bias)
+    var norm_m = (0.5 + 0.5 * m);
+    var exp_bits: u4 = @intFromFloat(norm_m * 2.0);
+
+    // Clamp диапазон: 0.75 * 2^(7 - 7) = 6 (L₄)
+    if (exp_bits > 6) {
+        exp_bits = 6;
+        norm_m = 3.5; // Clamp to max
+    }
+
+    const mant_f = (norm_m - 0.5) * 16.0; // 2^4 = 16
+    const mant_i = @as(i32, @intFromFloat(std.math.round(mant_f)));
+
+    // Format: S(1) + exp_bits(3) + mantissa(4)
+    return sign_bit | (exp_bits << 4) | (@as(u8, @intCast(mant_i)) & 0x0F);
+}
+
+fn gf8ToF32(x: u8) f32 {
+    if (x == 0) return 0.0;
+    if (x == 0x80) return -0.0;
+    if (x == 0xFF) return std.math.nan(f32);
+
+    const sign_bit = @as(u8, x & 0x80);
+    const abs_x = @as(u8, x & 0x7F);
+    const exp_bits = abs_x >> 4;
+    const mantissa = abs_x & 0x0F;
+
+    const exp = @as(i32, exp_bits) - 7; // bias = 7
+    const m = @as(f32, mantissa) / 16.0;
+
+    // Denormals
+    var exp_adj = exp;
+    if (exp == 0 and m > 0) {
+        exp_adj = 1;
+    }
+
+    // Mantissa (1.m) * 2^(exp - 1)
+    const mant_val = (1.0 + @as(f32, m)) * std.math.pow(f32, 2.0, @as(f32, exp_adj - 1));
+
+    return if (sign_bit != 0) -mant_val else mant_val;
+}
+
 pub fn gf16ToF32(x: u16) f32 {
     const s = @as(i32, (x >> SignShift) & 1);
     const e = @as(i32, (x & ExpMask) >> ExpShift);
@@ -171,65 +233,23 @@ fn fp16ToF32(x: u16) f32 {
     }
 }
 
-// Software bf16 encode/decode (Brain Float 16)
-fn f32ToBf16(a: f32) u16 {
-    if (a == 0) return 0;
-    if (std.math.isInf(a)) return 0x7F80; // Infinity (all ones)
-    if (std.math.isNan(a)) return 0x7FC0; // NaN
+// ═══════════════════════════════════════════════════════════════════
+// bf16 encode/decode (IEEE 754 Brain Float: [S(1) E(8) M(7)] )
+// ═══════════════════════════════════════════════════════════════════
+// Canonical IEEE 754 bf16: top-16-bits truncation from f32 with round-to-nearest-even
+pub fn f32ToBf16(a: f32) u16 {
+    if (std.math.isNan(a)) return 0x7FC0;  // Canonical quiet NaN
 
-    const sign_bit: u16 = if (a < 0) 0x8000 else 0;
-    const abs_a = if (a < 0) -a else a;
+    const bits = @as(u32, @bitCast(a));
 
-    const frexp_result = std.math.frexp(abs_a);
-    const m_val = frexp_result.significand;
-    var e = frexp_result.exponent - 127;
-
-    if (e < -7) {
-        // Denormalized range -> flush to zero
-        return sign_bit;
-    }
-
-    e = @min(e, 7);
-    if (e <= 0 and m_val < 0.5) {
-        return sign_bit; // Subnormal -> zero
-    }
-
-    const mant_f = (m_val - 1.0) * 256.0; // 2^8
-    var mant_i = @as(i32, @intFromFloat(mant_f));
-
-    if (mant_i == 256) {
-        mant_i = 255;
-        e += 1;
-        if (e >= 7) return 0x7F80; // Overflow
-    }
-
-    const mant_bits: u16 = @as(u16, @intCast(mant_i)) & 0x00FF;
-    const e_bits: u16 = @as(u16, @intCast(e)) << 7;
-
-    return sign_bit | e_bits | mant_bits;
+    // Round-to-nearest-even: add 0x7FFF (LSB of mantissa + lower bits) then truncate
+    const rounded = bits + 0x7FFF;
+    return @as(u16, @intCast((rounded >> 16) & 0xFFFF));
 }
 
-fn bf16ToF32(x: u16) f32 {
-    if (x == 0) return 0.0;
-    if (x == 0x8000) return -0.0;
 
-    const sign = @as(i32, (x >> 15) & 0x1);
-    const e = @as(i32, (x >> 7) & 0x7F);
-    const m = @as(i32, x & 0x00FF);
-
-    if (e == 0) {
-        // Denormalized: value = m * 2^(-126)
-        const frac = @as(f32, @floatFromInt(m)) / 256.0;
-        const exp = @as(f32, @floatFromInt(e - 1 - 127));
-        const val = frac * std.math.pow(f32, 2.0, exp);
-        return if (sign != 0) -val else val;
-    } else {
-        // Normal: value = (1 + m/256) * 2^(e-127)
-        const frac = @as(f32, @floatFromInt(m)) / 256.0;
-        const exp = @as(f32, @floatFromInt(e - 127));
-        const val = (1.0 + frac) * std.math.pow(f32, 2.0, exp);
-        return if (sign != 0) -val else val;
-    }
+pub fn bf16ToF32(x: u16) f32 {
+    return @as(f32, @bitCast(@as(u32, x) << 16));
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -249,23 +269,53 @@ pub fn ternaryToF32(t: i8) f32 {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// GF32/GF64 Stub Implementations (TODO: implement properly)
+// ═══════════════════════════════════════════════════════════════════
+
+/// GF32 stub - currently just passes f32 through
+pub fn f32ToGf32(x: f32) u32 {
+    return @bitCast(x);
+}
+
+/// GF32 stub - currently just passes f32 through
+pub fn gf32ToF32(x: u32) f32 {
+    return @bitCast(x);
+}
+
+/// GF64 stub - currently just casts f32 to f64 and back
+pub fn f32ToGf64(x: f32) u64 {
+    return @bitCast(@as(f64, @floatCast(x)));
+}
+
+/// GF64 stub - currently casts f64 to f32
+pub fn gf64ToF32(x: u64) f32 {
+    return @floatCast(@as(f64, @bitCast(x)));
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // Format Enum and Conversion Interface
 // ═══════════════════════════════════════════════════════════════════
 
 pub const Format = enum {
+    gf8,    // GoldenFloat8: 1:3:4
+    gf16,   // GoldenFloat16: 6:9
+    gf32,   // GoldenFloat32: 1:13:18
+    gf64,   // GoldenFloat64: 1:21:42
     fp32,
     fp16,
     bf16,
-    gf16,
     ternary,
 };
 
 pub fn formatBytes(fmt: Format) usize {
     return switch (fmt) {
+        .gf8 => 1,
+        .gf16 => 2,
+        .gf32 => 4,
+        .gf64 => 8,
         .fp32 => 4,
         .fp16 => 2,
         .bf16 => 2,
-        .gf16 => 2,
         .ternary => 1,
     };
 }
@@ -273,10 +323,13 @@ pub fn formatBytes(fmt: Format) usize {
 /// Quantize single f32 value to target format (returns f32 for convenience)
 pub fn quantizeValue(x: f32, fmt: Format) f32 {
     return switch (fmt) {
+        .gf8 => gf8ToF32(f32ToGf8(x)),
+        .gf16 => gf16ToF32(f32ToGf16(x)),
+        .gf32 => gf32ToF32(f32ToGf32(x)),
+        .gf64 => gf64ToF32(f32ToGf64(x)),
         .fp32 => x,
         .fp16 => fp16ToF32(f32ToFp16(x)),
         .bf16 => bf16ToF32(f32ToBf16(x)),
-        .gf16 => gf16ToF32(f32ToGf16(x)),
         .ternary => ternaryToF32(f32ToTernary(x)),
     };
 }
@@ -581,6 +634,41 @@ test "Ternary: quantization" {
     try std.testing.expectEqual(@as(i8, 0), f32ToTernary(0.3));
     try std.testing.expectEqual(@as(i8, 0), f32ToTernary(-0.3));
     try std.testing.expectEqual(@as(i8, 1), f32ToTernary(0.6));
+}
+
+test "bf16: round-trip one" {
+    try std.testing.expectEqual(@as(f32, 1.0), bf16ToF32(f32ToBf16(1.0)));
+}
+
+test "bf16: round-trip pi" {
+    const pi = 3.141592653589793;
+    const encoded = f32ToBf16(pi);
+    const decoded = bf16ToF32(encoded);
+    const err = @abs(decoded - pi);
+    // ULP at π ≈ 2^(-7) * 2^(1) ≈ 0.0156
+    try std.testing.expect(err < 0.016);
+}
+
+test "bf16: round-trip 100" {
+    const encoded = f32ToBf16(100.0);
+    const decoded = bf16ToF32(encoded);
+    const err = @abs(decoded - 100.0);
+    // ULP at 100 = 2^(-7) * 2^(6) ≈ 0.5
+    try std.testing.expect(err < 0.51);
+}
+
+test "bf16: NaN encoding" {
+    const encoded = f32ToBf16(std.math.nan(f32));
+    // Canonical bf16 quiet NaN: 0x7FC0 (sign bit + Inf pattern)
+    try std.testing.expectEqual(@as(u16, 0x7FC0), encoded);
+}
+
+test "bf16: Inf encoding" {
+    const pos_inf = f32ToBf16(std.math.inf(f32));
+    try std.testing.expectEqual(@as(u16, 0x7F80), pos_inf);
+
+    const neg_inf = f32ToBf16(-std.math.inf(f32));
+    try std.testing.expectEqual(@as(u16, 0xFF80), neg_inf);
 }
 
 test "formatBytes" {
