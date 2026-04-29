@@ -164,4 +164,17 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_phi_attention_tests.step);
     test_step.dependOn(&run_trinity_init_tests.step);
     test_step.dependOn(&run_jepa_t_tests.step);
+
+    const igla_bench_module = b.createModule(.{
+        .root_source_file = b.path("benches/igla_gf16_bench.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const igla_bench = b.addExecutable(.{
+        .name = "igla_gf16_bench",
+        .root_module = igla_bench_module,
+    });
+    const run_igla_bench = b.addRunArtifact(igla_bench);
+    const igla_bench_step = b.step("bench-igla", "Run IGLA-GF16 architecture verification (Module 7)");
+    igla_bench_step.dependOn(&run_igla_bench.step);
 }
