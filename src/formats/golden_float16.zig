@@ -190,6 +190,27 @@ pub const GF16 = packed struct(u16) {
     pub fn phiDequantize(gf: GF16) f32 {
         return gf.toF32() * PHI_SQ;
     }
+
+    /// φ-optimized fused multiply-add: dequantize(a)*dequantize(b) + dequantize(c), then φ-quantize
+    pub fn phiFma(a: GF16, b: GF16, c: GF16) GF16 {
+        const fa = phiDequantize(a);
+        const fb = phiDequantize(b);
+        const fc = phiDequantize(c);
+        return phiQuantize(fa * fb + fc);
+    }
+
+    /// φ-optimized fused multiply-subtract: dequantize(a)*dequantize(b) - dequantize(c), then φ-quantize
+    pub fn phiFms(a: GF16, b: GF16, c: GF16) GF16 {
+        const fa = phiDequantize(a);
+        const fb = phiDequantize(b);
+        const fc = phiDequantize(c);
+        return phiQuantize(fa * fb - fc);
+    }
+
+    /// Standard fused multiply-add (no φ scaling): a*b + c in f32, rounded to GF16
+    pub fn fma(a: GF16, b: GF16, c: GF16) GF16 {
+        return fromF32(a.toF32() * b.toF32() + c.toF32());
+    }
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -415,6 +436,32 @@ test "PHI constant" {
 test "PHI_SQ + 1/PHI_SQ equals 3" {
     const computed = PHI_SQ + 1.0 / PHI_SQ;
     try std.testing.expectApproxEqAbs(@as(f32, 3.0), computed, 1e-10);
+}
+
+test "GF16 phi-fused multiply-add" {
+    const a = GF16.phiQuantize(2.0);
+    const b = GF16.phiQuantize(3.0);
+    const c = GF16.phiQuantize(4.0);
+    const result = GF16.phiFma(a, b, c);
+    const deq = GF16.phiDequantize(result);
+    try std.testing.expectApproxEqAbs(@as(f32, 10.0), deq, 1.5);
+}
+
+test "GF16 phi-fused multiply-subtract" {
+    const a = GF16.phiQuantize(5.0);
+    const b = GF16.phiQuantize(3.0);
+    const c = GF16.phiQuantize(4.0);
+    const result = GF16.phiFms(a, b, c);
+    const deq = GF16.phiDequantize(result);
+    try std.testing.expectApproxEqAbs(@as(f32, 11.0), deq, 2.0);
+}
+
+test "GF16 standard fused multiply-add" {
+    const a = GF16.fromF32(2.0);
+    const b = GF16.fromF32(3.0);
+    const c = GF16.fromF32(4.0);
+    const result = GF16.fma(a, b, c);
+    try std.testing.expectApproxEqAbs(@as(f32, 10.0), result.toF32(), 0.5);
 }
 
 // φ² + 1/φ² = 3 | TRINITY

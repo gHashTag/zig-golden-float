@@ -201,11 +201,18 @@ export fn gf16_max(a: gf16_t, b: gf16_t) callconv(.c) gf16_t {
 }
 
 export fn gf16_fma(a: gf16_t, b: gf16_t, c: gf16_t) callconv(.c) gf16_t {
-    // Compute a * b + c in f32, then round to GF16
     const fa = rawToGf16(a).toF32();
     const fb = rawToGf16(b).toF32();
     const fc = rawToGf16(c).toF32();
     return gf16ToRaw(golden.GF16.fromF32(fa * fb + fc));
+}
+
+export fn gf16_phi_fma(a: gf16_t, b: gf16_t, c: gf16_t) callconv(.c) gf16_t {
+    return gf16ToRaw(golden.GF16.phiFma(rawToGf16(a), rawToGf16(b), rawToGf16(c)));
+}
+
+export fn gf16_phi_fms(a: gf16_t, b: gf16_t, c: gf16_t) callconv(.c) gf16_t {
+    return gf16ToRaw(golden.GF16.phiFms(rawToGf16(a), rawToGf16(b), rawToGf16(c)));
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -307,6 +314,24 @@ test "C-ABI: gf16_fma" {
     const result = gf16_fma(a, b, c);
     const val = gf16_to_f32(result);
     try std.testing.expectApproxEqAbs(@as(f32, 10.0), val, 0.05);
+}
+
+test "C-ABI: gf16_phi_fma" {
+    const a = gf16_phi_quantize(2.0);
+    const b = gf16_phi_quantize(3.0);
+    const c = gf16_phi_quantize(4.0);
+    const result = gf16_phi_fma(a, b, c);
+    const deq = gf16_phi_dequantize(result);
+    try std.testing.expectApproxEqAbs(@as(f32, 10.0), deq, 1.5);
+}
+
+test "C-ABI: gf16_phi_fms" {
+    const a = gf16_phi_quantize(5.0);
+    const b = gf16_phi_quantize(3.0);
+    const c = gf16_phi_quantize(4.0);
+    const result = gf16_phi_fms(a, b, c);
+    const deq = gf16_phi_dequantize(result);
+    try std.testing.expectApproxEqAbs(@as(f32, 11.0), deq, 2.0);
 }
 
 test "C-ABI: library version" {
