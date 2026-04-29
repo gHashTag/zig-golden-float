@@ -107,9 +107,10 @@ func (a Gf16) Fma(b, c Gf16) Gf16 {
 	return Gf16(C.gf16_fma(C.uint16_t(a), C.uint16_t(b), C.uint16_t(c)))
 }
 
+var One = FromF32(1.0)
+
 const (
 	Zero  Gf16 = 0x0000
-	One   Gf16 = 0x3C00
 	PInf  Gf16 = 0x7E00
 	NInf  Gf16 = 0xFE00
 	NaN   Gf16 = 0x7E01
