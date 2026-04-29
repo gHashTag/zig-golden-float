@@ -8,7 +8,7 @@ Distribution: GAUSS_001 (n=10000)
 Format              MSE    MaxAbsErr      ULP_obs       ULP_th   Status
 --------------------------------------------------------------------------------
 fp32           6.34e-20      1.83e-9      1.83e-9     9.31e-10     FAIL
-fp16            7.68e-8      1.56e-2      1.56e-2      7.63e-6     FAIL
+fp16           2.05e-11      4.56e-5      4.56e-5      7.63e-6     FAIL
 bf16           2.69e-10      1.09e-4      1.09e-4      6.10e-5     FAIL
 gf16           1.74e-11      2.91e-5      2.91e-5      1.53e-5     FAIL
 ternary         1.00e-4      4.61e-2      4.61e-2       1.00e0     FAIL
@@ -18,7 +18,7 @@ Distribution: GAUSS_01 (n=10000)
 Format              MSE    MaxAbsErr      ULP_obs       ULP_th   Status
 --------------------------------------------------------------------------------
 fp32           6.26e-18      1.47e-8      1.47e-8      7.45e-9     FAIL
-fp16            9.97e-8      3.12e-2      3.12e-2      6.10e-5     FAIL
+fp16            1.73e-9      2.44e-4      2.44e-4      6.10e-5     FAIL
 bf16            2.78e-8      9.63e-4      9.63e-4      4.88e-4     FAIL
 gf16            1.74e-9      2.44e-4      2.44e-4      1.22e-4     FAIL
 ternary         1.00e-2      4.61e-1      4.61e-1       1.00e0     FAIL
@@ -28,7 +28,7 @@ Distribution: GAUSS_10 (n=10000)
 Format              MSE    MaxAbsErr      ULP_obs       ULP_th   Status
 --------------------------------------------------------------------------------
 fp32           6.55e-16      2.31e-7      2.31e-7      5.96e-8     FAIL
-fp16            1.85e-7      7.81e-3      7.81e-3      4.88e-4     FAIL
+fp16            1.79e-7      2.56e-3      2.56e-3      4.88e-4     FAIL
 bf16            2.83e-6      1.32e-2      1.32e-2      3.91e-3     FAIL
 gf16            1.72e-7      2.46e-3      2.46e-3      9.77e-4     FAIL
 ternary         2.04e-1       3.61e0       3.61e0       1.00e0     FAIL
@@ -77,17 +77,17 @@ H2: bf16 vs gf16 on Gaussian σ=0.1
 
 === Full Result Log ===
 RESULT=fp32 @ GAUSS_001 | MSE=6.34e-20 ULP_th=9.31e-10 ULP_obs=1.83e-9 status=FAIL
-RESULT=fp16 @ GAUSS_001 | MSE=7.68e-8 ULP_th=7.63e-6 ULP_obs=1.56e-2 status=FAIL
+RESULT=fp16 @ GAUSS_001 | MSE=2.05e-11 ULP_th=7.63e-6 ULP_obs=4.56e-5 status=FAIL
 RESULT=bf16 @ GAUSS_001 | MSE=2.69e-10 ULP_th=6.10e-5 ULP_obs=1.09e-4 status=FAIL
 RESULT=gf16 @ GAUSS_001 | MSE=1.74e-11 ULP_th=1.53e-5 ULP_obs=2.91e-5 status=FAIL
 RESULT=ternary @ GAUSS_001 | MSE=1.00e-4 ULP_th=1.00e0 ULP_obs=4.61e-2 status=FAIL
 RESULT=fp32 @ GAUSS_01 | MSE=6.26e-18 ULP_th=7.45e-9 ULP_obs=1.47e-8 status=FAIL
-RESULT=fp16 @ GAUSS_01 | MSE=9.97e-8 ULP_th=6.10e-5 ULP_obs=3.12e-2 status=FAIL
+RESULT=fp16 @ GAUSS_01 | MSE=1.73e-9 ULP_th=6.10e-5 ULP_obs=2.44e-4 status=FAIL
 RESULT=bf16 @ GAUSS_01 | MSE=2.78e-8 ULP_th=4.88e-4 ULP_obs=9.63e-4 status=FAIL
 RESULT=gf16 @ GAUSS_01 | MSE=1.74e-9 ULP_th=1.22e-4 ULP_obs=2.44e-4 status=FAIL
 RESULT=ternary @ GAUSS_01 | MSE=1.00e-2 ULP_th=1.00e0 ULP_obs=4.61e-1 status=FAIL
 RESULT=fp32 @ GAUSS_10 | MSE=6.55e-16 ULP_th=5.96e-8 ULP_obs=2.31e-7 status=FAIL
-RESULT=fp16 @ GAUSS_10 | MSE=1.85e-7 ULP_th=4.88e-4 ULP_obs=7.81e-3 status=FAIL
+RESULT=fp16 @ GAUSS_10 | MSE=1.79e-7 ULP_th=4.88e-4 ULP_obs=2.56e-3 status=FAIL
 RESULT=bf16 @ GAUSS_10 | MSE=2.83e-6 ULP_th=3.91e-3 ULP_obs=1.32e-2 status=FAIL
 RESULT=gf16 @ GAUSS_10 | MSE=1.72e-7 ULP_th=9.77e-4 ULP_obs=2.46e-3 status=FAIL
 RESULT=ternary @ GAUSS_10 | MSE=2.04e-1 ULP_th=1.00e0 ULP_obs=3.61e0 status=FAIL
