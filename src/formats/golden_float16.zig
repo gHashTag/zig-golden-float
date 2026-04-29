@@ -88,7 +88,11 @@ pub const GF16 = packed struct(u16) {
     pub fn fromF32(v: f32) GF16 {
         if (v == 0.0) return .{ .mant = 0, .exp = 0, .sign = 0 };
 
-        if (!std.math.isFinite(v)) {
+        if (std.math.isNan(v)) {
+            return .{ .mant = 1, .exp = 0x3F, .sign = 0 };
+        }
+
+        if (std.math.isInf(v)) {
             return .{ .mant = 0, .exp = 0x3F, .sign = @intFromBool(v < 0) };
         }
 

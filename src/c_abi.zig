@@ -285,6 +285,10 @@ test "C-ABI: gf16_is_nan and gf16_is_inf" {
 
     const zero = gf16_from_f32(0.0);
     try std.testing.expect(gf16_is_zero(zero));
+
+    const nan_val = gf16_from_f32(std.math.nan(f32));
+    try std.testing.expect(gf16_is_nan(nan_val));
+    try std.testing.expect(!gf16_is_inf(nan_val));
 }
 
 test "C-ABI: gf16_phi_quantize" {
