@@ -4,6 +4,10 @@ package goldenfloat
 #cgo LDFLAGS: -L../../zig-out/lib -lgoldenfloat
 #cgo CFLAGS: -I../../src/c
 #include "gf16.h"
+
+extern double goldenfloat_phi();
+extern double goldenfloat_trinity();
+extern const char* goldenfloat_version();
 */
 import "C"
 
