@@ -39,7 +39,8 @@ const FORMATS: &[FormatSpec] = &[
     FormatSpec { name: "GF32",      exp_bits: 13, mantissa_bits: 18, phi_distance: 0.340 },
     FormatSpec { name: "GF64",      exp_bits: 21, mantissa_bits: 42, phi_distance: 0.264 },
     FormatSpec { name: "fp16",      exp_bits: 5,  mantissa_bits: 10, phi_distance: 0.118 },
-    FormatSpec { name: "bf16",      exp_bits: 8,  mantissa_bits: 7,  phi_distance: 0.525 },
+    // bf16 EXCLUDED — BUG-001: f32ToBf16 clamps exponent ±7 instead of ±127 (zgf#22)
+    // FormatSpec { name: "bf16",      exp_bits: 8,  mantissa_bits: 7,  phi_distance: 0.525 },
     FormatSpec { name: "GFTernary", exp_bits: 0,  mantissa_bits: 1,  phi_distance: 0.000 },
 ];
 
@@ -251,6 +252,52 @@ fn main() {
             if pearson_r > 0.5 {
                 println!("→ CONFIRMED: Higher φ-distance correlates with higher MSE ✓");
             } else if pearson_r < -0.5 {
+                println!("→ INVERTED: Lower φ-distance has higher MSE — unexpected");
+            } else {
+                println!("→ WEAK correlation — MSE dominated by bit-width, not φ-alignment");
+            }
+        }
+    }
+
+    // ── r_clean: Pearson r excluding saturating formats (GF8, GFTernary) ──
+    println!();
+    println!("r_clean: Pearson r excluding saturating formats (n=4)");
+    println!("{:-<70}", "");
+    let clean_results: Vec<&BenchResult> = all_results.iter()
+        .filter(|r| {
+            r.range_label.contains("[-10,10]") &&
+            !r.range_label.contains("φ-dist") &&
+            r.dynamic_range_ok  // exclude CLIP formats
+        })
+        .collect();
+
+    if !clean_results.is_empty() {
+        let phi_dists_c: Vec<f64> = clean_results.iter().map(|r| r.phi_distance).collect();
+        let mses_c: Vec<f64> = clean_results.iter().map(|r| r.mse).collect();
+
+        println!("Clean subset (dynamic_range_ok = true):");
+        for r in &clean_results {
+            println!("  {:<12} MSE={:.6}  φ-dist={:.3}", r.format, r.mse, r.phi_distance);
+        }
+
+        let nc = phi_dists_c.len() as f64;
+        let mean_pd_c = phi_dists_c.iter().sum::<f64>() / nc;
+        let mean_mse_c = mses_c.iter().sum::<f64>() / nc;
+
+        let cov_c: f64 = phi_dists_c.iter().zip(mses_c.iter())
+            .map(|(pd, mse)| (pd - mean_pd_c) * (mse - mean_mse_c))
+            .sum::<f64>() / nc;
+
+        let std_pd_c = (phi_dists_c.iter().map(|pd| (pd - mean_pd_c).powi(2)).sum::<f64>() / nc).sqrt();
+        let std_mse_c = (mses_c.iter().map(|mse| (mse - mean_mse_c).powi(2)).sum::<f64>() / nc).sqrt();
+
+        if std_pd_c > 0.0 && std_mse_c > 0.0 {
+            let r_clean = cov_c / (std_pd_c * std_mse_c);
+            println!();
+            println!("r_clean (n={}) = {:.4}", clean_results.len(), r_clean);
+            if r_clean > 0.5 {
+                println!("→ CONFIRMED: Higher φ-distance correlates with higher MSE ✓");
+            } else if r_clean < -0.5 {
                 println!("→ INVERTED: Lower φ-distance has higher MSE — unexpected");
             } else {
                 println!("→ WEAK correlation — MSE dominated by bit-width, not φ-alignment");
