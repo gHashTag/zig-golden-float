@@ -111,8 +111,21 @@ pub fn build(b: *std.Build) void {
 
     const run_tests = b.addRunArtifact(formats_tests);
     const run_transcendent_tests = b.addRunArtifact(transcendent_tests);
+
+    const trinity_tests_root = b.createModule(.{
+        .root_source_file = b.path("src/trinity_constants.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const trinity_tests = b.addTest(.{
+        .name = "trinity-constants-tests",
+        .root_module = trinity_tests_root,
+    });
+    const run_trinity_tests = b.addRunArtifact(trinity_tests);
+
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&run_tests.step);
     test_step.dependOn(&run_transcendent_tests.step);
     test_step.dependOn(&run_c_abi_tests.step);
+    test_step.dependOn(&run_trinity_tests.step);
 }
