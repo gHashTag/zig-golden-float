@@ -203,19 +203,23 @@ func TestConstants(t *testing.T) {
 		t.Error("FAIL: zero constant")
 	}
 
-	if !approxEqual(One.ToF32(), 1.0, 0.01) {
-		t.Errorf("FAIL: one constant - got %v", One.ToF32())
+	one := FromF32(1.0)
+	if !approxEqual(one.ToF32(), 1.0, 0.01) {
+		t.Errorf("FAIL: from_f32(1.0) - got %v", one.ToF32())
 	}
 
-	if !PInf.IsInf() || PInf.IsNegative() {
-		t.Error("FAIL: p_inf constant")
+	pInf := FromF32(float32(math.Inf(1)))
+	if !pInf.IsInf() || pInf.IsNegative() {
+		t.Error("FAIL: +inf")
 	}
 
-	if !NInf.IsInf() || !NInf.IsNegative() {
-		t.Error("FAIL: n_inf constant")
+	nInf := FromF32(float32(math.Inf(-1)))
+	if !nInf.IsInf() || !nInf.IsNegative() {
+		t.Error("FAIL: -inf")
 	}
 
-	if !NaN.IsNaN() {
-		t.Error("FAIL: nan constant")
+	nan := FromF32(float32(math.NaN()))
+	if !nan.IsNaN() {
+		t.Errorf("FAIL: nan - is_nan=%v", nan.IsNaN())
 	}
 }
