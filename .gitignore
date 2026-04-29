@@ -4,3 +4,6 @@ zig/
 rust/target/
 rust/*.rs
 rust/test_nan
+cpp/build/
+rust/target/
+// R5-honest cleanup: remove CMakeCache artifacts
