@@ -94,6 +94,7 @@ jobs:
         if: matrix.language == 'go'
         env:
           CGO_ENABLED: 1
+          LD_LIBRARY_PATH: ${{ github.workspace }}/zig-out/lib
         run: |
           cd go/goldenfloat
           go test -v ./...
