@@ -123,9 +123,45 @@ pub fn build(b: *std.Build) void {
     });
     const run_trinity_tests = b.addRunArtifact(trinity_tests);
 
+    const phi_attention_tests_root = b.createModule(.{
+        .root_source_file = b.path("src/phi_attention.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const phi_attention_tests = b.addTest(.{
+        .name = "phi-attention-tests",
+        .root_module = phi_attention_tests_root,
+    });
+    const run_phi_attention_tests = b.addRunArtifact(phi_attention_tests);
+
+    const trinity_init_tests_root = b.createModule(.{
+        .root_source_file = b.path("src/trinity_init.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const trinity_init_tests = b.addTest(.{
+        .name = "trinity-init-tests",
+        .root_module = trinity_init_tests_root,
+    });
+    const run_trinity_init_tests = b.addRunArtifact(trinity_init_tests);
+
+    const jepa_t_tests_root = b.createModule(.{
+        .root_source_file = b.path("src/jepa_t.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const jepa_t_tests = b.addTest(.{
+        .name = "jepa-t-tests",
+        .root_module = jepa_t_tests_root,
+    });
+    const run_jepa_t_tests = b.addRunArtifact(jepa_t_tests);
+
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&run_tests.step);
     test_step.dependOn(&run_transcendent_tests.step);
     test_step.dependOn(&run_c_abi_tests.step);
     test_step.dependOn(&run_trinity_tests.step);
+    test_step.dependOn(&run_phi_attention_tests.step);
+    test_step.dependOn(&run_trinity_init_tests.step);
+    test_step.dependOn(&run_jepa_t_tests.step);
 }
