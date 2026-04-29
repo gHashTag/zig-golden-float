@@ -89,6 +89,9 @@ pub const GF16 = packed struct(u16) {
         if (v == 0.0) return .{ .mant = 0, .exp = 0, .sign = 0 };
 
         if (!std.math.isFinite(v)) {
+            if (std.math.isNan(v)) {
+                return .{ .mant = 1, .exp = 0x3F, .sign = 0 };
+            }
             return .{ .mant = 0, .exp = 0x3F, .sign = @intFromBool(v < 0) };
         }
 
@@ -120,6 +123,7 @@ pub const GF16 = packed struct(u16) {
             return if (self.sign == 1) -0.0 else 0.0;
         }
         if (self.exp == 0x3F) {
+            if (self.mant != 0) return std.math.nan(f32);
             return if (self.sign == 1) -std.math.inf(f32) else std.math.inf(f32);
         }
 
