@@ -1,0 +1,110 @@
+BENCH-010: Format Analysis Suite (post BUG-001-BF16 fix)
+=========================================================
+seed=42, n=10000 per distribution
+Cross-reference: issue #23
+
+Distribution: GAUSS_001 (n=10000)
+--------------------------------------------------------------------------------
+Format              MSE    MaxAbsErr      ULP_obs       ULP_th   Status
+--------------------------------------------------------------------------------
+fp32           6.34e-20      1.83e-9      1.83e-9     9.31e-10     FAIL
+fp16            7.68e-8      1.56e-2      1.56e-2      7.63e-6     FAIL
+bf16           2.69e-10      1.09e-4      1.09e-4      6.10e-5     FAIL
+gf16           1.74e-11      2.91e-5      2.91e-5      1.53e-5     FAIL
+ternary         1.00e-4      4.61e-2      4.61e-2       1.00e0     FAIL
+
+Distribution: GAUSS_01 (n=10000)
+--------------------------------------------------------------------------------
+Format              MSE    MaxAbsErr      ULP_obs       ULP_th   Status
+--------------------------------------------------------------------------------
+fp32           6.26e-18      1.47e-8      1.47e-8      7.45e-9     FAIL
+fp16            9.97e-8      3.12e-2      3.12e-2      6.10e-5     FAIL
+bf16            2.78e-8      9.63e-4      9.63e-4      4.88e-4     FAIL
+gf16            1.74e-9      2.44e-4      2.44e-4      1.22e-4     FAIL
+ternary         1.00e-2      4.61e-1      4.61e-1       1.00e0     FAIL
+
+Distribution: GAUSS_10 (n=10000)
+--------------------------------------------------------------------------------
+Format              MSE    MaxAbsErr      ULP_obs       ULP_th   Status
+--------------------------------------------------------------------------------
+fp32           6.55e-16      2.31e-7      2.31e-7      5.96e-8     FAIL
+fp16            1.85e-7      7.81e-3      7.81e-3      4.88e-4     FAIL
+bf16            2.83e-6      1.32e-2      1.32e-2      3.91e-3     FAIL
+gf16            1.72e-7      2.46e-3      2.46e-3      9.77e-4     FAIL
+ternary         2.04e-1       3.61e0       3.61e0       1.00e0     FAIL
+
+Distribution: GAUSS_100 (n=10000)
+--------------------------------------------------------------------------------
+Format              MSE    MaxAbsErr      ULP_obs       ULP_th   Status
+--------------------------------------------------------------------------------
+fp32           6.44e-14      1.74e-6      1.74e-6      9.54e-7     FAIL
+fp16            1.80e-5      2.67e-2      2.67e-2      7.81e-3     FAIL
+bf16            2.81e-4      1.23e-1      1.23e-1      6.25e-2     FAIL
+gf16            1.69e-5      2.67e-2      2.67e-2      1.56e-2     FAIL
+ternary          8.53e1       4.51e1       4.51e1       1.00e0     FAIL
+
+Distribution: UNIFORM_1 (n=10000)
+--------------------------------------------------------------------------------
+Format              MSE    MaxAbsErr      ULP_obs       ULP_th   Status
+--------------------------------------------------------------------------------
+fp32           1.67e-16      2.98e-8      2.98e-8      2.98e-8     PASS
+fp16            4.45e-8      4.88e-4      4.88e-4      2.44e-4     FAIL
+bf16            7.26e-7      1.95e-3      1.95e-3      1.95e-3     PASS
+gf16            4.48e-8      4.88e-4      4.88e-4      4.88e-4     PASS
+ternary         8.47e-2      5.00e-1      5.00e-1       1.00e0     FAIL
+
+Distribution: UNIFORM_100 (n=10000)
+--------------------------------------------------------------------------------
+Format              MSE    MaxAbsErr      ULP_obs       ULP_th   Status
+--------------------------------------------------------------------------------
+fp32           2.18e-12      3.81e-6      3.81e-6      3.81e-6     PASS
+fp16            5.88e-4      6.25e-2      6.25e-2      3.12e-2     FAIL
+bf16            9.37e-3      2.50e-1      2.50e-1      2.50e-1     PASS
+gf16            5.77e-4      6.24e-2      6.24e-2      6.25e-2     PASS
+ternary          3.19e3       9.90e1       9.90e1       1.00e0     FAIL
+
+=== Hypothesis Tests ===
+
+H1: bf16 vs gf16 on Uniform [-100,+100]
+  bf16 MSE = 9.369421e-3
+  gf16 MSE = 5.772505e-4
+  DIVERGED (ratio=0.9384) -> H1 CONFIRMED (fix resolved collision)
+
+H2: bf16 vs gf16 on Gaussian σ=0.1
+  bf16 MSE = 2.784927e-8
+  gf16 MSE = 1.740400e-9
+  DIVERGED (ratio=0.9375) -> H2 FAILED (was genuine bug)
+
+=== Full Result Log ===
+RESULT=fp32 @ GAUSS_001 | MSE=6.34e-20 ULP_th=9.31e-10 ULP_obs=1.83e-9 status=FAIL
+RESULT=fp16 @ GAUSS_001 | MSE=7.68e-8 ULP_th=7.63e-6 ULP_obs=1.56e-2 status=FAIL
+RESULT=bf16 @ GAUSS_001 | MSE=2.69e-10 ULP_th=6.10e-5 ULP_obs=1.09e-4 status=FAIL
+RESULT=gf16 @ GAUSS_001 | MSE=1.74e-11 ULP_th=1.53e-5 ULP_obs=2.91e-5 status=FAIL
+RESULT=ternary @ GAUSS_001 | MSE=1.00e-4 ULP_th=1.00e0 ULP_obs=4.61e-2 status=FAIL
+RESULT=fp32 @ GAUSS_01 | MSE=6.26e-18 ULP_th=7.45e-9 ULP_obs=1.47e-8 status=FAIL
+RESULT=fp16 @ GAUSS_01 | MSE=9.97e-8 ULP_th=6.10e-5 ULP_obs=3.12e-2 status=FAIL
+RESULT=bf16 @ GAUSS_01 | MSE=2.78e-8 ULP_th=4.88e-4 ULP_obs=9.63e-4 status=FAIL
+RESULT=gf16 @ GAUSS_01 | MSE=1.74e-9 ULP_th=1.22e-4 ULP_obs=2.44e-4 status=FAIL
+RESULT=ternary @ GAUSS_01 | MSE=1.00e-2 ULP_th=1.00e0 ULP_obs=4.61e-1 status=FAIL
+RESULT=fp32 @ GAUSS_10 | MSE=6.55e-16 ULP_th=5.96e-8 ULP_obs=2.31e-7 status=FAIL
+RESULT=fp16 @ GAUSS_10 | MSE=1.85e-7 ULP_th=4.88e-4 ULP_obs=7.81e-3 status=FAIL
+RESULT=bf16 @ GAUSS_10 | MSE=2.83e-6 ULP_th=3.91e-3 ULP_obs=1.32e-2 status=FAIL
+RESULT=gf16 @ GAUSS_10 | MSE=1.72e-7 ULP_th=9.77e-4 ULP_obs=2.46e-3 status=FAIL
+RESULT=ternary @ GAUSS_10 | MSE=2.04e-1 ULP_th=1.00e0 ULP_obs=3.61e0 status=FAIL
+RESULT=fp32 @ GAUSS_100 | MSE=6.44e-14 ULP_th=9.54e-7 ULP_obs=1.74e-6 status=FAIL
+RESULT=fp16 @ GAUSS_100 | MSE=1.80e-5 ULP_th=7.81e-3 ULP_obs=2.67e-2 status=FAIL
+RESULT=bf16 @ GAUSS_100 | MSE=2.81e-4 ULP_th=6.25e-2 ULP_obs=1.23e-1 status=FAIL
+RESULT=gf16 @ GAUSS_100 | MSE=1.69e-5 ULP_th=1.56e-2 ULP_obs=2.67e-2 status=FAIL
+RESULT=ternary @ GAUSS_100 | MSE=8.53e1 ULP_th=1.00e0 ULP_obs=4.51e1 status=FAIL
+RESULT=fp32 @ UNIFORM_1 | MSE=1.67e-16 ULP_th=2.98e-8 ULP_obs=2.98e-8 status=PASS
+RESULT=fp16 @ UNIFORM_1 | MSE=4.45e-8 ULP_th=2.44e-4 ULP_obs=4.88e-4 status=FAIL
+RESULT=bf16 @ UNIFORM_1 | MSE=7.26e-7 ULP_th=1.95e-3 ULP_obs=1.95e-3 status=PASS
+RESULT=gf16 @ UNIFORM_1 | MSE=4.48e-8 ULP_th=4.88e-4 ULP_obs=4.88e-4 status=PASS
+RESULT=ternary @ UNIFORM_1 | MSE=8.47e-2 ULP_th=1.00e0 ULP_obs=5.00e-1 status=FAIL
+RESULT=fp32 @ UNIFORM_100 | MSE=2.18e-12 ULP_th=3.81e-6 ULP_obs=3.81e-6 status=PASS
+RESULT=fp16 @ UNIFORM_100 | MSE=5.88e-4 ULP_th=3.12e-2 ULP_obs=6.25e-2 status=FAIL
+RESULT=bf16 @ UNIFORM_100 | MSE=9.37e-3 ULP_th=2.50e-1 ULP_obs=2.50e-1 status=PASS
+RESULT=gf16 @ UNIFORM_100 | MSE=5.77e-4 ULP_th=6.25e-2 ULP_obs=6.24e-2 status=PASS
+RESULT=ternary @ UNIFORM_100 | MSE=3.19e3 ULP_th=1.00e0 ULP_obs=9.90e1 status=FAIL
+
+Results: .trinity/results/bench_010.log
