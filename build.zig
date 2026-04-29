@@ -96,5 +96,24 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&run_tests.step);
     test_step.dependOn(&run_transcendent_tests.step);
+    const formats_root_module = b.createModule(.{
+        .root_source_file = b.path("src/formats/formats_root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const bench_008_module = b.createModule(.{
+        .root_source_file = b.path("benches/bench_008_fashion_mnist.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    bench_008_module.addImport("formats_root", formats_root_module);
+    const bench_008 = b.addExecutable(.{
+        .name = "bench_008",
+        .root_module = bench_008_module,
+    });
+    const run_bench_008 = b.addRunArtifact(bench_008);
+    const bench_008_step = b.step("bench-008", "Run BENCH-008 Fashion-MNIST quantization validation");
+    bench_008_step.dependOn(&run_bench_008.step);
+
     test_step.dependOn(&run_c_abi_tests.step);
 }

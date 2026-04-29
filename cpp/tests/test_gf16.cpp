@@ -21,7 +21,7 @@ using json = nlohmann::json;
 // ============================================================================
 
 json load_vectors() {
-    std::ifstream vectors_file("../../conformance/vectors.json");
+    std::ifstream vectors_file("../conformance/vectors.json");
     if (!vectors_file.is_open()) {
         std::cerr << "Failed to open conformance/vectors.json" << std::endl;
         exit(1);

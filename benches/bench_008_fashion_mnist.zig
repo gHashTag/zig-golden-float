@@ -26,7 +26,7 @@
 //! Depends on: src/formats/formats_root.zig
 
 const std = @import("std");
-const fmt = @import("../src/formats/formats_root.zig");
+const fmt = @import("formats_root");
 
 // ── Constants ─────────────────────────────────────────────────────────
 
@@ -271,7 +271,7 @@ fn estimateAccuracyDrop(weight_mse: f64, phi_distance: f32) f64 {
 }
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
     _ = allocator;
