@@ -171,65 +171,16 @@ fn fp16ToF32(x: u16) f32 {
     }
 }
 
-// Software bf16 encode/decode (Brain Float 16)
+// Software bf16 encode/decode (Brain Float 16) — IEEE 754 canonical
 fn f32ToBf16(a: f32) u16 {
-    if (a == 0) return 0;
-    if (std.math.isInf(a)) return 0x7F80; // Infinity (all ones)
-    if (std.math.isNan(a)) return 0x7FC0; // NaN
-
-    const sign_bit: u16 = if (a < 0) 0x8000 else 0;
-    const abs_a = if (a < 0) -a else a;
-
-    const frexp_result = std.math.frexp(abs_a);
-    const m_val = frexp_result.significand;
-    var e = frexp_result.exponent - 127;
-
-    if (e < -7) {
-        // Denormalized range -> flush to zero
-        return sign_bit;
-    }
-
-    e = @min(e, 7);
-    if (e <= 0 and m_val < 0.5) {
-        return sign_bit; // Subnormal -> zero
-    }
-
-    const mant_f = (m_val - 1.0) * 256.0; // 2^8
-    var mant_i = @as(i32, @intFromFloat(mant_f));
-
-    if (mant_i == 256) {
-        mant_i = 255;
-        e += 1;
-        if (e >= 7) return 0x7F80; // Overflow
-    }
-
-    const mant_bits: u16 = @as(u16, @intCast(mant_i)) & 0x00FF;
-    const e_bits: u16 = @as(u16, @intCast(e)) << 7;
-
-    return sign_bit | e_bits | mant_bits;
+    if (std.math.isNan(a)) return 0x7FC0;
+    const bits: u32 = @bitCast(a);
+    const rounding: u32 = ((bits >> 16) & 1) + 0x7FFF;
+    return @intCast((bits +| rounding) >> 16);
 }
 
 fn bf16ToF32(x: u16) f32 {
-    if (x == 0) return 0.0;
-    if (x == 0x8000) return -0.0;
-
-    const sign = @as(i32, (x >> 15) & 0x1);
-    const e = @as(i32, (x >> 7) & 0x7F);
-    const m = @as(i32, x & 0x00FF);
-
-    if (e == 0) {
-        // Denormalized: value = m * 2^(-126)
-        const frac = @as(f32, @floatFromInt(m)) / 256.0;
-        const exp = @as(f32, @floatFromInt(e - 1 - 127));
-        const val = frac * std.math.pow(f32, 2.0, exp);
-        return if (sign != 0) -val else val;
-    } else {
-        // Normal: value = (1 + m/256) * 2^(e-127)
-        const frac = @as(f32, @floatFromInt(m)) / 256.0;
-        const exp = @as(f32, @floatFromInt(e - 127));
-        const val = (1.0 + frac) * std.math.pow(f32, 2.0, exp);
-        return if (sign != 0) -val else val;
-    }
+    return @bitCast(@as(u32, x) << 16);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -587,4 +538,52 @@ test "formatBytes" {
     try std.testing.expectEqual(@as(usize, 4), formatBytes(.fp32));
     try std.testing.expectEqual(@as(usize, 2), formatBytes(.gf16));
     try std.testing.expectEqual(@as(usize, 1), formatBytes(.ternary));
+}
+
+test "BF16: roundtrip small values" {
+    const values = [_]f32{ 1.0, -1.0, 0.5, -0.5, 2.0, -2.0, 0.1, -0.1, 1.5, -1.5 };
+    for (values) |v| {
+        const bf16 = f32ToBf16(v);
+        const recovered = bf16ToF32(bf16);
+        const err = @abs(recovered - v) / @max(@abs(v), 1e-30);
+        try std.testing.expect(err < 0.02);
+    }
+}
+
+test "BF16: large values (full IEEE-754 exponent range)" {
+    const cases = [_]struct { f32, u16 }{
+        .{ 100.0, 0x42C8 },
+        .{ 1e10, 0x501C },
+        .{ 1e-10, 0x2E5C },
+        .{ -100.0, 0xC2C8 },
+        .{ std.math.inf(f32), 0x7F80 },
+        .{ -std.math.inf(f32), 0xFF80 },
+    };
+    for (cases) |case| {
+        const encoded = f32ToBf16(case[0]);
+        try std.testing.expectEqual(case[1], encoded);
+    }
+}
+
+test "BF16: NaN preserved" {
+    const nan_val = std.math.nan(f32);
+    const encoded = f32ToBf16(nan_val);
+    const decoded = bf16ToF32(encoded);
+    try std.testing.expect(std.math.isNan(decoded));
+}
+
+test "BF16: zero and signed zero" {
+    try std.testing.expectEqual(@as(u16, 0x0000), f32ToBf16(0.0));
+    try std.testing.expectEqual(@as(u16, 0x8000), f32ToBf16(-0.0));
+    try std.testing.expectEqual(@as(f32, 0.0), bf16ToF32(0x0000));
+    const neg_zero = bf16ToF32(@as(u16, 0x8000));
+    try std.testing.expect(neg_zero == 0.0);
+    try std.testing.expect(@as(u32, @bitCast(neg_zero)) != 0);
+}
+
+test "BF16: roundtrip 1e10 does not flush to zero" {
+    const encoded = f32ToBf16(1e10);
+    const decoded = bf16ToF32(encoded);
+    try std.testing.expect(decoded > 1e9);
+    try std.testing.expect(decoded < 2e10);
 }
