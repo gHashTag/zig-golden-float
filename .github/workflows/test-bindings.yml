@@ -36,7 +36,7 @@ jobs:
           version: 0.15.2
 
       - name: Build shared library
-        run: zig build
+        run: zig build shared
 
       - name: Test Zig
         if: matrix.language == 'zig'
