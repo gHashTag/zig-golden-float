@@ -10,5 +10,5 @@ Repository: https://github.com/gHashTag/zig-golden-float
 
 from .gf16 import Gf16
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 __all__ = ["Gf16"]

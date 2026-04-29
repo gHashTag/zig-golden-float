@@ -1,6 +1,6 @@
 [package]
 name = "golden-float"
-version = "2.0.0"
+version = "2.1.0"
 description = "GoldenFloat — φ-optimized ML number formats: GF16/fp16/bf16 codecs, FMA, IGLA architecture, ternary, VSA"
 license = "MIT"
 repository = "https://github.com/gHashTag/zig-golden-float"

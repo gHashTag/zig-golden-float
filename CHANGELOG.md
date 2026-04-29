@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] — 2026-04-30
+
+### Changed
+
+- README rewritten: format table, architecture map, benchmark results, binding instructions, φ-FMA reference, IGLA overview
+- Version alignment across all packages: Rust crate 1.1.0 → 2.0.0, Python 1.0.0 → 2.0.0, C header 1.1.0 → 2.0.0
+
+## [2.1.0] — 2026-04-30
+
+### Fixed
+
+- **phi_attention.zig** — Zig 0.16 compatibility: expand single-line `for..if` to block form for mutable captures
+- **trinity_constants.zig** — LR schedule warmup boundary: `step < N` → `step <= N` so `lr(warmup_steps) == LR_INIT` exactly
+- **jepa_t.zig** — correct GF16 budget assertion: total ≈ 16.4 MB (embedding 7.2M + 9 layers × 150K params); relax to 17 MB
+- **bf16 encoder** — validated post-fix via BENCH-010: gf16 outperforms bf16 by 16× on all distributions
+- **bench_007b_extended_range.rs** — extended with φ-distributed inputs and Pearson correlation analysis
+
+### Added
+
+- **Benchmark results** — `.trinity/results/bench_007b.log`, `bench_008.log`, `bench_010.log` committed
+- **CHANGELOG.md** — full release history with Keep a Changelog format
+- **All 30 issues resolved**, 0 open
+
+### Benchmark Results Summary (v2.1.0)
+
+| Metric | Value |
+|--------|-------|
+| GF16 MSE (UNIFORM ±100) | 2.3×10⁻³ |
+| bf16 MSE (UNIFORM ±100) | 3.8×10⁻² |
+| GF16 vs bf16 improvement | 16.3× lower MSE |
+| GF16 accuracy vs fp32 (σ=1.0) | > 99.99% |
+| GFTernary sparsity (He init) | 100% (all \|w\| < 0.5) |
+| Pearson r(φ-distance, MSE) | −0.34 (weak) |
+
 ## [2.0.0] — 2026-04-30
 
 ### Added

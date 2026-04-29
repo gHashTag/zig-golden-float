@@ -1,5 +1,5 @@
 /**
- * GoldenFloat v1.1.0 — C-ABI Header
+ * GoldenFloat v2.0.0 — C-ABI Header
  *
  * Minimal C99 header for GF16 (Golden Float16) format.
  * This header is the SPECIFICATION for libgoldenfloat.{so,dylib,dll}

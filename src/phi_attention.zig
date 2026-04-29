@@ -58,7 +58,9 @@ test "Fibonacci mask: visible positions" {
 test "Fibonacci mask: sparsity" {
     const mask = fibonacciDistanceMask(512);
     var visible: u32 = 0;
-    for (mask) |m| if (m) visible += 1;
+    for (mask) |m| {
+        if (m) visible += 1;
+    }
     const sparsity = @as(f64, @floatFromInt(visible)) / 512.0;
     try std.testing.expect(sparsity < 0.05);
 }
@@ -77,6 +79,8 @@ test "phi attention: output non-zero for valid input" {
     var out: [n]f64 = @splat(0.0);
     applyPhiAttention(&q, &k, &v, &out, n);
     var any_nonzero = false;
-    for (out) |o| if (o != 0.0) any_nonzero = true;
+    for (out) |o| {
+        if (o != 0.0) any_nonzero = true;
+    }
     try std.testing.expect(any_nonzero);
 }

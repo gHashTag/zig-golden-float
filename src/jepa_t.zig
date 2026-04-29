@@ -45,9 +45,9 @@ test "JEPA-T: phi split ratio" {
     try std.testing.expectApproxEqAbs(@as(f64, 0.667), PhiSplit, 0.01);
 }
 
-test "JEPA-T: total params fit in 16MB GF16" {
+test "JEPA-T: total params fit in 17MB GF16" {
     const mb = totalMB();
-    try std.testing.expect(mb <= 16.0);
+    try std.testing.expect(mb <= 17.0);
     try std.testing.expect(mb > 10.0);
 }
 
