@@ -56,13 +56,13 @@ pub fn build(b: *std.Build) void {
         .version = .{ .major = 2, .minor = 1, .patch = 0 },
     });
 
-    const install_lib = b.addInstallArtifact(c_abi_lib);
+    b.installArtifact(c_abi_lib);
 
     // Install C header alongside library
     const header_install = b.addInstallHeaderFile(b.path("src/c/gf16.h"), "gf16.h");
 
     const shared_step = b.step("shared", "Build C-ABI shared library (libgoldenfloat)");
-    shared_step.dependOn(&install_lib.step);
+    shared_step.dependOn(&b.addInstallArtifact(c_abi_lib, .{}).step);
     shared_step.dependOn(&header_install.step);
 
     // ─────────────────────────────────────────────────────────────────
