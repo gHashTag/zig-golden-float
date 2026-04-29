@@ -48,6 +48,8 @@ jobs:
 
       - name: Test Rust
         if: matrix.language == 'rust'
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/zig-out/lib
         run: |
           cd rust/goldenfloat-sys
           cargo test --verbose
