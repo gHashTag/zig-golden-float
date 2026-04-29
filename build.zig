@@ -56,13 +56,12 @@ pub fn build(b: *std.Build) void {
         .version = .{ .major = 1, .minor = 1, .patch = 0 },
     });
 
-    b.installArtifact(c_abi_lib);
+    const c_abi_install = b.addInstallArtifact(c_abi_lib, .{});
 
-    // Install C header alongside library
     const header_install = b.addInstallHeaderFile(b.path("src/c/gf16.h"), "gf16.h");
 
     const shared_step = b.step("shared", "Build C-ABI shared library (libgoldenfloat)");
-    shared_step.dependOn(&c_abi_lib.step);
+    shared_step.dependOn(&c_abi_install.step);
     shared_step.dependOn(&header_install.step);
 
     // ─────────────────────────────────────────────────────────────────
@@ -112,17 +111,6 @@ pub fn build(b: *std.Build) void {
     const run_tests = b.addRunArtifact(formats_tests);
     const run_transcendent_tests = b.addRunArtifact(transcendent_tests);
 
-    const trinity_tests_root = b.createModule(.{
-        .root_source_file = b.path("src/trinity_constants.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    const trinity_tests = b.addTest(.{
-        .name = "trinity-constants-tests",
-        .root_module = trinity_tests_root,
-    });
-    const run_trinity_tests = b.addRunArtifact(trinity_tests);
-
     const phi_attention_tests_root = b.createModule(.{
         .root_source_file = b.path("src/phi_attention.zig"),
         .target = target,
@@ -160,7 +148,6 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_tests.step);
     test_step.dependOn(&run_transcendent_tests.step);
     test_step.dependOn(&run_c_abi_tests.step);
-    test_step.dependOn(&run_trinity_tests.step);
     test_step.dependOn(&run_phi_attention_tests.step);
     test_step.dependOn(&run_trinity_init_tests.step);
     test_step.dependOn(&run_jepa_t_tests.step);
