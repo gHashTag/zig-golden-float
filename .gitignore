@@ -4,3 +4,14 @@ zig/
 rust/target/
 rust/*.rs
 rust/test_nan
+
+# Build artifacts
+cpp/build/
+**/build/
+*.o
+*.a
+*.so
+*.dylib
+CMakeCache.txt
+CMakeFiles/
+
