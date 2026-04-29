@@ -61,6 +61,9 @@ pub const ternary_primitives = @import("src/ternary/bigint.zig");
 /// Sacred constants (φ, e, π)
 pub const math = @import("src/math/constants.zig");
 
+/// Trinity constants for IGLA-GF16 architecture
+pub const trinity = @import("src/trinity_constants.zig");
+
 // ═══════════════════════════════════════════════════════════════════════
 // TRINITY CONSTANTS (re-exported for convenience)
 // ═════════════════════════════════════════════════════════════════════════════════
