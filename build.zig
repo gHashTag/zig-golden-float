@@ -96,6 +96,26 @@ pub fn build(b: *std.Build) void {
         .root_module = formats_tests_root,
     });
 
+    const gf8_tests_root = b.createModule(.{
+        .root_source_file = b.path("src/formats/gf8.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const gf8_tests = b.addTest(.{
+        .name = "gf8-tests",
+        .root_module = gf8_tests_root,
+    });
+
+    const formats_root_tests_root = b.createModule(.{
+        .root_source_file = b.path("src/formats/formats_root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const formats_root_tests = b.addTest(.{
+        .name = "formats-root-tests",
+        .root_module = formats_root_tests_root,
+    });
+
     // ─────────────────────────────────────────────────────────────────
     // Tests — transcendental functions (Wave 4B)
     // ─────────────────────────────────────────────────────────────────
@@ -110,9 +130,13 @@ pub fn build(b: *std.Build) void {
     });
 
     const run_tests = b.addRunArtifact(formats_tests);
+    const run_gf8_tests = b.addRunArtifact(gf8_tests);
+    const run_formats_root_tests = b.addRunArtifact(formats_root_tests);
     const run_transcendent_tests = b.addRunArtifact(transcendent_tests);
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&run_tests.step);
+    test_step.dependOn(&run_gf8_tests.step);
+    test_step.dependOn(&run_formats_root_tests.step);
     test_step.dependOn(&run_transcendent_tests.step);
     test_step.dependOn(&run_c_abi_tests.step);
 }

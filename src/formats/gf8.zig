@@ -281,6 +281,57 @@ test "GF8: mantissa precision" {
 test "GF8: exponent range" {
     const min_val = toF32(GF8{ .mant = 1, .exp = 0, .sign = 0 });
     const max_val = toF32(GF8{ .mant = MantMask, .exp = 7, .sign = 0 });
-    try std.testing.expect(min_val > 0.0); // Smallest normal > 0
-    try std.testing.expect(max_val < 15.0); // Max normal with max mantissa
+    try std.testing.expect(min_val > 0.0);
+    try std.testing.expect(max_val < 15.0);
+}
+
+test "GF8: max-value characterization (pre-flight BENCH-008)" {
+    const max_representable = toF32(GF8{ .mant = 15, .exp = 7, .sign = 0 });
+    try std.testing.expect(@abs(max_representable - 1.9375) < 0.01);
+
+    const near_max = fromF32(1.9374);
+    try std.testing.expect(@abs(toF32(near_max) - 1.9375) < 0.02);
+
+    const just_above = fromF32(1.9376);
+    try std.testing.expect(@abs(toF32(just_above) - 1.9375) < 0.02);
+
+    const two = fromF32(2.0);
+    try std.testing.expect(@abs(toF32(two) - 1.9375) < 0.01);
+
+    const hundred = fromF32(100.0);
+    try std.testing.expect(@abs(toF32(hundred) - 1.9375) < 0.01);
+
+    const zero = fromF32(0.0);
+    try std.testing.expect(toF32(zero) == 0.0);
+
+    const subnormal_input = fromF32(0.0077);
+    try std.testing.expect(toF32(subnormal_input) >= 0.0);
+
+    const neg_mid = fromF32(-1.5);
+    const neg_back = toF32(neg_mid);
+    try std.testing.expect(neg_back < 0.0);
+    try std.testing.expect(@abs(@abs(neg_back) - 1.5) < 0.15);
+}
+
+test "GF8: round-trip sweep 1000 uniform samples" {
+    const Prng = std.Random.DefaultPrng;
+    var prng = Prng.init(42);
+    const rand = prng.random();
+
+    var sum_sq_error: f64 = 0.0;
+    const n_samples: u32 = 1000;
+
+    for (0..n_samples) |_| {
+        const raw = rand.float(f32);
+        const v = raw * 1.9375;
+        const gf8 = fromF32(v);
+        const back = toF32(gf8);
+        const err: f64 = @floatCast(back - v);
+        sum_sq_error += err * err;
+    }
+
+    const mse = sum_sq_error / @as(f64, @floatFromInt(n_samples));
+    const ulp: f64 = 1.0 / 16.0;
+    const threshold = ulp * ulp * 1.5;
+    try std.testing.expect(mse < threshold);
 }
