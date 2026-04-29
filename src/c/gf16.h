@@ -347,6 +347,39 @@ gf16_t gf16_max(gf16_t a, gf16_t b);
  */
 gf16_t gf16_fma(gf16_t a, gf16_t b, gf16_t c);
 
+/**
+ * Fused multiply-subtract: a × b - c
+ *
+ * @param a First operand
+ * @param b Second operand
+ * @param c Third operand
+ * @return a × b - c in GF16
+ */
+gf16_t gf16_fms(gf16_t a, gf16_t b, gf16_t c);
+
+/**
+ * Fused negated multiply-add: c - a × b
+ *
+ * @param a First operand
+ * @param b Second operand
+ * @param c Third operand
+ * @return c - a × b in GF16
+ */
+gf16_t gf16_fnma(gf16_t a, gf16_t b, gf16_t c);
+
+/**
+ * φ-optimized FMA with golden-ratio scaling
+ *
+ * Applies φ-weighted dequantization in the fused operation
+ * for better distribution in ML weight space.
+ *
+ * @param a First operand
+ * @param b Second operand
+ * @param c Third operand
+ * @return φ-weighted fused result in GF16
+ */
+gf16_t gf16_phi_fma(gf16_t a, gf16_t b, gf16_t c);
+
 /*======================================================================
  * Constants
  *======================================================================*/

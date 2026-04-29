@@ -190,6 +190,39 @@ pub const GF16 = packed struct(u16) {
     pub fn phiDequantize(gf: GF16) f32 {
         return gf.toF32() * PHI_SQ;
     }
+
+    /// Fused multiply-add: a * b + c (single rounding)
+    pub fn fma(a: GF16, b: GF16, c: GF16) GF16 {
+        return fromF32(a.toF32() * b.toF32() + c.toF32());
+    }
+
+    /// Fused multiply-subtract: a * b - c (single rounding)
+    pub fn fms(a: GF16, b: GF16, c: GF16) GF16 {
+        return fromF32(a.toF32() * b.toF32() - c.toF32());
+    }
+
+    /// Fused negated multiply-add: -(a * b) + c = c - a*b (single rounding)
+    pub fn fnma(a: GF16, b: GF16, c: GF16) GF16 {
+        return fromF32(c.toF32() - a.toF32() * b.toF32());
+    }
+
+    /// φ-optimized FMA: phiDequantize(a) * phiDequantize(b) + phiDequantize(c)
+    /// with φ-weighted scaling applied in single rounding step
+    pub fn phiFma(a: GF16, b: GF16, c: GF16) GF16 {
+        const scale = PHI_SQ * PHI_SQ;
+        const sum = a.toF32() * b.toF32() * scale + c.toF32() * PHI_SQ;
+        return fromF32(sum / PHI_SQ);
+    }
+
+    /// φ-optimized dot product over slices (FMA accumulator)
+    pub fn phiDot(a: []const GF16, b: []const GF16) GF16 {
+        std.debug.assert(a.len == b.len);
+        var acc: f32 = 0.0;
+        for (a, b) |ai, bi| {
+            acc += ai.toF32() * bi.toF32();
+        }
+        return fromF32(acc * PHI_INV_SQ);
+    }
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -368,6 +401,51 @@ test "GF16 arithmetic" {
     try std.testing.expectApproxEqAbs(@as(f32, 1.0), diff.toF32(), 0.05);
     try std.testing.expectApproxEqAbs(@as(f32, 3.75), prod.toF32(), 0.05);
     try std.testing.expectApproxEqAbs(@as(f32, 0.6), quot.toF32(), 0.05);
+}
+
+test "GF16 FMA" {
+    const a = GF16.fromF32(2.0);
+    const b = GF16.fromF32(3.0);
+    const c = GF16.fromF32(1.0);
+    const result = GF16.fma(a, b, c);
+    try std.testing.expectApproxEqAbs(@as(f32, 7.0), result.toF32(), 0.1);
+}
+
+test "GF16 FMS" {
+    const a = GF16.fromF32(2.0);
+    const b = GF16.fromF32(3.0);
+    const c = GF16.fromF32(1.0);
+    const result = GF16.fms(a, b, c);
+    try std.testing.expectApproxEqAbs(@as(f32, 5.0), result.toF32(), 0.1);
+}
+
+test "GF16 FNMA" {
+    const a = GF16.fromF32(2.0);
+    const b = GF16.fromF32(3.0);
+    const c = GF16.fromF32(10.0);
+    const result = GF16.fnma(a, b, c);
+    try std.testing.expectApproxEqAbs(@as(f32, 4.0), result.toF32(), 0.1);
+}
+
+test "GF16 phiFMA" {
+    const a = GF16.fromF32(1.0);
+    const b = GF16.fromF32(1.0);
+    const c = GF16.fromF32(0.0);
+    const result = GF16.phiFma(a, b, c);
+    const deq = result.phiDequantize();
+    try std.testing.expect(deq > 1.0 and deq < 10.0);
+}
+
+test "GF16 phiDot product" {
+    const a_vals = [_]f32{ 1.0, 2.0, 3.0 };
+    const b_vals = [_]f32{ 1.0, 1.0, 1.0 };
+    var a_gf: [3]GF16 = undefined;
+    var b_gf: [3]GF16 = undefined;
+    for (&a_gf, a_vals) |*g, v| g.* = GF16.fromF32(v);
+    for (&b_gf, b_vals) |*g, v| g.* = GF16.fromF32(v);
+    const result = GF16.phiDot(&a_gf, &b_gf);
+    const back = result.phiDequantize();
+    try std.testing.expect(back > 4.0 and back < 8.0);
 }
 
 test "GF16 phi quantization roundtrip" {

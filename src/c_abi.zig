@@ -201,11 +201,31 @@ export fn gf16_max(a: gf16_t, b: gf16_t) callconv(.c) gf16_t {
 }
 
 export fn gf16_fma(a: gf16_t, b: gf16_t, c: gf16_t) callconv(.c) gf16_t {
-    // Compute a * b + c in f32, then round to GF16
-    const fa = rawToGf16(a).toF32();
-    const fb = rawToGf16(b).toF32();
-    const fc = rawToGf16(c).toF32();
-    return gf16ToRaw(golden.GF16.fromF32(fa * fb + fc));
+    const gf_a = rawToGf16(a);
+    const gf_b = rawToGf16(b);
+    const gf_c = rawToGf16(c);
+    return gf16ToRaw(golden.GF16.fma(gf_a, gf_b, gf_c));
+}
+
+export fn gf16_fms(a: gf16_t, b: gf16_t, c: gf16_t) callconv(.c) gf16_t {
+    const gf_a = rawToGf16(a);
+    const gf_b = rawToGf16(b);
+    const gf_c = rawToGf16(c);
+    return gf16ToRaw(golden.GF16.fms(gf_a, gf_b, gf_c));
+}
+
+export fn gf16_fnma(a: gf16_t, b: gf16_t, c: gf16_t) callconv(.c) gf16_t {
+    const gf_a = rawToGf16(a);
+    const gf_b = rawToGf16(b);
+    const gf_c = rawToGf16(c);
+    return gf16ToRaw(golden.GF16.fnma(gf_a, gf_b, gf_c));
+}
+
+export fn gf16_phi_fma(a: gf16_t, b: gf16_t, c: gf16_t) callconv(.c) gf16_t {
+    const gf_a = rawToGf16(a);
+    const gf_b = rawToGf16(b);
+    const gf_c = rawToGf16(c);
+    return gf16ToRaw(golden.GF16.phiFma(gf_a, gf_b, gf_c));
 }
 
 // ═══════════════════════════════════════════════════════════════════
