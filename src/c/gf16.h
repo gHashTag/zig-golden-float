@@ -347,6 +347,32 @@ gf16_t gf16_max(gf16_t a, gf16_t b);
  */
 gf16_t gf16_fma(gf16_t a, gf16_t b, gf16_t c);
 
+/**
+ * φ-optimized fused multiply-add
+ *
+ * Dequantizes inputs from φ-space, computes a × b + c in f32,
+ * then φ-quantizes the result back.
+ *
+ * @param a First operand (φ-quantized)
+ * @param b Second operand (φ-quantized)
+ * @param c Third operand (φ-quantized)
+ * @return φ-quantized result of a × b + c
+ */
+gf16_t gf16_phi_fma(gf16_t a, gf16_t b, gf16_t c);
+
+/**
+ * φ-optimized fused multiply-subtract
+ *
+ * Dequantizes inputs from φ-space, computes a × b - c in f32,
+ * then φ-quantizes the result back.
+ *
+ * @param a First operand (φ-quantized)
+ * @param b Second operand (φ-quantized)
+ * @param c Third operand (φ-quantized)
+ * @return φ-quantized result of a × b - c
+ */
+gf16_t gf16_phi_fms(gf16_t a, gf16_t b, gf16_t c);
+
 /*======================================================================
  * Constants
  *======================================================================*/
