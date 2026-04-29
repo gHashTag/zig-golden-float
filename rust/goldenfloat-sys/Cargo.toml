@@ -1,6 +1,6 @@
 [package]
 name = "goldenfloat-sys"
-version = "1.1.0"
+version = "2.0.0"
 edition = "2021"
 authors = ["Trinity Project"]
 description = "FFI bindings to GoldenFloat C-ABI library (φ-optimized 16-bit floating point format)"

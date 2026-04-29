@@ -30,10 +30,10 @@ pub const LR_WARMUP_STEPS: u32 = 21;
 pub const LR_TAU: f64 = 228.9;
 
 pub fn phiLrSchedule(step: u32, total_steps: u32) f64 {
-    if (step < LR_WARMUP_STEPS) {
+    if (step <= LR_WARMUP_STEPS) {
         return LR_INIT * @as(f64, @floatFromInt(step)) / @as(f64, @floatFromInt(LR_WARMUP_STEPS));
     }
-    const t = @as(f64, @floatFromInt(step)) / @as(f64, @floatFromInt(total_steps));
+    const t = @as(f64, @floatFromInt(step - LR_WARMUP_STEPS)) / @as(f64, @floatFromInt(total_steps));
     return LR_INIT * std.math.pow(f64, PHI, -t / LR_TAU * total_steps / LR_TAU);
 }
 
