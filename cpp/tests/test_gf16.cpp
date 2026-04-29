@@ -63,7 +63,7 @@ bool test_conversions() {
         }
 
         Gf16 gf = Gf16::from_f32(input_val);
-        back = gf.to_f32();
+        float back = gf.to_f32();
 
         bool result = false;
         bool expected = true;
