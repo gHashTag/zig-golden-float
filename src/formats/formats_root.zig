@@ -152,11 +152,12 @@ fn fp16ToF32(x: u16) f32 {
     if (e == 0) {
         if (m == 0) return @bitCast(sign);
         var mant = @as(u32, m) << 13;
-        var exp: u32 = 0;
-        while ((mant & 0x00800000) == 0) : (exp -= 1) {
+        var shifts: u32 = 0;
+        while ((mant & 0x00800000) == 0) : (shifts += 1) {
             mant <<= 1;
         }
-        const f32_bits = sign | ((112 - exp) << 23) | (mant & 0x7FFFFF);
+        const biased_exp: u32 = 113 - shifts;
+        const f32_bits = sign | (biased_exp << 23) | (mant & 0x7FFFFF);
         return @bitCast(f32_bits);
     }
     if (e == 0x1F) {
@@ -646,4 +647,41 @@ test "BF16: quantizeValue roundtrip all formats" {
     try std.testing.expect(@abs(gf16_round - test_val) / test_val < 0.05);
     try std.testing.expect(@abs(bf16_round - test_val) / test_val < 0.05);
     try std.testing.expect(@abs(fp16_round - test_val) / test_val < 0.05);
+}
+
+test "FP16: subnormal decode mantissa=1" {
+    const bits: u16 = 0x0001;
+    const val = fp16ToF32(bits);
+    const expected: f32 = 5.960464e-8;
+    try std.testing.expectApproxEqAbs(expected, val, 1e-14);
+}
+
+test "FP16: subnormal decode mantissa=2" {
+    const bits: u16 = 0x0002;
+    const val = fp16ToF32(bits);
+    const expected: f32 = 1.192093e-7;
+    try std.testing.expectApproxEqAbs(expected, val, 1e-14);
+}
+
+test "FP16: subnormal decode mantissa=1023 (max)" {
+    const bits: u16 = 0x03FF;
+    const val = fp16ToF32(bits);
+    try std.testing.expect(val > 0.0);
+    try std.testing.expect(val < 6.1e-5);
+}
+
+test "FP16: quantizeValue small values preserve sign" {
+    const pos = quantizeValue(0.003, .fp16);
+    const neg = quantizeValue(-0.003, .fp16);
+    try std.testing.expect(pos > 0.0);
+    try std.testing.expect(neg < 0.0);
+}
+
+test "FP16: subnormal roundtrip accuracy" {
+    const vals = [_]f32{ 1e-5, 5e-5, 1e-4, 5e-4 };
+    for (vals) |v| {
+        const q = quantizeValue(v, .fp16);
+        const rel_err = @abs(q - v) / v;
+        try std.testing.expect(rel_err < 0.1);
+    }
 }
