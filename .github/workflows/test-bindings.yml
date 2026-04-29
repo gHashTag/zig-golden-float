@@ -38,6 +38,11 @@ jobs:
       - name: Build shared library
         run: zig build shared
 
+      - name: Set library environment
+        run: |
+          echo "LD_LIBRARY_PATH=$GITHUB_WORKSPACE/zig-out/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "GOLDENFLOAT_LIB_DIR=$GITHUB_WORKSPACE/zig-out/lib" >> $GITHUB_ENV
+
       - name: Test Zig
         if: matrix.language == 'zig'
         run: zig build test
@@ -64,6 +69,8 @@ jobs:
           cd python
           pip install -e . -q
           python -m goldenfloat.tests.test_gf16
+        env:
+          GOLDENFLOAT_LIB_DIR: ${{ github.workspace }}/zig-out/lib
 
       - name: Install CMake
         if: matrix.language == 'cpp'
@@ -78,9 +85,9 @@ jobs:
         run: |
           cd cpp
           mkdir -p build
-          cmake -S . -B build
+          cmake -S . -B build -DGOLDENFLOAT_LIB_DIR=$GITHUB_WORKSPACE/zig-out/lib
           cmake --build build --target test_gf16
-          ./build/test_gf16
+          LD_LIBRARY_PATH=$GITHUB_WORKSPACE/zig-out/lib ./build/test_gf16
 
       - name: Install Go
         if: matrix.language == 'go'
@@ -92,4 +99,6 @@ jobs:
         if: matrix.language == 'go'
         run: |
           cd go/goldenfloat
-          go test -v ./...
+          CGO_CFLAGS="-I$GITHUB_WORKSPACE/src/c" CGO_LDFLAGS="-L$GITHUB_WORKSPACE/zig-out/lib -lgoldenfloat" go test -v ./...
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/zig-out/lib

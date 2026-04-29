@@ -1,6 +1,6 @@
 [package]
 name = "gf16"
-version = "1.1.0"
+version = "2.0.0"
 edition = "2021"
 authors = ["Trinity Project"]
 license = "MIT"
@@ -20,5 +20,4 @@ c-abi = ["goldenfloat-sys"]
 
 [dependencies]
 
-# C-FFI bindings (optional, workspace member)
-goldenfloat-sys = { version = "1.1.0", optional = true, path = "../goldenfloat-sys" }
+goldenfloat-sys = { version = "2.0.0", optional = true, path = "../goldenfloat-sys" }
