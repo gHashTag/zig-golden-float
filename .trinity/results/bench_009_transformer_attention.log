@@ -1,0 +1,73 @@
+BENCH-009: Transformer Attention φ-Pattern Analysis
+====================================================
+Architecture: single-head self-attention, seq=64, dim=64
+Trinity Identity: φ² + 1/φ² = 3.0000000000 (should be 3.0)
+Cross-reference: whitepaper.md §9.5, issue #15
+
+--------------------------------------------------------------------------------
+Format         TrinityResid   φ-Entropy     Sharp%    EffRank  φ-dist
+--------------------------------------------------------------------------------
+fp32            4095.953171     0.135035      0.00%     63.992    0.000
+GF16            4095.952793     0.135035      0.00%     63.992    0.049
+fp16            4119.248697     0.135005      0.00%     63.932    0.118
+bf16            4093.000244     0.135039      0.00%     64.000    0.525
+GFTernary       4093.000244     0.135039      0.00%     64.000    0.000
+--------------------------------------------------------------------------------
+
+Best Trinity alignment: bf16 (residual=4093.000244)
+
+Detailed φ-Analysis per Format:
+------------------------------------------------------------
+
+[fp32] (φ-dist=0.000)
+  Trinity residual  : 4095.95317072
+  φ-entropy         : 0.135035
+  Mean score        : 0.015625 (uniform=0.015625)
+  Max score         : 0.016478
+  Effective rank    : 63.99 / 64
+  Sharp (>1/φ=0.618) : 0.00%
+  → ✗ Trinity not satisfied (residual = 4095.9532)
+
+[GF16] (φ-dist=0.049)
+  Trinity residual  : 4095.95279257
+  φ-entropy         : 0.135035
+  Mean score        : 0.015625 (uniform=0.015625)
+  Max score         : 0.016478
+  Effective rank    : 63.99 / 64
+  Sharp (>1/φ=0.618) : 0.00%
+  → ✗ Trinity not satisfied (residual = 4095.9528)
+
+[fp16] (φ-dist=0.118)
+  Trinity residual  : 4119.24869688
+  φ-entropy         : 0.135005
+  Mean score        : 0.015625 (uniform=0.015625)
+  Max score         : 0.018278
+  Effective rank    : 63.93 / 64
+  Sharp (>1/φ=0.618) : 0.00%
+  → ✗ Trinity not satisfied (residual = 4119.2487)
+
+[bf16] (φ-dist=0.525)
+  Trinity residual  : 4093.00024414
+  φ-entropy         : 0.135039
+  Mean score        : 0.015625 (uniform=0.015625)
+  Max score         : 0.015625
+  Effective rank    : 64.00 / 64
+  Sharp (>1/φ=0.618) : 0.00%
+  → ✗ Trinity not satisfied (residual = 4093.0002)
+
+[GFTernary] (φ-dist=0.000)
+  Trinity residual  : 4093.00024414
+  φ-entropy         : 0.135039
+  Mean score        : 0.015625 (uniform=0.015625)
+  Max score         : 0.015625
+  Effective rank    : 64.00 / 64
+  Sharp (>1/φ=0.618) : 0.00%
+  → ✗ Trinity not satisfied (residual = 4093.0002)
+
+Correlation: φ-distance vs Trinity Residual:
+------------------------------------------------------------
+Pearson r(φ-distance, Trinity residual) = -0.1220
+→ No correlation. Attention score Trinity alignment format-independent.
+
+Results: .trinity/results/bench_009_transformer_attention.log
+Next: BENCH-010 Fibonacci sequence prediction task
