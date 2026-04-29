@@ -115,4 +115,24 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_tests.step);
     test_step.dependOn(&run_transcendent_tests.step);
     test_step.dependOn(&run_c_abi_tests.step);
+
+    // ─────────────────────────────────────────────────────────────────
+    // Benchmark — Format Analysis (BENCH-010)
+    // ─────────────────────────────────────────────────────────────────
+    const bench_010_module = b.createModule(.{
+        .root_source_file = b.path("benches/bench_010_format_analysis.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const bench_010 = b.addExecutable(.{
+        .name = "bench_010",
+        .root_module = bench_010_module,
+    });
+
+    b.installArtifact(bench_010);
+
+    const run_bench_010 = b.addRunArtifact(bench_010);
+    const bench_010_step = b.step("bench-010", "Run BENCH-010 format analysis");
+    bench_010_step.dependOn(&run_bench_010.step);
 }
