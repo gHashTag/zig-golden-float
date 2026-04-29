@@ -224,11 +224,21 @@ pub const TestVector = struct {
 };
 
 /// Load .tri specification from file
-pub fn load(allocator: std.mem.Allocator, path: []const u8) !Spec {
-    const file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
+pub fn load(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !Spec {
+    // Zig 0.16.0 API: use std.Io.Dir.cwd() with io parameter
+    const file = try std.Io.Dir.cwd().openFile(io, path, .{});
+    defer std.Io.File.close(file, io);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 10);
+    // Get file size to read exact amount
+    const stat_info = try std.Io.File.stat(file, io);
+    const file_size = stat_info.size;
+    const read_size = @min(file_size, 1024 * 10);
+
+    // Create reader and read all content
+    var read_buffer: [4096]u8 = undefined;
+    var reader = std.Io.File.reader(file, io, &read_buffer);
+    // Use Io.Reader interface for readAlloc
+    const content = try std.Io.Reader.readAlloc(&reader.interface, allocator, read_size);
     defer allocator.free(content);
 
     var spec = try parse(allocator, content);
@@ -1056,7 +1066,7 @@ const Parser = struct {
 
         while (lines_it.next()) |raw_line| {
             // Skip empty lines and comments
-            const trimmed = std.mem.trimLeft(u8, raw_line, " \t\r");
+            const trimmed = std.mem.trimStart(u8, raw_line, " \t\r");
             if (trimmed.len == 0 or trimmed[0] == '#') continue;
 
             // Count indentation (2-space units)
@@ -1080,7 +1090,7 @@ const Parser = struct {
             // Constant definition at indent 1 (2 spaces): "MAX_LEVEL: 16"
             if (indent == 1) {
                 if (std.mem.indexOfScalar(u8, trimmed, ':')) |colon_idx| {
-                    const const_name = std.mem.trimRight(u8, trimmed[0..colon_idx], " \t");
+                    const const_name = std.mem.trimEnd(u8, trimmed[0..colon_idx], " \t");
                     const const_value = std.mem.trim(u8, trimmed[colon_idx + 1 ..], " \t\r");
                     try constants.append(self.allocator, .{
                         .name = try self.allocator.dupe(u8, const_name),
@@ -1113,7 +1123,7 @@ const Parser = struct {
 
         while (lines_it.next()) |raw_line| {
             // Skip empty lines and comments
-            const trimmed = std.mem.trimLeft(u8, raw_line, " \t\r");
+            const trimmed = std.mem.trimStart(u8, raw_line, " \t\r");
             if (trimmed.len == 0 or trimmed[0] == '#') continue;
 
             // Count indentation (2-space units)
@@ -1155,7 +1165,7 @@ const Parser = struct {
 
                 // Parse new type name (e.g., "Entry:" -> "Entry")
                 if (std.mem.lastIndexOfScalar(u8, trimmed, ':')) |colon_idx| {
-                    const type_name = std.mem.trimRight(u8, trimmed[0..colon_idx], " \t");
+                    const type_name = std.mem.trimEnd(u8, trimmed[0..colon_idx], " \t");
                     current_type = TypeDef{
                         .name = try self.allocator.dupe(u8, type_name),
                         .variant = .struct_type,
@@ -1206,7 +1216,7 @@ const Parser = struct {
             // Field definition at indent 3 (6 spaces): "- name: key"
             if (indent == 3 and in_fields_section and current_fields != null and std.mem.startsWith(u8, trimmed, "-")) {
                 var field_line = trimmed[1..]; // Skip "-"
-                field_line = std.mem.trimLeft(u8, field_line, " \t");
+                field_line = std.mem.trimStart(u8, field_line, " \t");
 
                 // Parse "name: key" part
                 if (std.mem.indexOfScalar(u8, field_line, ':')) |name_colon| {
@@ -1216,7 +1226,7 @@ const Parser = struct {
                     var field_type: []const u8 = "";
 
                     if (lines_it.next()) |next_raw| {
-                        const next_trimmed = std.mem.trimLeft(u8, next_raw, " \t\r");
+                        const next_trimmed = std.mem.trimStart(u8, next_raw, " \t\r");
                         const next_indent = countIndent(next_raw);
 
                         // Check if next line is "- name:" -> end of this field

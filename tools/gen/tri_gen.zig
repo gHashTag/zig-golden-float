@@ -7,18 +7,37 @@ const std = @import("std");
 
 const tri_reader = @import("tri_reader.zig");
 
-const stdout_file = std.fs.File.stdout();
-const stdout = stdout_file.deprecatedWriter();
-const stderr_file = std.fs.File.stderr();
-const stderr = stderr_file.deprecatedWriter();
+// Writer buffers and io reference for Zig 0.16.0 I/O
+var stdout_buffer: [4096]u8 = undefined;
+var stderr_buffer: [4096]u8 = undefined;
+var stdout_file_writer: std.Io.File.Writer = undefined;
+var stderr_file_writer: std.Io.File.Writer = undefined;
+var g_io: ?std.Io = null;
 
-pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const alloc = arena.allocator();
+fn stdout() *std.Io.Writer {
+    return &stdout_file_writer.interface;
+}
 
-    const args = try std.process.argsAlloc(alloc);
-    defer std.process.argsFree(alloc, args);
+fn stderr() *std.Io.Writer {
+    return &stderr_file_writer.interface;
+}
+
+pub fn main(init: std.process.Init) !void {
+    // Set global io reference and initialize writers
+    g_io = init.io;
+    // Create proper file writers for stdout/stderr
+    stdout_file_writer = std.Io.File.writer(std.Io.File.stdout(), init.io, &stdout_buffer);
+    stderr_file_writer = std.Io.File.writer(std.Io.File.stderr(), init.io, &stderr_buffer);
+    defer g_io = null;
+
+    // Zig 0.16.0 API: init.minimal.args contains command line arguments
+    const alloc = init.gpa;
+
+    var args_iter = try std.process.Args.Iterator.initAllocator(init.minimal.args, init.gpa);
+    defer args_iter.deinit();
+
+    // Skip executable name
+    _ = args_iter.skip();
 
     // Parse arguments
     var lang: []const u8 = "all";
@@ -26,71 +45,62 @@ pub fn main() !void {
     var dry_run: bool = false;
     var verbose: bool = false;
 
-    var i: usize = 1;
-    while (i < args.len) : (i += 1) {
-        const arg = args[i];
-
+    while (args_iter.next()) |arg| {
         if (std.mem.eql(u8, arg, "--lang") or std.mem.eql(u8, arg, "-l")) {
-            if (i + 1 < args.len) {
-                lang = args[i + 1];
-                i += 1;
-            }
+            lang = args_iter.next() orelse "all";
         } else if (std.mem.eql(u8, arg, "--input") or std.mem.eql(u8, arg, "-i")) {
-            if (i + 1 < args.len) {
-                input = args[i + 1];
-                i += 1;
-            }
+            input = args_iter.next() orelse "specs/gf16.tri";
         } else if (std.mem.eql(u8, arg, "--dry-run") or std.mem.eql(u8, arg, "-n")) {
             dry_run = true;
         } else if (std.mem.eql(u8, arg, "--verbose") or std.mem.eql(u8, arg, "-v")) {
             verbose = true;
         } else if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
             try printHelp();
-            std.process.exit(0);
+            return;
         }
     }
 
-    // Load spec
-    var spec = try tri_reader.load(alloc, input);
+    // Load spec (pass io for Zig 0.16.0 compatibility)
+    var spec = try tri_reader.load(alloc, g_io.?, input);
     defer spec.deinit(alloc);
 
     if (verbose) {
-        try stderr.print("Loaded spec: {s} v{}\n", .{ spec.format, spec.version });
-        try stderr.print("  Fields: {d}\n", .{spec.fields.len});
-        try stderr.print("  Test vectors: {d}\n", .{spec.test_vectors.len});
+        try stderr().print("Loaded spec: {s} v{}\n", .{ spec.format, spec.version });
+        try stderr().print("  Fields: {d}\n", .{spec.fields.len});
+        try stderr().print("  Test vectors: {d}\n", .{spec.test_vectors.len});
     }
 
     // Generate based on language (stdout only)
     const generate_all = std.mem.eql(u8, lang, "all");
 
     if (generate_all or std.mem.eql(u8, lang, "c")) {
-        try genC(alloc, spec, dry_run, verbose);
+        try genC(alloc, g_io.?, spec, dry_run, verbose);
     }
 
     if (generate_all or std.mem.eql(u8, lang, "rust")) {
-        try genRust(alloc, spec, dry_run, verbose);
+        try genRust(alloc, g_io.?, spec, dry_run, verbose);
     }
 
     if (generate_all or std.mem.eql(u8, lang, "zig")) {
         // For data_structure specs, use genStructTypes
         if (spec.spec_type != null and std.mem.eql(u8, spec.spec_type.?, "data_structure")) {
-            try genStructTypes(alloc, spec, dry_run, verbose);
+            try genStructTypes(alloc, g_io.?, spec, dry_run, verbose);
         } else {
-            try genZig(alloc, spec, dry_run, verbose);
+            try genZig(alloc, g_io.?, spec, dry_run, verbose);
         }
     }
 
     if (generate_all or std.mem.eql(u8, lang, "cpp")) {
-        try genCpp(alloc, spec, dry_run, verbose);
+        try genCpp(alloc, g_io.?, spec, dry_run, verbose);
     }
 
     if (dry_run) {
-        try stdout.writeAll("Dry-run complete (no files written)\n");
+        try stdout().writeAll("Dry-run complete (no files written)\n");
     }
 }
 
 fn printHelp() !void {
-    try stdout.writeAll(
+    try stdout().writeAll(
         \\TRI Format Code Generator
         \\
         \\Usage: zig run tri_gen [OPTIONS]
@@ -117,19 +127,37 @@ fn writeFile(
     verbose: bool,
 ) !void {
     if (dry_run) {
-        try stdout.print("  [DRY] {s} ({d} bytes)\n", .{ path, content.len });
+        try stdout().print("  [DRY] {s} ({d} bytes)\n", .{ path, content.len });
         return;
     }
 
-    try stdout.writeAll(content);
+    try stdout().writeAll(content);
 
     if (verbose) {
-        try stdout.print("  {s} ({d} bytes)\n", .{ path, content.len });
+        try stdout().print("  {s} ({d} bytes)\n", .{ path, content.len });
     }
+}
+
+/// Helper function to read file contents (Zig 0.16.0 compatible)
+fn readFileAlloc(allocator: std.mem.Allocator, io: std.Io, path: []const u8, max_bytes: usize) ![]u8 {
+    const file = try std.Io.Dir.cwd().openFile(io, path, .{});
+    defer std.Io.File.close(file, io);
+
+    // Get file size to read exact amount
+    const stat_info = try std.Io.File.stat(file, io);
+    const file_size = stat_info.size;
+
+    // Clamp to max_bytes
+    const read_size = @min(file_size, max_bytes);
+
+    var read_buffer: [4096]u8 = undefined;
+    var reader = std.Io.File.reader(file, io, &read_buffer);
+    return try std.Io.Reader.readAlloc(&reader.interface, allocator, read_size);
 }
 
 fn genC(
     alloc: std.mem.Allocator,
+    io: std.Io,
     spec: tri_reader.Spec,
     dry_run: bool,
     verbose: bool,
@@ -139,9 +167,9 @@ fn genC(
     const h_path = "tools/gen/templates/gf16.h";
     const c_path = "tools/gen/templates/gf16.c";
 
-    const h_output = try std.fs.cwd().readFileAlloc(alloc, h_path, .max_file_size);
+    const h_output = try readFileAlloc(alloc, io, h_path, 1024 * 1024);
     defer alloc.free(h_output);
-    const c_output = try std.fs.cwd().readFileAlloc(alloc, c_path, .max_file_size);
+    const c_output = try readFileAlloc(alloc, io, c_path, 1024 * 1024);
     defer alloc.free(c_output);
 
     try writeFile("c/gf16.h", h_output, dry_run, verbose);
@@ -150,6 +178,7 @@ fn genC(
 
 fn genRust(
     alloc: std.mem.Allocator,
+    io: std.Io,
     spec: tri_reader.Spec,
     dry_run: bool,
     verbose: bool,
@@ -157,7 +186,7 @@ fn genRust(
     _ = spec;
 
     const rust_path = "tools/gen/templates/gf16.rs";
-    const output = try std.fs.cwd().readFileAlloc(alloc, rust_path, .max_file_size);
+    const output = try readFileAlloc(alloc, io, rust_path, 1024 * 1024);
     defer alloc.free(output);
 
     try writeFile("rust/src/lib.rs", output, dry_run, verbose);
@@ -165,6 +194,7 @@ fn genRust(
 
 fn genZig(
     alloc: std.mem.Allocator,
+    io: std.Io,
     spec: tri_reader.Spec,
     dry_run: bool,
     verbose: bool,
@@ -172,7 +202,7 @@ fn genZig(
     _ = spec;
 
     const zig_path = "tools/gen/templates/gf16.zig";
-    const output = try std.fs.cwd().readFileAlloc(alloc, zig_path, .max_file_size);
+    const output = try readFileAlloc(alloc, io, zig_path, 1024 * 1024);
     defer alloc.free(output);
 
     try writeFile("zig/src/formats/gf16.zig", output, dry_run, verbose);
@@ -180,6 +210,7 @@ fn genZig(
 
 fn genCpp(
     alloc: std.mem.Allocator,
+    io: std.Io,
     spec: tri_reader.Spec,
     dry_run: bool,
     verbose: bool,
@@ -187,7 +218,7 @@ fn genCpp(
     _ = spec;
 
     const cpp_path = "tools/gen/templates/gf16.hpp";
-    const output = try std.fs.cwd().readFileAlloc(alloc, cpp_path, .max_file_size);
+    const output = try readFileAlloc(alloc, io, cpp_path, 1024 * 1024);
     defer alloc.free(output);
 
     try writeFile("cpp/gf16.hpp", output, dry_run, verbose);
@@ -231,6 +262,7 @@ fn transformGenericParams(alloc: std.mem.Allocator, generic: []const u8) ![]cons
 
 fn genStructTypes(
     alloc: std.mem.Allocator,
+    io: std.Io,
     spec: tri_reader.Spec,
     dry_run: bool,
     verbose: bool,
@@ -240,61 +272,59 @@ fn genStructTypes(
     var buffer = try std.ArrayList(u8).initCapacity(alloc, 0);
     defer buffer.deinit(alloc);
 
-    const writer = buffer.writer(alloc);
-
     // Header
-    try writer.print("// Auto-generated from {s} — DO NOT EDIT\n", .{spec.input_path});
-    try writer.print("// Level {d} Data Structures\n", .{spec.level});
-    try writer.print("\nconst std = @import(\"std\");\n\n", .{});
+    try buffer.print(alloc,"// Auto-generated from {s} — DO NOT EDIT\n", .{spec.input_path});
+    try buffer.print(alloc,"// Level {d} Data Structures\n", .{spec.level});
+    try buffer.print(alloc,"\nconst std = @import(\"std\");\n\n", .{});
 
     // Generate constants
     for (spec.constants) |c| {
-        try writer.print("pub const {s} = {s};\n", .{ c.name, c.value });
+        try buffer.print(alloc,"pub const {s} = {s};\n", .{ c.name, c.value });
     }
-    if (spec.constants.len > 0) try writer.print("\n", .{});
+    if (spec.constants.len > 0) try buffer.print(alloc,"\n", .{});
 
     // Generate types
     for (spec.types) |td| {
         // Handle enum type definitions (e.g., Color = enum { Red, Black })
         if (td.enum_values.len > 0 and td.variant == .enum_type) {
-            try writer.print("pub const {s} = enum {{\n", .{td.name});
+            try buffer.print(alloc,"pub const {s} = enum {{\n", .{td.name});
             for (td.enum_values, 0..) |val, i| {
-                if (i > 0) try writer.print(", ", .{});
-                try writer.print("{s}", .{val});
+                if (i > 0) try buffer.print(alloc,", ", .{});
+                try buffer.print(alloc,"{s}", .{val});
             }
-            try writer.print("}};\n\n", .{});
+            try buffer.print(alloc,"}};\n\n", .{});
         } else if (td.generic) |generic| {
             // Transform generic syntax: [T] -> comptime T: type
             const generic_params = try transformGenericParams(alloc, generic);
-            try writer.print("pub fn {s}({s}) type {{\n", .{ td.name, generic_params });
-            try writer.print("    return struct {{\n", .{});
+            try buffer.print(alloc,"pub fn {s}({s}) type {{\n", .{ td.name, generic_params });
+            try buffer.print(alloc,"    return struct {{\n", .{});
             for (td.fields) |f| {
-                try writer.print("        {s}: {s},\n", .{ f.name, f.type });
+                try buffer.print(alloc,"        {s}: {s},\n", .{ f.name, f.type });
             }
-            try writer.print("    }};\n}}\n\n", .{});
+            try buffer.print(alloc,"    }};\n}}\n\n", .{});
         } else {
-            try writer.print("pub const {s} = struct {{\n", .{td.name});
+            try buffer.print(alloc,"pub const {s} = struct {{\n", .{td.name});
             for (td.fields) |f| {
-                try writer.print("    {s}: {s},\n", .{ f.name, f.type });
+                try buffer.print(alloc,"    {s}: {s},\n", .{ f.name, f.type });
             }
-            try writer.print("}};\n\n", .{});
+            try buffer.print(alloc,"}};\n\n", .{});
         }
     }
 
     // Generate ops as stubs
-    try writer.print("// Operations\n", .{});
+    try buffer.print(alloc,"// Operations\n", .{});
     for (spec.ops) |op| {
         if (op.description.len > 0) {
-            try writer.print("/// {s}\n", .{op.description});
+            try buffer.print(alloc,"/// {s}\n", .{op.description});
         }
-        try writer.print("pub fn {s}(", .{op.name});
+        try buffer.print(alloc,"pub fn {s}(", .{op.name});
         for (op.inputs, 0..) |inp, i| {
-            if (i > 0) try writer.print(", ", .{});
-            try writer.print("arg{d}: {s}", .{ i, inp });
+            if (i > 0) try buffer.print(alloc,", ", .{});
+            try buffer.print(alloc,"arg{d}: {s}", .{ i, inp });
         }
-        try writer.print(") {s} {{\n", .{op.output});
-        try writer.print("    @compileError(\"TODO: implement {s}\");\n", .{op.name});
-        try writer.print("}}\n\n", .{});
+        try buffer.print(alloc,") {s} {{\n", .{op.output});
+        try buffer.print(alloc,"    @compileError(\"TODO: implement {s}\");\n", .{op.name});
+        try buffer.print(alloc,"}}\n\n", .{});
     }
 
     const output = try buffer.toOwnedSlice(alloc);
@@ -310,7 +340,8 @@ fn genStructTypes(
     defer alloc.free(filename);
 
     // Ensure directory exists before writing (zig/src/generated/)
-    const basename = std.fs.path.basename(filename);
-    const out_subdir = try std.fs.cwd().makeOpenPath("zig/src/generated", .{});
-    try writeFile(out_subdir, basename, output, dry_run, verbose);
+    // Zig 0.16.0 API: use std.Io.Dir.cwd().createDirPathOpen
+    const out_subdir = try std.Io.Dir.cwd().createDirPathOpen(io, "zig/src/generated", .{});
+    defer std.Io.Dir.close(out_subdir, io);
+    try writeFile(filename, output, dry_run, verbose);
 }
