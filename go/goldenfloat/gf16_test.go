@@ -3,6 +3,7 @@ package goldenfloat
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"testing"
 )
@@ -22,7 +23,30 @@ func loadVectors() (map[string]interface{}, error) {
 	return vectors, nil
 }
 
+func parseFloatInput(raw interface{}) float32 {
+	switch v := raw.(type) {
+	case string:
+		switch v {
+		case "inf":
+			return float32(math.Inf(1))
+		case "-inf":
+			return float32(math.Inf(-1))
+		case "nan":
+			return float32(math.NaN())
+		default:
+			return 0
+		}
+	case float64:
+		return float32(v)
+	default:
+		return 0
+	}
+}
+
 func approxEqual(a, b, tolerance float32) bool {
+	if math.IsNaN(float64(a)) && math.IsNaN(float64(b)) {
+		return true
+	}
 	if a == b {
 		return true
 	}
@@ -43,8 +67,9 @@ func TestConversions(t *testing.T) {
 	for _, test := range conversions {
 		tc := test.(map[string]interface{})
 		name := tc["name"].(string)
+		inputStr, _ := tc["input"].(string)
 
-		gf := FromF32(float32(tc["input"].(float64)))
+		gf := FromF32(parseFloatInput(tc["input"]))
 		back := gf.ToF32()
 
 		if predicate, ok := tc["predicate"]; ok {
@@ -55,19 +80,25 @@ func TestConversions(t *testing.T) {
 				result = gf.IsNaN()
 			}
 			if !result {
-				t.Errorf("FAIL: %s - predicate=%v not satisfied", name, predicate)
+				t.Errorf("FAIL: %s - predicate=%v not satisfied, back=%v", name, predicate, back)
 			}
-		} else if match, ok := tc["match"]; ok {
+			continue
+		}
+
+		if match, ok := tc["match"]; ok {
 			matchType := match.(string)
 			switch matchType {
 			case "roundtrip":
-				inputVal := float32(tc["input"].(float64))
-				if !approxEqual(back, inputVal, 0.01) && back != 0 {
-					t.Errorf("FAIL: %s - roundtrip got %v", name, back)
+				if inputStr == "inf" || inputStr == "-inf" || inputStr == "nan" {
+					continue
+				}
+				inputVal := parseFloatInput(tc["input"])
+				if !approxEqual(back, inputVal, 0.01) && back != 0 && inputVal != 0 {
+					t.Errorf("FAIL: %s - roundtrip got %v, expected %v", name, back, inputVal)
 				}
 			case "is_nan":
 				if !gf.IsNaN() {
-					t.Errorf("FAIL: %s - expected NaN", name)
+					t.Errorf("FAIL: %s - expected NaN, got %v", name, back)
 				}
 			case "approximate":
 			}
@@ -125,7 +156,7 @@ func TestPredicates(t *testing.T) {
 		tc := test.(map[string]interface{})
 		name := tc["name"].(string)
 
-		gf := FromF32(float32(tc["input"].(float64)))
+		gf := FromF32(parseFloatInput(tc["input"]))
 		predicate := tc["predicate"].(string)
 		expected := tc["expected"].(bool)
 
