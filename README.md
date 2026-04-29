@@ -25,7 +25,7 @@ All formats use **round-to-nearest-even** via `quantizeValue()` dispatch.
 ## Quick Start
 
 ```bash
-zig fetch --save https://github.com/gHashTag/zig-golden-float/archive/refs/tags/v2.0.0.tar.gz
+zig fetch --save https://github.com/gHashTag/zig-golden-float/archive/refs/tags/v2.1.0.tar.gz
 ```
 
 ```zig
@@ -112,7 +112,7 @@ Neural network architecture built on φ-math:
 | GF16 vs bf16 MSE ratio (uniform ±100) | 16.2× better |
 | GF16 sparsity at [-10,10] | 0% (no saturation) |
 | GFTernary sparsity (He init σ=0.05) | 100% |
-| Pearson r(φ-distance, MSE) | −0.42 |
+| Pearson r(φ-distance, MSE) | −0.34 |
 
 Full results in `.trinity/results/` and benches under `benches/`.
 
@@ -140,7 +140,7 @@ double trinity = goldenfloat_trinity(); // φ² + φ⁻² = 3
 
 ## Version
 
-**2.0.0** — see [CHANGELOG.md](CHANGELOG.md) for release history.
+**2.1.0** — see [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## License
 

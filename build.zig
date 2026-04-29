@@ -53,7 +53,7 @@ pub fn build(b: *std.Build) void {
         .name = "goldenfloat",
         .root_module = c_abi_module,
         .linkage = .dynamic,
-        .version = .{ .major = 2, .minor = 0, .patch = 0 },
+        .version = .{ .major = 2, .minor = 1, .patch = 0 },
     });
 
     b.installArtifact(c_abi_lib);
