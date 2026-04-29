@@ -332,11 +332,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_phi_quantize_within_range() {
-        // GF8 max_val = φ^7 ≈ 29.0 — should handle [-10, 10] without saturation
+    fn test_gf8_saturates_at_wide_range() {
         let max_exp_gf8: i32 = (1 << (3u32 - 1)) - 1; // = 3
-        let max_val_gf8 = PHI.powi(max_exp_gf8);
-        assert!(max_val_gf8 > 10.0, "GF8 max_val={} should cover [-10,10]", max_val_gf8);
+        let max_val_gf8 = PHI.powi(max_exp_gf8); // φ³ ≈ 4.236
+        assert!(max_val_gf8 < 10.0, "GF8 max_val={} should NOT cover [-10,10]", max_val_gf8);
+        assert!(max_val_gf8 > 1.0, "GF8 max_val={} should cover [-1,1]", max_val_gf8);
     }
 
     #[test]
