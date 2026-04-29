@@ -126,6 +126,16 @@ def _get_lib():
         _lib.gf16_fma.restype = _gf16_t
         _lib.gf16_fma.argtypes = [_gf16_t, _gf16_t, _gf16_t]
 
+        # Library info functions
+        _lib.goldenfloat_version.restype = ctypes.c_char_p
+        _lib.goldenfloat_version.argtypes = []
+
+        _lib.goldenfloat_phi.restype = ctypes.c_double
+        _lib.goldenfloat_phi.argtypes = []
+
+        _lib.goldenfloat_trinity.restype = ctypes.c_double
+        _lib.goldenfloat_trinity.argtypes = []
+
     return _lib
 
 
