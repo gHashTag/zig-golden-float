@@ -32,7 +32,7 @@ pub struct gf16_t(pub u16);
 // ═════════════════════════════════════════════════════════════════════
 
 pub const GF16_ZERO: gf16_t = gf16_t(0x0000);
-pub const GF16_ONE: gf16_t = gf16_t(0x3C00);
+pub const GF16_ONE: gf16_t = gf16_t(0x4000);
 pub const GF16_PINF: gf16_t = gf16_t(0x7E00);
 pub const GF16_NINF: gf16_t = gf16_t(0xFE00);
 pub const GF16_NAN: gf16_t = gf16_t(0x7E01);
@@ -91,6 +91,6 @@ mod tests {
     #[test]
     fn test_constants() {
         assert_eq!(GF16_ZERO.0, 0x0000);
-        assert_eq!(GF16_ONE.0, 0x3C00);
+        assert_eq!(GF16_ONE.0, 0x4000);
     }
 }

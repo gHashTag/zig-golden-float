@@ -102,7 +102,7 @@ impl Gf16 {
 pub const GF16_ZERO: u16 = 0x0000;
 
 /// One constant (1.0 in GF16)
-pub const GF16_ONE: u16 = 0x3C00;
+pub const GF16_ONE: u16 = 0x4000;
 
 /// Positive infinity
 pub const GF16_PINF: u16 = 0x7E00;

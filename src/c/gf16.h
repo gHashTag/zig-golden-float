@@ -64,7 +64,7 @@ typedef uint16_t gf16_t;
 #define GF16_ZERO   ((gf16_t)0x0000)
 
 /** One constant (1.0 in GF16) */
-#define GF16_ONE    ((gf16_t)0x3C00)
+#define GF16_ONE    ((gf16_t)0x4000)
 
 /** Positive infinity */
 #define GF16_PINF   ((gf16_t)0x7E00)

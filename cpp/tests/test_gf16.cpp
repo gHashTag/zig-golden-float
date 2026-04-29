@@ -47,15 +47,18 @@ bool test_conversions() {
 
     for (const auto& test : vectors["vectors"]["conversions"]) {
         std::string name = test["name"];
-        std::string input_str = test["input"];
 
         float input_val;
-        if (input_str == "inf") {
-            input_val = std::numeric_limits<float>::infinity();
-        } else if (input_str == "-inf") {
-            input_val = -std::numeric_limits<float>::infinity();
-        } else if (input_str == "nan") {
-            input_val = std::numeric_limits<float>::quiet_NaN();
+        std::string input_str;
+        if (test["input"].is_string()) {
+            input_str = test["input"];
+            if (input_str == "inf") {
+                input_val = std::numeric_limits<float>::infinity();
+            } else if (input_str == "-inf") {
+                input_val = -std::numeric_limits<float>::infinity();
+            } else if (input_str == "nan") {
+                input_val = std::numeric_limits<float>::quiet_NaN();
+            }
         } else {
             input_val = test["input"];
         }
@@ -154,15 +157,17 @@ bool test_predicates() {
 
     for (const auto& test : vectors["vectors"]["predicates"]) {
         std::string name = test["name"];
-        std::string input_str = test["input"];
 
         float input_val;
-        if (input_str == "inf") {
-            input_val = std::numeric_limits<float>::infinity();
-        } else if (input_str == "-inf") {
-            input_val = -std::numeric_limits<float>::infinity();
-        } else if (input_str == "nan") {
-            input_val = std::numeric_limits<float>::quiet_NaN();
+        if (test["input"].is_string()) {
+            std::string input_str = test["input"];
+            if (input_str == "inf") {
+                input_val = std::numeric_limits<float>::infinity();
+            } else if (input_str == "-inf") {
+                input_val = -std::numeric_limits<float>::infinity();
+            } else if (input_str == "nan") {
+                input_val = std::numeric_limits<float>::quiet_NaN();
+            }
         } else {
             input_val = test["input"];
         }

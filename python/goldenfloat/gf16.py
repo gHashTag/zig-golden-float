@@ -58,7 +58,7 @@ class Gf16:
 
     # Constants
     GF16_ZERO = 0x0000
-    GF16_ONE = 0x3C00
+    GF16_ONE = 0x4000
     GF16_PINF = 0x7E00
     GF16_NINF = 0xFE00
     GF16_NAN = 0x7E01
