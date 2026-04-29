@@ -22,6 +22,7 @@ endif()
 
 # Include directory for header-only wrapper
 include_directories(
+    "${CMAKE_SOURCE_DIR}/include"
     "${CMAKE_SOURCE_DIR}/../src/c"
     "${CMAKE_SOURCE_DIR}/../../src/c"
 )
