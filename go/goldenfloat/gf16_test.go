@@ -366,6 +366,16 @@ func testConstants(t *testing.T) bool {
 }
 
 // ============================================================================
+// Test Entry Points (Go requires Test* naming)
+// ============================================================================
+
+func TestConversions(t *testing.T) { testConversions(t) }
+func TestArithmetic(t *testing.T)  { testArithmetic(t) }
+func TestPredicates(t *testing.T)  { testPredicates(t) }
+func TestPhiMath(t *testing.T)     { testPhiMath(t) }
+func TestConstants(t *testing.T)   { testConstants(t) }
+
+// ============================================================================
 // Benchmarks
 // ============================================================================
 
