@@ -6,6 +6,7 @@
 //! - `zig build test` — Run all tests
 //! - `zig build shared` — Build libgoldenfloat.{so,dylib,dll}
 //! - `zig build c-abi-test` — Test C-ABI layer
+//! - `zig build bench-007b` — Run BENCH-007b φ-distance extended range
 
 const std = @import("std");
 
@@ -115,4 +116,20 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_tests.step);
     test_step.dependOn(&run_transcendent_tests.step);
     test_step.dependOn(&run_c_abi_tests.step);
+
+    // ─────────────────────────────────────────────────────────────────
+    // BENCH-007b: φ-Distance Extended Range [-10, 10]
+    // ─────────────────────────────────────────────────────────────────
+    const bench_007b_module = b.createModule(.{
+        .root_source_file = b.path("tests/bench_007b_phi_distance_extended.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const bench_007b_tests = b.addTest(.{
+        .name = "bench-007b",
+        .root_module = bench_007b_module,
+    });
+    const run_bench_007b = b.addRunArtifact(bench_007b_tests);
+    const bench_007b_step = b.step("bench-007b", "Run BENCH-007b: phi-distance extended range [-10,10]");
+    bench_007b_step.dependOn(&run_bench_007b.step);
 }
