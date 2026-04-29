@@ -62,6 +62,25 @@ pub const ternary_primitives = @import("src/ternary/bigint.zig");
 pub const math = @import("src/math/constants.zig");
 
 // ═══════════════════════════════════════════════════════════════════════
+// IGLA-GF16 MODULES (issue #3)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// IGLA-GF16 Trinity Constants + Architecture Dimensions
+pub const trinity = @import("src/trinity_constants.zig");
+
+/// φ-Sparse Attention with Fibonacci CA-mask
+pub const phi_attention = @import("src/phi_attention.zig");
+
+/// Trinity Weight Initialization (4 physics sectors)
+pub const trinity_init = @import("src/trinity_init.zig");
+
+/// φ-LR Schedule (warmup + φ-decay)
+pub const phi_schedule = @import("src/phi_schedule.zig");
+
+/// JEPA-T Predictor (Joint-Embedding Predictive Architecture)
+pub const jepa_t = @import("src/jepa_t.zig");
+
+// ═══════════════════════════════════════════════════════════════════════
 // TRINITY CONSTANTS (re-exported for convenience)
 // ═════════════════════════════════════════════════════════════════════════════════
 

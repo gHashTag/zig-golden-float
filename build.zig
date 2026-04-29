@@ -123,9 +123,30 @@ pub fn build(b: *std.Build) void {
     });
     const run_trinity_tests = b.addRunArtifact(trinity_tests);
 
+    const igla_modules = &[_]struct { name: []const u8, path: []const u8 }{
+        .{ .name = "phi-attention", .path = "src/phi_attention.zig" },
+        .{ .name = "trinity-init", .path = "src/trinity_init.zig" },
+        .{ .name = "phi-schedule", .path = "src/phi_schedule.zig" },
+        .{ .name = "jepa-t", .path = "src/jepa_t.zig" },
+        .{ .name = "igla-bench", .path = "benches/igla_gf16_bench.zig" },
+    };
+
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&run_tests.step);
     test_step.dependOn(&run_transcendent_tests.step);
     test_step.dependOn(&run_c_abi_tests.step);
     test_step.dependOn(&run_trinity_tests.step);
+
+    for (igla_modules) |mod| {
+        const m = b.createModule(.{
+            .root_source_file = b.path(mod.path),
+            .target = target,
+            .optimize = optimize,
+        });
+        const t = b.addTest(.{
+            .name = mod.name,
+            .root_module = m,
+        });
+        test_step.dependOn(&b.addRunArtifact(t).step);
+    }
 }
