@@ -303,21 +303,21 @@ public:
      * @brief Golden ratio φ constant
      */
     static constexpr double phi() noexcept {
-        return GF16_PHI;
+        return 1.6180339887498948;
     }
 
     /**
      * @brief φ² constant
      */
     static constexpr double phi_sq() noexcept {
-        return GF16_PHI_SQ;
+        return 2.6180339887498948;
     }
 
     /**
      * @brief 1/φ² constant
      */
     static constexpr double phi_inv_sq() noexcept {
-        return GF16_PHI_INV_SQ;
+        return 0.3819660112501051;
     }
 
     /**
