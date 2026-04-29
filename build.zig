@@ -56,13 +56,12 @@ pub fn build(b: *std.Build) void {
         .version = .{ .major = 1, .minor = 1, .patch = 0 },
     });
 
-    b.installArtifact(c_abi_lib);
+    const c_abi_install = b.installArtifact(c_abi_lib);
 
-    // Install C header alongside library
     const header_install = b.addInstallHeaderFile(b.path("src/c/gf16.h"), "gf16.h");
 
     const shared_step = b.step("shared", "Build C-ABI shared library (libgoldenfloat)");
-    shared_step.dependOn(&c_abi_lib.step);
+    shared_step.dependOn(&c_abi_install.step);
     shared_step.dependOn(&header_install.step);
 
     // ─────────────────────────────────────────────────────────────────
@@ -115,4 +114,37 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_tests.step);
     test_step.dependOn(&run_transcendent_tests.step);
     test_step.dependOn(&run_c_abi_tests.step);
+
+    // ─────────────────────────────────────────────────────────────────
+    // Benchmarks
+    // ─────────────────────────────────────────────────────────────────
+    const bench_008_module = b.createModule(.{
+        .root_source_file = b.path("benches/bench_008_fashion_mnist.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const bench_008 = b.addExecutable(.{
+        .name = "bench_008_fashion_mnist",
+        .root_module = bench_008_module,
+    });
+    const run_bench_008 = b.addRunArtifact(bench_008);
+    const bench_008_step = b.step("bench-008", "Run BENCH-008: Fashion-MNIST MLP Quantization Validation");
+    bench_008_step.dependOn(&run_bench_008.step);
+
+    const bench_009_module = b.createModule(.{
+        .root_source_file = b.path("benches/bench_009_transformer_attention.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const bench_009 = b.addExecutable(.{
+        .name = "bench_009_transformer_attention",
+        .root_module = bench_009_module,
+    });
+    const run_bench_009 = b.addRunArtifact(bench_009);
+    const bench_009_step = b.step("bench-009", "Run BENCH-009: Transformer Attention Pattern Analysis");
+    bench_009_step.dependOn(&run_bench_009.step);
+
+    const bench_step = b.step("bench", "Run all benchmarks");
+    bench_step.dependOn(&run_bench_008.step);
+    bench_step.dependOn(&run_bench_009.step);
 }
