@@ -8,6 +8,7 @@ package goldenfloat
 /*
 #cgo LDFLAGS: -L../../zig-out/lib -lgoldenfloat
 #cgo CFLAGS: -I../../src/c
+#include "gf16.h"
 */
 import "C"
 

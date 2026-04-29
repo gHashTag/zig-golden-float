@@ -19,7 +19,9 @@ def _find_library():
     # Check zig-out/lib first
     search_paths = [
         os.path.join(os.path.dirname(__file__), "..", "..", "zig-out", "lib"),
+        os.path.join(os.path.dirname(__file__), "..", "..", "zig-out", "bin"),
         os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "zig-out", "lib"),
+        os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "zig-out", "bin"),
     ]
 
     # Add current directory for development
