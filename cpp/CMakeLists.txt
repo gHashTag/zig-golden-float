@@ -8,12 +8,12 @@ project(goldenfloat VERSION 1.0.0 LANGUAGES CXX)
 
 # Find GoldenFloat shared library
 find_library(GOLDENFLOAT NAMES goldenfloat PATHS
+    "$ENV{GOLDENFLOAT_LIB_DIR}"
     "${CMAKE_SOURCE_DIR}/../../zig-out/lib"
     "${CMAKE_SOURCE_DIR}/../zig-out/lib"
     "${CMAKE_SOURCE_DIR}/../../zig-out/bin"
     "${CMAKE_SOURCE_DIR}/../../build"
     "${CMAKE_SOURCE_DIR}/../../zig-out/lib"
-    NO_DEFAULT_PATH
 )
 
 if(NOT GOLDENFLOAT)
