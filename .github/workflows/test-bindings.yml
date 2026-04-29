@@ -36,7 +36,10 @@ jobs:
           version: 0.15.2
 
       - name: Build shared library
-        run: zig build shared
+        run: |
+          zig build shared
+          echo "GOLDENFLOAT_LIB_DIR=$PWD/zig-out/lib" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$PWD/zig-out/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> $GITHUB_ENV
 
       - name: Test Zig
         if: matrix.language == 'zig'
@@ -77,6 +80,7 @@ jobs:
         if: matrix.language == 'cpp'
         run: |
           cd cpp
+          rm -rf build
           mkdir -p build
           cmake -S . -B build
           cmake --build build --target test_gf16

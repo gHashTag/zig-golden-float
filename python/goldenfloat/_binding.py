@@ -24,6 +24,10 @@ def _find_library():
         os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "zig-out", "bin"),
     ]
 
+    env_dir = os.environ.get("GOLDENFLOAT_LIB_DIR")
+    if env_dir:
+        search_paths.insert(0, env_dir)
+
     # Add current directory for development
     search_paths.append(os.getcwd())
 
