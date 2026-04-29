@@ -21,7 +21,7 @@ fn main() {
         let back = gf16_to_f32(pi);
         println!("Conversion:");
         println!("  Original: {:.5}", 3.14159);
-        println!("  GF16:     0x{:04X}", pi);
+        println!("  GF16:     0x{:04X}", pi.0);
         println!("  Back:     {:.5}", back);
         println!("  Error:    {:.2}%\n", (3.14159 - back) / 3.14159 * 100.0);
 
@@ -46,7 +46,7 @@ fn main() {
 
         println!("φ-Quantization:");
         println!("  Original:     {:.5}", weight);
-        println!("  Quantized:    0x{:04X}", quantized);
+        println!("  Quantized:    0x{:04X}", quantized.0);
         println!("  Dequantized:  {:.5}\n", dequantized);
 
         // Test predicates
@@ -79,10 +79,10 @@ fn main() {
         println!("  1.5 * 2.5 + 4.0 = {:.2} (expected 7.75)\n", gf16_to_f32(fma_result));
 
         // Test bit extraction
-        println!("Bit Extraction (GF16_ONE = 0x{:04X}):", GF16_ONE);
-        println!("  GF16_SIGN(GF16_ONE):   {}", GF16_SIGN(GF16_ONE));
-        println!("  GF16_EXP(GF16_ONE):    {}", GF16_EXP(GF16_ONE));
-        println!("  GF16_MANT(GF16_ONE):   {}\n", GF16_MANT(GF16_ONE));
+        println!("Bit Extraction (GF16_ONE = 0x{:04X}):", GF16_ONE.0);
+        println!("  GF16_SIGN(GF16_ONE):   {}", (GF16_ONE.0 >> 15) & 1);
+        println!("  GF16_EXP(GF16_ONE):    {}", (GF16_ONE.0 >> 9) & 0x3F);
+        println!("  GF16_MANT(GF16_ONE):   {}\n", GF16_ONE.0 & 0x1FF);
 
         // Test library info
         let version = std::ffi::CStr::from_ptr(goldenfloat_version() as *const i8);
