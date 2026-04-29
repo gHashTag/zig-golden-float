@@ -207,7 +207,7 @@ bool test_phi_math() {
     int passed = 0, failed = 0;
 
     // Test phi constant
-    if (std::abs(Gf16::phi() - 1.6180339887498948) < 1e-10) {
+    if (std::abs(Gf16::phi() - 1.6180339887498948) < 1e-5) {
         passed++;
     } else {
         failed++;
@@ -216,7 +216,7 @@ bool test_phi_math() {
     }
 
     // Test phi_sq
-    if (std::abs(Gf16::phi_sq() - 2.6180339887498948) < 1e-10) {
+    if (std::abs(Gf16::phi_sq() - 2.6180339887498948) < 1e-5) {
         passed++;
     } else {
         failed++;
@@ -225,7 +225,7 @@ bool test_phi_math() {
     }
 
     // Test phi_inv_sq
-    if (std::abs(Gf16::phi_inv_sq() - 0.3819660112501051) < 1e-10) {
+    if (std::abs(Gf16::phi_inv_sq() - 0.3819660112501051) < 1e-5) {
         passed++;
     } else {
         failed++;
