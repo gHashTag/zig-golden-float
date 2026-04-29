@@ -1,8 +1,8 @@
 # GoldenFloat Family: φ-Optimized Floating-Point Formats
 
-**Version:** 1.0
-**Date:** 2026-04-02
-**Status:** Format Specification
+**Version:** 1.1
+**Date:** 2026-04-02 / Updated: 2026-04-29
+**Status:** Format Specification (GF16 Production, GF8 Experimental, Others Proposal Only)
 
 ---
 
@@ -100,37 +100,56 @@ Special values:
 
 ## 3. GoldenFloat Family Extension
 
+> **IMPLEMENTATION STATUS NOTICE:** Only GF16 is fully implemented. Other formats listed below are proposals/specifications only.
+
 ### 3.1 Proposed Family Members
 
-| Format | Bits | Layout | Bias | Use Case |
-|--------|------|--------|------|----------|
-| GF8 | 8 | [1][4][3] | 7 | Extreme compression |
-| GF12 | 12 | [1][5][6] | 15 | Embedded ML |
-| **GF16** | **16** | **[1][6][9]** | **31** | **Standard ML** |
-| GF24 | 24 | [1][7][16] | 63 | High-precision training |
-| GF32 | 32 | [1][8][23] | 127 | FP32 replacement |
+| Format | Bits | Layout | Bias | Implementation Status |
+|--------|------|--------|------|----------------------|
+| GF8 | 8 | [sign:1][exp:3][mant:4] | 7 | 🧪 **Experimental** — limited range [0.0078, 1.9375], not suitable for LLM |
+| GF12 | 12 | [1][5][6] | 15 | ❌ **Proposal only** — no implementation |
+| **GF16** | **16** | **[1][6][9]** | **31** | ✅ **Production** — BENCH-001–006 complete |
+| GF24 | 24 | [1][7][16] | 63 | ❌ **Proposal only** — no implementation |
+| GF32 | 32 | [1][8][23] | 127 | ❌ **Specification only** — no implementation |
 
-### 3.2 GF8 (8-bit) Specification
+### 3.2 GF8 (8-bit) — Experimental Status
 
 ```
-GF8: [sign:1][exp:4][mant:3]
+GF8: [sign:1][exp:3][mant:4]
 ```
 
+**Current Implementation:**
 - Exponent bias: 7
-- Special encoding: exp=15 → Inf/NaN
-- No subnormals
-- Target: LLM quantization, edge inference
+- Special encoding: exp=7 with mantissa=0 → max normal (1.9375)
+- **Actual range:** [~0.0078, 1.9375]
+- **Test status:** 8/8 tests passing (basic roundtrip, clamping)
 
-### 3.3 GF32 (32-bit) Specification
+**Known Limitations:**
+- Very narrow range (max value = 1.9375) — unsuitable for LLM quantization
+- No benchmark suite (BENCH-001 equivalent)
+- No hardware synthesis results
+
+**Note:** The original research document incorrectly listed GF8 target as "LLM quantization, edge inference" — this is **not achievable** with the current narrow range without normalization/rescaling.
+
+### 3.3 GF32 (32-bit) — Specification Only
 
 ```
 GF32: [sign:1][exp:8][mant:23]
 ```
 
+**Status:** ❌ Not implemented — specification only.
+
+**Proposed Design:**
 - Exponent bias: 127
 - Same layout as IEEE FP32, but φ-optimized operations
 - φ-quantization for initialization and training
 - Target: Drop-in FP32 replacement with better convergence
+
+**Required Work:**
+- Create `specs/gf32.tri`
+- Implement operations
+- Run BENCH-001–006
+- Validate against f32 baseline
 
 ---
 
@@ -236,11 +255,12 @@ Shared `vectors.json` with 33 entries covering:
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
 | 0 | Competitive analysis | ✅ Complete |
-| 1 | GF16 specification | ✅ Complete |
-| 2 | MNIST/CIFAR-10 benchmarks | 🔄 In Progress |
-| 3 | FPGA synthesis via VIBEE | ⏳ Planned |
-| 4 | GF8/GF32 extensions | ⏳ Planned |
-| 5 | Academic publication | ⏳ Planned |
+| 1 | GF16 specification + BENCH-001–006 | ✅ Complete |
+| 2 | GF8 experimental implementation | ✅ Complete (8/8 tests, limited range) |
+| 3 | GF8 benchmark suite | ❌ Not started |
+| 4 | FPGA synthesis via VIBEE | ⏳ Planned |
+| 5 | GF32 specification + implementation | ❌ Not started |
+| 6 | Academic publication | ⏳ Planned |
 
 ---
 
@@ -371,5 +391,5 @@ double   goldenfloat_trinity(void);
 
 ---
 
-**Document Status:** ✅ Complete — Phase 0 of research roadmap
-**Next:** Benchmarking phase — MNIST/CIFAR-10 accuracy curves
+**Document Status:** ✅ Updated — v1.1 reflects honest implementation status
+**Next:** GF8 benchmark suite or GF32 specification (resources permitting)
