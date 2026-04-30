@@ -3,35 +3,38 @@
 // Provides FFI bindings to Zig-compiled golden-float binary
 // Downloads the appropriate binary from GitHub releases
 
+use std::process::Command;
+
 pub const VERSION: &str = "1.0.0";
 pub const GITHUB_RELEASES: &str = "https://github.com/gHashTag/zig-golden-float/releases/download";
 
-#[cfg(target_os = "windows")]
-use std::os::windows::process::Command;
-
 /// Get binary path for current platform
-pub fn get_binary_path() -> std::path.PathBuf {
+pub fn get_binary_path() -> std::path::PathBuf {
     let bin_name = "golden-float";
-    let mut path = std::env::var("HOME").unwrap();
-    path.push(".golden-float");
-    path.push(bin_name);
+    let mut path = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    path.push_str(".golden-float");
+    path.push_str(bin_name);
 
-    #[cfg(windows)]
+    #[cfg(target_os = "windows")]
     {
-        path.set_extension("exe");
+        path.push_str(".exe");
     }
 
-    path
+    std::path::PathBuf::from(path)
 }
 
 /// Launch golden-float binary
 pub fn run_golden_float(args: &[&str]) -> std::process::Child {
     let binary = get_binary_path();
 
-    let cmd = Command::new(&binary);
-    cmd.args(args);
+    Command::new(&binary)
+        .args(args)
+        .spawn()
+        .expect("Failed to spawn golden-float binary")
+}
 
-    cmd.spawn().expect("Failed to spawn golden-float binary")
+fn main() {
+    println!("GoldenFloat v{}", VERSION);
 }
 
 #[cfg(test)]

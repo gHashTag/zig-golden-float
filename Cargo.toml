@@ -1,6 +1,7 @@
 [package]
 name = "golden-float"
 version = "2.1.0"
+edition = "2021"
 description = "GoldenFloat — φ-optimized ML number formats: GF16/fp16/bf16 codecs, FMA, IGLA architecture, ternary, VSA"
 license = "MIT"
 repository = "https://github.com/gHashTag/zig-golden-float"
@@ -14,9 +15,15 @@ readme = "README.md"
 reqwest = { version = "0.12", features = ["blocking"] }
 
 [dependencies]
+rand = { version = "0.8", features = ["std"] }
+
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
 [[bin]]
 name = "golden-float"
 path = "src/main.rs"
+
+[[bin]]
+name = "phd-benchmarks"
+path = "src/phd/main.rs"
