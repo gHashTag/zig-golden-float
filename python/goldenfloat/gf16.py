@@ -205,7 +205,7 @@ class Gf16:
     @classmethod
     def one(cls) -> "Gf16":
         """One constant."""
-        return cls(cls.GF16_ONE)
+        return cls.from_f32(1.0)
 
     @classmethod
     def p_inf(cls) -> "Gf16":

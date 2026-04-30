@@ -53,7 +53,7 @@ pub fn build(b: *std.Build) void {
         .name = "goldenfloat",
         .root_module = c_abi_module,
         .linkage = .dynamic,
-        .version = .{ .major = 1, .minor = 1, .patch = 0 },
+        .version = .{ .major = 2, .minor = 1, .patch = 0 },
     });
 
     b.installArtifact(c_abi_lib);
@@ -62,7 +62,7 @@ pub fn build(b: *std.Build) void {
     const header_install = b.addInstallHeaderFile(b.path("src/c/gf16.h"), "gf16.h");
 
     const shared_step = b.step("shared", "Build C-ABI shared library (libgoldenfloat)");
-    shared_step.dependOn(&c_abi_lib.step);
+    shared_step.dependOn(&b.addInstallArtifact(c_abi_lib, .{}).step);
     shared_step.dependOn(&header_install.step);
 
     // ─────────────────────────────────────────────────────────────────
@@ -111,10 +111,59 @@ pub fn build(b: *std.Build) void {
 
     const run_tests = b.addRunArtifact(formats_tests);
     const run_transcendent_tests = b.addRunArtifact(transcendent_tests);
+
+    const trinity_tests_root = b.createModule(.{
+        .root_source_file = b.path("src/trinity_constants.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const trinity_tests = b.addTest(.{
+        .name = "trinity-constants-tests",
+        .root_module = trinity_tests_root,
+    });
+    const run_trinity_tests = b.addRunArtifact(trinity_tests);
+
+    const phi_attention_tests_root = b.createModule(.{
+        .root_source_file = b.path("src/phi_attention.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const phi_attention_tests = b.addTest(.{
+        .name = "phi-attention-tests",
+        .root_module = phi_attention_tests_root,
+    });
+    const run_phi_attention_tests = b.addRunArtifact(phi_attention_tests);
+
+    const trinity_init_tests_root = b.createModule(.{
+        .root_source_file = b.path("src/trinity_init.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const trinity_init_tests = b.addTest(.{
+        .name = "trinity-init-tests",
+        .root_module = trinity_init_tests_root,
+    });
+    const run_trinity_init_tests = b.addRunArtifact(trinity_init_tests);
+
+    const jepa_t_tests_root = b.createModule(.{
+        .root_source_file = b.path("src/jepa_t.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const jepa_t_tests = b.addTest(.{
+        .name = "jepa-t-tests",
+        .root_module = jepa_t_tests_root,
+    });
+    const run_jepa_t_tests = b.addRunArtifact(jepa_t_tests);
+
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&run_tests.step);
     test_step.dependOn(&run_transcendent_tests.step);
     test_step.dependOn(&run_c_abi_tests.step);
+    test_step.dependOn(&run_trinity_tests.step);
+    test_step.dependOn(&run_phi_attention_tests.step);
+    test_step.dependOn(&run_trinity_init_tests.step);
+    test_step.dependOn(&run_jepa_t_tests.step);
 
     // ─────────────────────────────────────────────────────────────────
     // Benchmark — Format Analysis (BENCH-010)
@@ -135,4 +184,20 @@ pub fn build(b: *std.Build) void {
     const run_bench_010 = b.addRunArtifact(bench_010);
     const bench_010_step = b.step("bench-010", "Run BENCH-010 format analysis");
     bench_010_step.dependOn(&run_bench_010.step);
+
+    // ─────────────────────────────────────────────────────────────────
+    // Benchmark — IGLA-GF16 architecture verification (Module 7)
+    // ─────────────────────────────────────────────────────────────────
+    const igla_bench_module = b.createModule(.{
+        .root_source_file = b.path("benches/igla_gf16_bench.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const igla_bench = b.addExecutable(.{
+        .name = "igla_gf16_bench",
+        .root_module = igla_bench_module,
+    });
+    const run_igla_bench = b.addRunArtifact(igla_bench);
+    const igla_bench_step = b.step("bench-igla", "Run IGLA-GF16 architecture verification (Module 7)");
+    igla_bench_step.dependOn(&run_igla_bench.step);
 }

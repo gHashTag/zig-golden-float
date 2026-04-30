@@ -34,6 +34,7 @@ struct FormatSpec {
 }
 
 const FORMATS: &[FormatSpec] = &[
+    FormatSpec { name: "f32",       exp_bits: 8,  mantissa_bits: 23, phi_distance: 0.000 },
     FormatSpec { name: "GF8",       exp_bits: 3,  mantissa_bits: 4,  phi_distance: 0.132 },
     FormatSpec { name: "GF16",      exp_bits: 6,  mantissa_bits: 9,  phi_distance: 0.049 },
     FormatSpec { name: "GF32",      exp_bits: 13, mantissa_bits: 18, phi_distance: 0.340 },
@@ -123,6 +124,7 @@ fn run_benchmark(spec: &FormatSpec, values: &[f64], range_label: &'static str) -
 
     for &v in values {
         let quantized = match spec.name {
+            "f32" => v,
             "fp16" => ieee_fp16_quantize(v),
             "bf16" => bf16_quantize(v),
             _ => phi_quantize(v, spec.exp_bits, spec.mantissa_bits),
@@ -172,8 +174,45 @@ fn phi_spaced(start: f64, end: f64, n: usize) -> Vec<f64> {
 // ── Main ────────────────────────────────────────────────────────────────────
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let format_filter: Option<Vec<&str>> = if args.len() > 1 {
+        let mut found = false;
+        for arg in &args[1..] {
+            if arg.starts_with("--formats=") {
+                found = true;
+                break;
+            }
+        }
+        if found {
+            let formats_arg = args.iter().find(|a| a.starts_with("--formats=")).unwrap();
+            let formats_str = &formats_arg["--formats=".len()..];
+            Some(formats_str.split(',').map(|s| s.trim()).collect())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let active_formats: Vec<&FormatSpec> = if let Some(ref filter) = format_filter {
+        FORMATS.iter().filter(|f| filter.contains(&f.name)).collect()
+    } else {
+        FORMATS.iter().collect()
+    };
+
+    if active_formats.is_empty() {
+        eprintln!("No matching formats. Available: f32, fp16, gf8, GF8, GF16, GF32, GF64, bf16, GFTernary");
+        eprintln!("Usage: {} [--formats=f32,fp16,gf8,gf16]", args[0]);
+        std::process::exit(1);
+    }
+
     println!("BENCH-007b: φ-Distance Extended Range Benchmark");
     println!("================================================");
+    if let Some(ref filter) = format_filter {
+        println!("Formats filter: {}", filter.join(","));
+    } else {
+        println!("Formats: all");
+    }
     println!("Cross-reference: whitepaper.md §9.5, issue #12");
     println!();
 
@@ -202,7 +241,7 @@ fn main() {
             "Format", "MSE", "MAE", "MaxAbsErr", "φ-dist", "InRange");
         println!("{:-<70}", "");
 
-        let mut range_results: Vec<BenchResult> = FORMATS.iter()
+        let mut range_results: Vec<BenchResult> = active_formats.iter()
             .map(|spec| run_benchmark(spec, &values, label))
             .collect();
 
@@ -293,11 +332,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_phi_quantize_within_range() {
-        // GF8 max_val = φ^7 ≈ 29.0 — should handle [-10, 10] without saturation
+    fn test_gf8_saturates_at_wide_range() {
         let max_exp_gf8: i32 = (1 << (3u32 - 1)) - 1; // = 3
-        let max_val_gf8 = PHI.powi(max_exp_gf8);
-        assert!(max_val_gf8 > 10.0, "GF8 max_val={} should cover [-10,10]", max_val_gf8);
+        let max_val_gf8 = PHI.powi(max_exp_gf8); // φ³ ≈ 4.236
+        assert!(max_val_gf8 < 10.0, "GF8 max_val={} should NOT cover [-10,10]", max_val_gf8);
+        assert!(max_val_gf8 > 1.0, "GF8 max_val={} should cover [-1,1]", max_val_gf8);
     }
 
     #[test]

@@ -100,8 +100,8 @@ public:
     /**
      * @brief One constant
      */
-    static constexpr Gf16 one() noexcept {
-        return Gf16(GF16_ONE);
+    static Gf16 one() noexcept {
+        return from_f32(1.0f);
     }
 
     /**

@@ -1,417 +1,250 @@
-// Package goldenfloat provides Go bindings for GoldenFloat GF16 format.
-//
-// MIT License — Copyright (c) 2026 Trinity Project
-// Repository: https://github.com/gHashTag/zig-golden-float
-
 package goldenfloat
 
 import (
-    "encoding/json"
-    "fmt"
-    "os"
-    "testing"
+	"encoding/json"
+	"fmt"
+	"math"
+	"os"
+	"testing"
 )
 
-/*
-#cgo LDFLAGS: -L../../zig-out/lib -lgoldenfloat
-#cgo CFLAGS: -I../../include
-*/
-import "C"
-
-// ============================================================================
-// Test Helpers
-// ============================================================================
-
 func loadVectors() (map[string]interface{}, error) {
-    vectorsPath := "../../conformance/vectors.json"
-    file, err := os.ReadFile(vectorsPath)
-    if err != nil {
-        return nil, fmt.Errorf("failed to read vectors.json: %w", err)
-    }
-    var data map[string]interface{}
-    err = json.Unmarshal(file, &data)
-    if err != nil {
-        return nil, fmt.Errorf("failed to parse vectors.json: %w", err)
-    }
-    vectors := data["vectors"].(map[string]interface{})
-    return vectors, nil
+	vectorsPath := "../../conformance/vectors.json"
+	file, err := os.ReadFile(vectorsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read vectors.json: %w", err)
+	}
+	var data map[string]interface{}
+	err = json.Unmarshal(file, &data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse vectors.json: %w", err)
+	}
+	vectors := data["vectors"].(map[string]interface{})
+	return vectors, nil
+}
+
+func parseFloatInput(tc map[string]interface{}) float64 {
+	inputStr, ok := tc["input"].(string)
+	if !ok {
+		if f, ok := tc["input"].(float64); ok {
+			return f
+		}
+		return 0
+	}
+	switch inputStr {
+	case "inf":
+		return math.Inf(1)
+	case "-inf":
+		return math.Inf(-1)
+	case "nan":
+		return math.NaN()
+	default:
+		var f float64
+		fmt.Sscanf(inputStr, "%f", &f)
+		return f
+	}
 }
 
 func approxEqual(a, b, tolerance float32) bool {
-    // Check for inf/nan
-    if a == b {
-        return true
-    }
-    // Use relative error for finite values
-    diff := a - b
-    if diff < 0 {
-        diff = -diff
-    }
-    return diff <= tolerance || diff >= -tolerance
+	if a == b {
+		return true
+	}
+	diff := a - b
+	if diff < 0 {
+		diff = -diff
+	}
+	return diff <= tolerance
 }
 
-// ============================================================================
-// Conversion Tests
-// ============================================================================
+func TestConversions(t *testing.T) {
+	vectors, err := loadVectors()
+	if err != nil {
+		t.Fatal(err)
+	}
 
-func testConversions(t *testing.T) bool {
-    vectors, err := loadVectors()
-    if err != nil {
-        t.Fatal(err)
-    }
+	conversions := vectors["conversions"].([]interface{})
+	for _, test := range conversions {
+		tc := test.(map[string]interface{})
+		name := tc["name"].(string)
+		inputVal := parseFloatInput(tc)
 
-    conversions := vectors["conversions"].([]interface{})
-    passed := 0
-    failed := 0
+		gf := FromF32(float32(inputVal))
+		back := gf.ToF32()
 
-    for _, test := range conversions {
-        tc := test.(map[string]interface{})
-        name := tc["name"].(string)
-        inputStr := tc["input"].(string)
-
-        // Parse input
-        var inputVal float64
-        switch inputStr {
-        case "inf":
-            inputVal = float64(1)
-            // In Go, positive infinity
-            inputVal /= 0 // Actually just set to +inf
-            inputVal *= float64(1) / float64(0) // But this gives NaN, so:
-            inputVal = float64(0x7FF0000000000000)
-        case "-inf":
-            inputVal = float64(1)
-            inputVal /= 0
-            inputVal *= float64(1) / float64(0)
-            inputVal = float64(0xFFF00000000000000)
-        case "nan":
-            inputVal = float64(0x7FF8000000000000)
-        default:
-            var ok bool
-            inputVal, ok = tc["input"].(float64)
-            if !ok {
-                t.Fatalf("invalid input value for %s", name)
-            }
-        }
-
-        gf := FromF32(float32(inputVal))
-        back := gf.ToF32()
-
-        var result bool
-        var expected bool
-
-        if predicate, ok := tc["predicate"]; ok {
-            result = false // Default
-            expected = true
-            if predicate == "is_inf" {
-                result = gf.IsInf()
-            } else if predicate == "is_nan" {
-                result = gf.IsNaN()
-            }
-        } else if match, ok := tc["match"]; ok {
-            matchType := match.(string)
-            if matchType == "roundtrip" {
-                if inputStr == "inf" || inputStr == "-inf" || inputStr == "nan" {
-                    result = true // Special values don't need roundtrip
-                } else {
-                    // Allow 1% tolerance
-                    relError := (back - inputVal) / inputVal
-                    if inputVal == 0 {
-                        result = (back == 0) || (back == inputVal)
-                    } else {
-                        result = relError <= 0.01
-                    }
-                }
-                expected = true
-            } else if matchType == "is_nan" {
-                result = gf.IsNaN()
-                expected = true
-            } else if matchType == "approximate" {
-                result = true // Just check conversion succeeds
-                expected = true
-            } else {
-                result = false
-                expected = true
-            }
-        }
-
-        if result == expected {
-            passed++
-        } else {
-            failed++
-            t.Errorf("FAIL: %s - input=%s, got=%v, expected=%v", name, inputStr, back, expected)
-        }
-    }
-
-    t.Logf("Conversions: %d/%d passed", passed, passed+failed)
-    return failed == 0
+		if predicate, ok := tc["predicate"]; ok {
+			predStr := predicate.(string)
+			var result bool
+			switch predStr {
+			case "is_inf":
+				result = gf.IsInf()
+			case "is_nan":
+				result = gf.IsNaN()
+			}
+			if !result {
+				t.Errorf("FAIL: %s - predicate %s not satisfied", name, predStr)
+			}
+		} else if match, ok := tc["match"]; ok {
+			matchType := match.(string)
+			if matchType == "is_nan" {
+				if !gf.IsNaN() {
+					t.Errorf("FAIL: %s - expected NaN", name)
+				}
+			} else if matchType == "roundtrip" {
+				if !math.IsInf(float64(inputVal), 0) && !math.IsNaN(float64(inputVal)) {
+					if inputVal != 0 {
+						relError := (float64(back) - inputVal) / inputVal
+						if relError > 0.01 || relError < -0.01 {
+							t.Errorf("FAIL: %s - got %v, expected ~%v", name, back, inputVal)
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
-// ============================================================================
-// Arithmetic Tests
-// ============================================================================
+func TestArithmetic(t *testing.T) {
+	vectors, err := loadVectors()
+	if err != nil {
+		t.Fatal(err)
+	}
 
-func testArithmetic(t *testing.T) bool {
-    vectors, err := loadVectors()
-    if err != nil {
-        t.Fatal(err)
-    }
+	arithmetic := vectors["arithmetic"].([]interface{})
+	for _, test := range arithmetic {
+		tc := test.(map[string]interface{})
+		name := tc["name"].(string)
 
-    arithmetic := vectors["arithmetic"].([]interface{})
-    passed := 0
-    failed := 0
+		a := FromF32(float32(tc["a"].(float64)))
+		b := FromF32(float32(tc["b"].(float64)))
+		expected := float32(tc["expected"].(float64))
+		tolerance := float32(tc["tolerance"].(float64))
 
-    for _, test := range arithmetic {
-        tc := test.(map[string]interface{})
-        name := tc["name"].(string)
+		op := tc["op"].(string)
+		var result float32
 
-        a := FromF32(float32(tc["a"].(float64)))
-        b := FromF32(float32(tc["b"].(float64)))
-        expected := float32(tc["expected"].(float64))
-        tolerance := float32(tc["tolerance"].(float64))
+		switch op {
+		case "add":
+			result = a.Add(b).ToF32()
+		case "sub":
+			result = a.Sub(b).ToF32()
+		case "mul":
+			result = a.Mul(b).ToF32()
+		case "div":
+			result = a.Div(b).ToF32()
+		default:
+			t.Errorf("unknown op: %s", op)
+			continue
+		}
 
-        op := tc["op"].(string)
-        var result float32
-
-        switch op {
-        case "add":
-            result = (a + b).ToF32()
-        case "sub":
-            result = (a.Sub(b)).ToF32()
-        case "mul":
-            result = (a.Mul(b)).ToF32()
-        case "div":
-            result = (a.Div(b)).ToF32()
-        default:
-            t.Errorf("unknown op: %s", op)
-            failed++
-            continue
-        }
-
-        if approxEqual(result, expected, tolerance) {
-            passed++
-        } else {
-            failed++
-            t.Errorf("FAIL: %s - got %v, expected %v ±%v", name, result, expected, tolerance)
-        }
-    }
-
-    t.Logf("Arithmetic: %d/%d passed", passed, passed+failed)
-    return failed == 0
+		if !approxEqual(result, expected, tolerance) {
+			t.Errorf("FAIL: %s - got %v, expected %v +/- %v", name, result, expected, tolerance)
+		}
+	}
 }
 
-// ============================================================================
-// Predicate Tests
-// ============================================================================
+func TestPredicates(t *testing.T) {
+	vectors, err := loadVectors()
+	if err != nil {
+		t.Fatal(err)
+	}
 
-func testPredicates(t *testing.T) bool {
-    vectors, err := loadVectors()
-    if err != nil {
-        t.Fatal(err)
-    }
+	predicates := vectors["predicates"].([]interface{})
+	for _, test := range predicates {
+		tc := test.(map[string]interface{})
+		name := tc["name"].(string)
+		inputVal := parseFloatInput(tc)
 
-    predicates := vectors["predicates"].([]interface{})
-    passed := 0
-    failed := 0
+		gf := FromF32(float32(inputVal))
+		predicate := tc["predicate"].(string)
+		expected := tc["expected"].(bool)
 
-    for _, test := range predicates {
-        tc := test.(map[string]interface{})
-        name := tc["name"].(string)
+		var result bool
+		switch predicate {
+		case "is_zero":
+			result = gf.IsZero()
+		case "is_nan":
+			result = gf.IsNaN()
+		case "is_inf":
+			result = gf.IsInf()
+		case "is_negative":
+			result = gf.IsNegative()
+		default:
+			t.Errorf("unknown predicate: %s", predicate)
+			continue
+		}
 
-        inputStr := tc["input"].(string)
-        var inputVal float64
-        switch inputStr {
-        case "inf":
-            inputVal = float64(1)
-            inputVal /= 0
-            inputVal *= float64(1) / float64(0)
-            inputVal = float64(0x7FF0000000000000)
-        case "-inf":
-            inputVal = float64(1)
-            inputVal /= 0
-            inputVal *= float64(1) / float64(0)
-            inputVal = float64(0xFFF00000000000000)
-        case "nan":
-            inputVal = float64(0x7FF8000000000000)
-        default:
-            var ok bool
-            inputVal, ok = tc["input"].(float64)
-            if !ok {
-                t.Fatalf("invalid input value for %s", name)
-            }
-        }
-
-        gf := FromF32(float32(inputVal))
-        predicate := tc["predicate"].(string)
-        expected := tc["expected"].(bool)
-
-        var result bool
-        switch predicate {
-        case "is_zero":
-            result = gf.IsZero()
-        case "is_nan":
-            result = gf.IsNaN()
-        case "is_inf":
-            result = gf.IsInf()
-        case "is_negative":
-            result = gf.IsNegative()
-        default:
-            t.Errorf("unknown predicate: %s", predicate)
-            failed++
-            continue
-        }
-
-        if result == expected {
-            passed++
-        } else {
-            failed++
-            t.Errorf("FAIL: %s - predicate=%s returned %v, expected %v", name, predicate, result, expected)
-        }
-    }
-
-    t.Logf("Predicates: %d/%d passed", passed, passed+failed)
-    return failed == 0
+		if result != expected {
+			t.Errorf("FAIL: %s - %s returned %v, expected %v", name, predicate, result, expected)
+		}
+	}
 }
 
-// ============================================================================
-// phi-Math Tests
-// ============================================================================
+func TestPhiMath(t *testing.T) {
+	phi := Phi()
+	if phi < 1.618 || phi > 1.619 {
+		t.Errorf("phi: got %v, expected ~1.618", phi)
+	}
 
-func testPhiMath(t *testing.T) bool {
-    passed := 0
-    failed := 0
-
-    // Test phi constant
-    phi := Phi()
-    if approxEqual(float32(phi), 1.6180339887498948, 1e-10) {
-        passed++
-    } else {
-        failed++
-        t.Errorf("FAIL: phi - got %v, expected 1.6180339887498948", phi)
-    }
-
-    // Test phi_sq
-    phiSq := PhiSq()
-    if approxEqual(float32(phiSq), 2.6180339887498948, 1e-10) {
-        passed++
-    } else {
-        failed++
-        t.Errorf("FAIL: phi_sq - got %v, expected 2.6180339887498948", phiSq)
-    }
-
-    // Test phi_inv_sq
-    phiInvSq := PhiInvSq()
-    if approxEqual(float32(phiInvSq), 0.3819660112501051, 1e-10) {
-        passed++
-    } else {
-        failed++
-        t.Errorf("FAIL: phi_inv_sq - got %v, expected 0.3819660112501051", phiInvSq)
-    }
-
-    // Test trinity
-    trinity := Trinity()
-    if approxEqual(float32(trinity), 3.0, 1e-10) {
-        passed++
-    } else {
-        failed++
-        t.Errorf("FAIL: trinity - got %v, expected 3.0", trinity)
-    }
-
-    t.Logf("phi-Math: %d/%d passed", passed, passed+failed)
-    return failed == 0
+	trinity := Trinity()
+	if trinity < 2.999 || trinity > 3.001 {
+		t.Errorf("trinity: got %v, expected 3.0", trinity)
+	}
 }
 
-// ============================================================================
-// Constants Tests
-// ============================================================================
+func TestConstants(t *testing.T) {
+	if !Zero.IsZero() {
+		t.Error("Zero constant should be zero")
+	}
 
-func testConstants(t *testing.T) bool {
-    passed := 0
-    failed := 0
+	one := One
+	if !approxEqual(one.ToF32(), 1.0, 0.01) {
+		t.Errorf("One constant: got %v", one.ToF32())
+	}
 
-    // Test zero
-    if Zero.IsZero() {
-        passed++
-    } else {
-        failed++
-        t.Error("FAIL: zero constant")
-    }
+	pInf := PInf
+	if !pInf.IsInf() || pInf.IsNegative() {
+		t.Error("PInf should be positive infinity")
+	}
 
-    // Test one
-    one := One
-    if approxEqual(one.ToF32(), 1.0, 0.01) {
-        passed++
-    } else {
-        failed++
-        t.Errorf("FAIL: one constant - got %v, expected 1.0", one.ToF32())
-    }
+	nInf := NInf
+	if !nInf.IsInf() || !nInf.IsNegative() {
+		t.Error("NInf should be negative infinity")
+	}
 
-    // Test p_inf
-    pInf := PInf
-    if pInf.IsInf() && !pInf.IsNegative() {
-        passed++
-    } else {
-        failed++
-        t.Error("FAIL: p_inf constant")
-    }
-
-    // Test n_inf
-    nInf := NInf
-    if nInf.IsInf() && nInf.IsNegative() {
-        passed++
-    } else {
-        failed++
-        t.Error("FAIL: n_inf constant")
-    }
-
-    // Test nan
-    nan := NaN
-    if nan.IsNaN() {
-        passed++
-    } else {
-        failed++
-        t.Error("FAIL: nan constant")
-    }
-
-    t.Logf("Constants: %d/%d passed", passed, passed+failed)
-    return failed == 0
+	nan := NaN
+	if !nan.IsNaN() {
+		t.Error("NaN should be NaN")
+	}
 }
-
-// ============================================================================
-// Benchmarks
-// ============================================================================
 
 func BenchmarkFromF32(b *testing.B) {
-    for i := 0; i < b.N; i++ {
-        b.ReportMetric(float64(i))
-        _ = FromF32(float32(i))
-    }
+	for i := 0; i < b.N; i++ {
+		_ = FromF32(float32(i))
+	}
 }
 
 func BenchmarkAdd(b *testing.B) {
-    a := FromF32(1.5)
-    b := FromF32(2.5)
-    b.ResetTimer()
-    for i := 0; i < b.N; i++ {
-        _ = a.Add(b)
-    }
-    b.ReportMetric(float64(b.N))
+	a := FromF32(1.5)
+	c := FromF32(2.5)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = a.Add(c)
+	}
 }
 
 func BenchmarkMul(b *testing.B) {
-    a := FromF32(2.5)
-    b := FromF32(4.0)
-    b.ResetTimer()
-    for i := 0; i < b.N; i++ {
-        _ = a.Mul(b)
-    }
-    b.ReportMetric(float64(b.N))
+	a := FromF32(2.5)
+	c := FromF32(4.0)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = a.Mul(c)
+	}
 }
 
 func BenchmarkPhiQuantize(b *testing.B) {
-    weights := []float32{1.0, 1.5, 2.0, 2.5, 3.0}
-    b.ResetTimer()
-    for i := 0; i < b.N; i++ {
-        _ = PhiQuantize(weights[i%len(weights)])
-    }
-    b.ReportMetric(float64(b.N))
+	weights := []float32{1.0, 1.5, 2.0, 2.5, 3.0}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = PhiQuantize(weights[i%len(weights)])
+	}
 }

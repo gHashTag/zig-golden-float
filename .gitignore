@@ -3,6 +3,8 @@ zig-out/
 zig/
 rust/target/
 rust/*.rs
+build/
+cpp/build/
 rust/test_nan
 cpp/build/
 python/__pycache__/

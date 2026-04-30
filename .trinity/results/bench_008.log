@@ -1,0 +1,38 @@
+BENCH-008: Fashion-MNIST MLP Quantization Validation
+======================================================
+Architecture: MLP 784->256->128->10 (He init, synthetic weights)
+Cross-reference: whitepaper.md §9.5, issue #14
+
+Post-Training Quantization Results:
+--------------------------------------------------------------------------------
+Format       phi-dist        MSE        MAE     MaxErr  Sparse%  Acc.Drop%
+--------------------------------------------------------------------------------
+fp32            0.000   0.000000   0.000000   0.000000     0.2%      0.00%
+GF16            0.049   0.000000   0.000016   0.000244     0.2%      0.00%
+fp16            0.118   0.000000   0.000016   0.000244     0.2%      0.00%
+bf16            0.525   0.000000   0.000063   0.000974     0.2%      0.00%
+GFTernary       0.000   0.003346   0.044783   0.426161   100.0%      0.09%
+--------------------------------------------------------------------------------
+
+Synthetic Inference Accuracy (1000 samples):
+--------------------------------------------------
+fp32         synthetic_acc=10.7%  (phi-dist=0.000)
+GF16         synthetic_acc=10.7%  (phi-dist=0.049)
+fp16         synthetic_acc=10.8%  (phi-dist=0.118)
+bf16         synthetic_acc=10.8%  (phi-dist=0.525)
+GFTernary    synthetic_acc=10.0%  (phi-dist=0.000)
+
+phi-Distance vs Weight MSE Correlation:
+--------------------------------------------------
+Pearson r(phi-distance, weight MSE) = -0.3494
+-> No correlation — bit-width dominates over phi-alignment
+
+GFTernary Special Analysis:
+--------------------------------------------------
+Sparsity:       100.0% of weights -> 0
+phi-distance:   0.000 (perfect Trinity basis)
+Weight MSE:     0.003346
+Memory saving:  ~16x vs fp32 (2-bit vs 32-bit)
+
+Results: .trinity/results/bench_008_fashion_mnist.log
+Next: BENCH-009 Transformer attention pattern analysis

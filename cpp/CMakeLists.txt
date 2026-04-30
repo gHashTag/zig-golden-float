@@ -8,12 +8,12 @@ project(goldenfloat VERSION 1.0.0 LANGUAGES CXX)
 
 # Find GoldenFloat shared library
 find_library(GOLDENFLOAT NAMES goldenfloat PATHS
+    "$ENV{GOLDENFLOAT_LIB_DIR}"
     "${CMAKE_SOURCE_DIR}/../../zig-out/lib"
     "${CMAKE_SOURCE_DIR}/../zig-out/lib"
     "${CMAKE_SOURCE_DIR}/../../zig-out/bin"
     "${CMAKE_SOURCE_DIR}/../../build"
     "${CMAKE_SOURCE_DIR}/../../zig-out/lib"
-    NO_DEFAULT_PATH
 )
 
 if(NOT GOLDENFLOAT)
@@ -22,6 +22,7 @@ endif()
 
 # Include directory for header-only wrapper
 include_directories(
+    "${CMAKE_SOURCE_DIR}/include"
     "${CMAKE_SOURCE_DIR}/../src/c"
     "${CMAKE_SOURCE_DIR}/../../src/c"
 )
@@ -80,7 +81,7 @@ endif()
 
 # ============================================================================
 # Configuration Summary
-// ============================================================================
+# ============================================================================
 
 message(STATUS "")
 message(STATUS "GoldenFloat C++ Bindings Configuration:")

@@ -16,13 +16,16 @@ _gf16_t = None
 
 def _find_library():
     """Find libgoldenfloat.{so,dylib,dll}"""
-    # Check zig-out/lib first
     search_paths = [
         os.path.join(os.path.dirname(__file__), "..", "..", "zig-out", "lib"),
         os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "zig-out", "lib"),
+        os.path.join(os.getcwd(), "zig-out", "lib"),
     ]
 
-    # Add current directory for development
+    env_dir = os.environ.get("GOLDENFLOAT_LIB_DIR")
+    if env_dir:
+        search_paths.insert(0, env_dir)
+
     search_paths.append(os.getcwd())
 
     lib_name = None
@@ -125,6 +128,15 @@ def _get_lib():
 
         _lib.gf16_fma.restype = _gf16_t
         _lib.gf16_fma.argtypes = [_gf16_t, _gf16_t, _gf16_t]
+
+        _lib.goldenfloat_phi.restype = ctypes.c_double
+        _lib.goldenfloat_phi.argtypes = []
+
+        _lib.goldenfloat_trinity.restype = ctypes.c_double
+        _lib.goldenfloat_trinity.argtypes = []
+
+        _lib.goldenfloat_version.restype = ctypes.c_char_p
+        _lib.goldenfloat_version.argtypes = []
 
     return _lib
 
