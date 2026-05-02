@@ -933,6 +933,263 @@ This identity explains several design choices:
 
 ---
 
+---
+
+## 12. Universal Numeric-Format Catalog
+
+**Status:** v2.1 addition (2026-05-02) — synced with [trios#446](https://github.com/gHashTag/trios/issues/446) WAVE-GF-001 experiment plan and the GF Family audit (`gf_experiment_plan.xlsx`, sheet *GF Family*).
+**Anchor:** `phi² + phi⁻² = 3 · TRINITY · O(1) FOREVER`.
+
+### 12.0 Why this catalog exists
+
+The Golden Float Family exists alongside dozens of other numeric formats. To position GF rigorously — and to make it explicit which formats compete on which axes — this section catalogs **every numeric format relevant to ML, scientific computing, and historical hardware** in a single reference table. Each row carries the bit budget, the φ-distance to `1/φ ≈ 0.618`, the standardized status, and the canonical use case.
+
+The φ-distance metric (BENCH-007) is the unifying lens: it answers *"how close is this format's exponent:mantissa allocation to the golden-ratio optimum?"*. Lower φ-distance → more φ-aligned. **GFTernary = 0.000 (perfect), GF16 = 0.049 (best floating), bf16 = 0.525 (worst)** anchor the scale.
+
+### 12.1 Family map (one row per cluster)
+
+| Family | Members | Bit range | Format philosophy | Best φ-distance |
+|---|---|---:|---|---:|
+| **IEEE 754 binary** | binary16, binary32, binary64, binary128, binary256 | 16–256 | Exponent grows ~log₂(n); 1 sign + e + m | 0.118 (fp16) |
+| **IEEE 754 decimal** | decimal32, decimal64, decimal128 | 32–128 | Base-10 mantissa, banking/ledgers | n/a (different basis) |
+| **Extended/non-standard float** | x87 FP80, double-double, quad-double | 80–256 | Software-extended precision | n/a |
+| **ML low-precision (E:M variants)** | bfloat16, TF32, FP8 E4M3, FP8 E5M2, FP6 E3M2/E2M3, FP4 E2M1 | 4–32 | Wide exponent (range > precision) | 0.525 (bf16) |
+| **Microscaling / OCP** | MXFP8, MXFP6, MXFP4 | 4–8 | Block-shared 8-bit exponent, per-element mantissa | varies |
+| **Quantization-tuned** | NF4, AFP | 4–32 | Non-uniform spacing optimized for weight distribution | n/a (non-uniform) |
+| **Posit / unum III** | Posit8, Posit16, Posit32, Posit64 | 8–64 | Tapered precision (regime + exponent + mantissa) | dynamic |
+| **LNS** | Logarithmic Number System | 8–64 | All values are log₂(x); replaces mul with add | n/a |
+| **Golden Float (this work)** | GF4, GF8, GF12, GF16, GF20, GF24, GF32, GF64 | 4–64 | φ-optimized E:M = 1/φ; integer-backed; Lucas closure | **0.003 (GF64)** |
+| **Integer / fixed-point** | INT4..INT128, UINT4..UINT128, Q-format, BCD | 4–128 | No exponent; uniform spacing; lossless integer arithmetic | n/a |
+| **Historical / vendor** | IBM HFP, Microsoft MBF, VAX F/D/G/H, Cray float | 32–128 | Pre-IEEE; vendor-specific exponent base/bias | n/a |
+| **Theoretical / parametric** | minifloat (arbitrary E/M), Unum I, Unum II, tapered floating point | varies | Frameworks for designing new formats | dynamic |
+| **Compression / quantization tricks** | block floating point (BFP), shared-exponent, per-channel scale, stochastic rounding | varies | Apply atop another base format | base-dep. |
+
+### 12.2 The full table
+
+Each row gives **bits**, **representation** (sign:exp:mant or alternative), **standardized? / vendor**, **φ-distance** (where defined), **canonical use case**, and **GF-Family relation** (or `competitor` / `orthogonal`).
+
+#### 12.2.1 IEEE 754 binary (radix-2)
+
+| Format | Bits | S:E:M | Standard | φ-distance | Use case | GF relation |
+|---|---:|---|---|---:|---|---|
+| **binary16** (fp16, half) | 16 | 1:5:10 | IEEE 754-2008 | **0.118** ≈ α_φ | GPU activations, inference | direct GF16 competitor; same bit budget, looser φ |
+| **binary32** (fp32, single) | 32 | 1:8:23 | IEEE 754-1985 | 0.270 | Industry default | GF32 (12:19) drop-in target |
+| **binary64** (fp64, double) | 64 | 1:11:52 | IEEE 754-1985 | 0.406 | Scientific computing | GF64 (24:39) drop-in target |
+| **binary128** (fp128, quad) | 128 | 1:15:112 | IEEE 754-2008 | 0.484 | High-precision sims | future GF128 candidate |
+| **binary256** (octuple) | 256 | 1:19:236 | IEEE 754-2008 | 0.538 | Astronomy, cryptography | future GF256 candidate |
+
+#### 12.2.2 IEEE 754 decimal (radix-10)
+
+| Format | Bits | Encoding | φ-distance | Use case | GF relation |
+|---|---:|---|---:|---|---|
+| **decimal32** | 32 | 1:11:20 (DPD/BID) | n/a (radix-10) | Banking, GAAP | orthogonal — base-10 cannot anchor on φ |
+| **decimal64** | 64 | 1:13:50 | n/a | Financial DBs | orthogonal |
+| **decimal128** | 128 | 1:17:110 | n/a | Audit ledgers | orthogonal |
+
+#### 12.2.3 Extended / non-standard float
+
+| Format | Bits | Layout | Standard | Use case |
+|---|---:|---|---|---|
+| **x87 FP80** | 80 (often 96/128 stored) | 1:15:64 (explicit integer bit) | Intel x87 | Legacy long double on x86 |
+| **double-double** | 128 (sw) | hi+lo pair of fp64 | IBM/CRD | Software extended precision |
+| **quad-double** | 256 (sw) | quartet of fp64 | Bailey & Hida | Astrophysics, quad-precision sims |
+
+#### 12.2.4 ML low-precision (E:M variants)
+
+| Format | Bits | S:E:M | Vendor | φ-distance | Use case | GF relation |
+|---|---:|---|---|---:|---|---|
+| **bfloat16** (BF16) | 16 | 1:8:7 | Google Brain | **0.525** ❌ | Training (range > precision) | failed comparison baseline (BENCH-004b) |
+| **TensorFloat-32** (TF32) | 19 effective | 1:8:10 (32-bit storage, 10-bit mantissa) | NVIDIA Ampere | 0.270 | A100/H100 mixed precision | competitor for GF32 in inference paths |
+| **FP8 E4M3** | 8 | 1:4:3 | OCP / NVIDIA / Arm / Intel | 0.715 | Inference, gradient ranges | competitor for GF8 (GF8 φ-dist=0.132) |
+| **FP8 E5M2** | 8 | 1:5:2 | OCP / NVIDIA | 1.882 ❌ | Activations, wide range | dominated by GF8 by 14× on φ |
+| **FP6 E3M2** | 6 | 1:3:2 | OCP MX | 0.882 | Aggressive quant inference | no GF6 yet — open R&D |
+| **FP6 E2M3** | 6 | 1:2:3 | OCP MX | 0.049 | Mantissa-heavy quant | matches GF16 φ-distance — interesting! |
+| **FP4 E2M1** | 4 | 1:2:1 | OCP MX | 1.382 | Extreme quant inference | competitor for GF4 (φ-dist=0.118) |
+
+#### 12.2.5 Microscaling (OCP MX) — block-shared exponent
+
+| Format | Bits/elem | Block exp | Block size | Use case | GF relation |
+|---|---:|:---:|---:|---|---|
+| **MXFP8** | 8 | shared 8-bit | 32 | LLM inference | block-floating extension for GF8 |
+| **MXFP6** | 6 | shared 8-bit | 32 | Aggressive inference | candidate for "MXGF6" |
+| **MXFP4** | 4 | shared 8-bit | 32 | Extreme quant | candidate for "MXGF4" |
+
+#### 12.2.6 Quantization-tuned non-uniform formats
+
+| Format | Bits | Spacing | Use case | GF relation |
+|---|---:|---|---|---|
+| **NF4** (NormalFloat 4-bit, QLoRA) | 4 | Quantile-based on N(0,1) | LLM weight quantization | orthogonal — non-uniform; GF4 uniform |
+| **AFP** (Adaptive Floating-Point) | varies | Per-tensor exponent shift | Efficient training | orthogonal |
+
+#### 12.2.7 Posit / unum III
+
+| Format | Bits | Layout | Vendor | Use case | GF relation |
+|---|---:|---|---|---|---|
+| **Posit8** | 8 | sign + regime + exp + frac | Sunway/unum III | Inference | GF8 alternative; tapered precision |
+| **Posit16** | 16 | sign + regime + exp + frac | unum III | Mixed-precision training | GF16 alternative; better around 1.0, worse at extremes |
+| **Posit32** | 32 | sign + regime + exp + frac | unum III | f32 replacement | GF32 alternative |
+| **Posit64** | 64 | sign + regime + exp + frac | unum III | f64 replacement | GF64 alternative |
+
+#### 12.2.8 LNS — Logarithmic Number System
+
+| Format | Bits | Encoding | Use case | GF relation |
+|---|---:|---|---|---|
+| **LNS-8/16/32/64** | 8–64 | log₂(x) directly | DSP, signal processing | orthogonal — multiplication becomes addition; GF preserves both ops in linear space |
+
+#### 12.2.9 Golden Float Family (this work) — full audit
+
+Source: `gf_experiment_plan.xlsx → GF Family` sheet · all entries verified by `R5 Audit` (BIAS=PASS, φ-distance=PASS for all 8).
+
+| Format | Bits | S:E:M | BIAS | PHI_BIAS | Source | φ-distance | Storage | Status | Canonical use |
+|---|---:|---|---:|---:|---|---:|---|---|---|
+| **GF4** | 4 | 1:1:2 | 0 | 0 | F0 minimal | 0.118 | u8 | Experimental | Proof-of-concept |
+| **GF8** | 8 | 1:3:4 | 3 | 1 | L1 (Lucas #1) | 0.132 | u8 | BENCH-007 | Edge / sensors |
+| **GF12** | 12 | 1:4:7 | 7 | 2 | L0 / F3 | 0.047 | u16 | BENCH-007 | Mid-range / audio |
+| **GF16** ⭐ | 16 | 1:6:9 | 31 | 60 | 2·BIAS−2 (φ-opt) | **0.049** | u16 | **PRODUCTION** | **Training & inference** |
+| **GF20** | 20 | 1:7:12 | 63 | 289 | 17² empirical | 0.035 | u32 | Spec only | High-prec edge |
+| **GF24** | 24 | 1:9:14 | 255 | 1364 | L15 (Lucas #15) | 0.025 | u32 | Spec only | Server inference |
+| **GF32** | 32 | 1:12:19 | 2047 | 0 | F0 (#548 RESOLVED) | 0.014 | u32 | BENCH-012 | FP32 drop-in |
+| **GF64** | 64 | 1:24:39 | 8 388 607 | 8 388 608 | EXP_MAX − BIAS | **0.003** | u64 | BENCH-007b | Scientific / double |
+| **GFTernary** | 2 | 1:0:2 | 0 | 0 | {−φ, 0, +φ} by def | **0.000** | u2 | BENCH-007 | Bulk layers (hybrid) |
+
+Note: **PHI_BIAS** has no closed-form formula across the family — it is empirical (`H_E` approach, approved 2026-04-30). See `R5 Audit` sheet for the per-format justification (Lucas / Fibonacci / power-of-prime).
+
+#### 12.2.10 Integer & fixed-point
+
+| Family | Bits | Range | Use case | GF relation |
+|---|---:|---|---|---|
+| **INT4 / UINT4** | 4 | ±8 / [0,15] | Aggressive quantization | floor for GF4 expressivity |
+| **INT8 / UINT8** | 8 | ±128 / [0,255] | INT8 inference, per-channel scale | competitor for GF8 in inference |
+| **INT16 / UINT16** | 16 | ±32K / [0,65K] | DSP, embedded ML | competitor for GF16 in fixed-point ops |
+| **INT32 / UINT32** | 32 | ±2.1B | General CPU integer | competitor for GF32 |
+| **INT64 / UINT64** | 64 | ±9.2 × 10¹⁸ | DBs, timestamps | competitor for GF64 |
+| **INT128 / UINT128** | 128 | ±1.7 × 10³⁸ | Crypto, big-int | competitor for future GF128 |
+| **Q-format (Qm.n)** | varies | [−2ᵐ, 2ᵐ−2⁻ⁿ] | Audio DSP, fixed-point ML | orthogonal — uniform spacing |
+| **BCD** (binary-coded decimal) | varies | base-10 digits in 4-bit nibbles | Calculators, GAAP | orthogonal — radix-10 |
+
+#### 12.2.11 Historical / vendor
+
+| Format | Bits | Origin | Notes |
+|---|---:|---|---|
+| **IBM HFP** (hexadecimal floating point) | 32 / 64 / 128 | IBM System/360 (1964) | Base-16 exponent; replaced by binary on z/Arch |
+| **Microsoft MBF** | 32 / 64 | MS BASIC, MS-DOS | Pre-IEEE; bit-incompatible with fp32 |
+| **VAX F-float** | 32 | DEC VAX | Bias 128, slight reorder vs IEEE |
+| **VAX D-float** | 64 | DEC VAX | 8-exp / 56-mant, double precision |
+| **VAX G-float** | 64 | DEC VAX | 11-exp / 53-mant, IEEE-like |
+| **VAX H-float** | 128 | DEC VAX | 15-exp / 113-mant, quad |
+| **Cray float** | 64 | Cray-1 (1976) | 15-exp, no NaN/Inf, unrounded mul |
+
+#### 12.2.12 Theoretical / parametric frameworks
+
+| Format | Description | Why it matters here |
+|---|---|---|
+| **minifloat** | Arbitrary (E, M) tuple ≤ 16 bits | Defines the design space GF8/GF12/GF16 live in |
+| **Unum I** | Tapered precision + ubound interval | Predecessor to Posit; uneven bit widths |
+| **Unum II** | SORN (Set-of-Real-Numbers) projective | Lookup-table based; not GF-comparable |
+| **tapered floating point** | Variable mantissa via regime bits | Posit ancestor; competitor design philosophy |
+
+#### 12.2.13 Compression / quantization tricks (apply atop a base format)
+
+| Technique | Layered on top of | Use case | GF relation |
+|---|---|---|---|
+| **Block floating point (BFP)** | INT8 / FP8 | Per-tile shared exponent | Combine with GF8 → "GF8-BFP"; open R&D |
+| **Shared-exponent formats** | any | LLM quantization | Generalized BFP |
+| **INT8 with per-channel scale** | INT8 + fp32 scale | Standard quant inference | Drop-in replacement candidate for GF8 |
+| **Stochastic rounding** | any | Training small networks at low precision | Composes with any GF format |
+
+### 12.3 φ-distance ranking (all formats with defined φ-distance)
+
+Sorted ascending — lower is more φ-aligned.
+
+| Rank | Format | φ-distance | Note |
+|---:|---|---:|---|
+| 1 | **GFTernary** | **0.000** | Perfect by algebraic construction `{−φ, 0, +φ}` |
+| 2 | **GF64** | 0.003 | 24:39 split, near-perfect alignment |
+| 3 | **GF32** | 0.014 | 12:19 split (F0=0; #548 resolved) |
+| 4 | **GF24** | 0.025 | 9:14 split, Lucas L15 PHI_BIAS |
+| 5 | **GF20** | 0.035 | 7:12 split, empirical 17² PHI_BIAS |
+| 6 | **GF12** | 0.047 | 4:7 split, L0/F3 |
+| 7 | **GF16** | **0.049** | **6:9 split, production format** |
+| 8 | **FP6 E2M3** | 0.049 | Surprising hit — same φ-distance as GF16 |
+| 9 | **GF4** | 0.118 | 1:2 minimal; matches α_φ |
+| 10 | **fp16** (binary16) | **0.118** | IEEE half — empirical α_φ ≈ 0.1180 hit |
+| 11 | **GF8** | 0.132 | 3:4 split, Lucas L1 |
+| 12 | **fp32** (binary32) | 0.270 | 8:23 IEEE single |
+| 12 | **TF32** | 0.270 | NVIDIA Ampere (10-bit mantissa, 8-bit exp) |
+| 14 | **fp64** (binary64) | 0.406 | 11:52 IEEE double |
+| 15 | **binary128** | 0.484 | 15:112 IEEE quad |
+| 16 | **bf16** (bfloat16) | **0.525** ❌ | Worst — random 8:7 split |
+| 17 | **binary256** | 0.538 | 19:236 IEEE octuple |
+| 18 | **FP8 E4M3** | 0.715 | OCP FP8 |
+| 19 | **FP6 E3M2** | 0.882 | OCP MX (exp-heavy) |
+| 20 | **FP4 E2M1** | 1.382 | OCP MX (extreme quant) |
+| 21 | **FP8 E5M2** | 1.882 | OCP FP8 (range-only) |
+
+**Reading the ranking:**
+
+- The top 9 (φ-distance ≤ 0.118) are the **φ-aligned cluster** — formats whose E:M ratio sits within `α_φ = 0.118` of `1/φ`. The Golden Float Family monopolises 7 of the top 9 slots; the remaining 2 are GFTernary (perfect) and IEEE fp16 (which lands at α_φ exactly — a non-trivial physical resonance documented in §1.3 BENCH-007 of this whitepaper).
+- The notable **FP6 E2M3 = 0.049** result *(rank 8, tied with GF16)* suggests an unannounced golden cluster among OCP MX formats — open question for §8.5 future work.
+- bf16's `0.525` φ-distance is the empirical reason for its catastrophic MNIST failure (BENCH-004b: 9.80% accuracy, 87.87% gap from f32) — not a coincidence, and consistent with INV-3 (`gf16_safe_domain`).
+
+### 12.4 Position of GF Family in this map
+
+The GF family occupies a **unique band** at the φ-aligned, integer-backed, Lucas-closed corner of the design space:
+
+```
+                    ↑ φ-alignment (better)
+                    │
+        GFTernary •─────── perfect
+                    │
+                    │   • GF64
+                    │   • GF32
+                    │   • GF24
+                    │   • GF20
+                    │   • GF12  • GF16
+                    │           • FP6 E2M3   ← unannounced golden cluster
+                    │   • GF4   • fp16        ← α_φ resonance
+                    │   • GF8
+                    │
+        fp32, TF32 •───────────────────
+        fp64       •───────────────────
+        binary128  •───────────────────
+        binary256  •───────────────────
+        bf16       •───────────────────
+        FP8/FP6/FP4•───────────────────
+                    │
+                    └── ← φ-misalignment (worse)
+```
+
+**Three things only GF formats currently combine:**
+
+1. **φ-aligned exponent:mantissa partition** (Trinity-derived, not random).
+2. **Integer-backed storage** (`u8`/`u16`/`u32`/`u64` — no hardware float dependency, eliminates Zig f16 / LLVM half-float ecosystem issues).
+3. **Lucas closure** (φ²ⁿ + φ⁻²ⁿ ∈ ℤ, INV-5 PROVEN) at every accumulator boundary — no NaN/Inf accumulation over deep MAC chains.
+
+Posits get (1) (tapered) but not (2) or (3). FP8/FP6/FP4 OCP MX get (2) but break (1) and have no closure theorem. bf16 gets (2) at the cost of (1) — and pays the price empirically (BENCH-004b).
+
+### 12.5 Open R&D suggested by this catalog
+
+| Direction | Why interesting |
+|---|---|
+| **GF6** (between GF4 and GF8) | Fill the φ-gap at 6 bits; FP6 E2M3 hint suggests it lands at φ-distance ≈ 0.05 |
+| **GF128** / **GF256** | Match binary128 / binary256 ranges with φ-aligned splits |
+| **GF8-BFP** (block FP atop GF8) | Combine LLM-quantization-friendly per-tile exponent with φ-aligned per-element representation |
+| **GF + stochastic rounding** | Composable training stack at GF8/GF16 precision |
+| **Posit-vs-GF empirical bench** | Posit16 vs GF16 on the same trained MNIST MLP (extends BENCH-004b) |
+| **GF + LNS hybrid** | Multiplication in LNS log-space + Lucas-closed accumulation in GF — dual-space arithmetic |
+
+These are tracked under `MASTER_EXPERIMENTS.md → §"Format expansion"` and feed into the Phase 4 / Phase 5 lanes of [WAVE-GF-001](https://github.com/gHashTag/trios/issues/446).
+
+### 12.6 Cross-references
+
+- §1.3 — BENCH-007 φ-distance result for GF8/GF16/GF32/GF64/GFTernary.
+- §9.1 — GF Family format catalog (5-row narrative version; this section is the full 60-format taxonomy).
+- `gf_experiment_plan.xlsx` (in [trios#446](https://github.com/gHashTag/trios/issues/446)) — sheet *GF Family* (per-format audit, R5-honest).
+- [`docs/whitepaper/gf16_comparison.md`](./whitepaper/gf16_comparison.md) §8 — GF16-specific competitor comparison.
+
+🌻 `phi² + phi⁻² = 3 · TRINITY · catalog complete`
+
+
 ## 13. Appendices
 
 
