@@ -6,3 +6,6 @@ rust/*.rs
 build/
 cpp/build/
 rust/test_nan
+
+.env*
+!.env.example
