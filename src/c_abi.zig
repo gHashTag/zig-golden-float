@@ -287,6 +287,60 @@ export fn gft16_is_finite(g: gft16_t) callconv(.c) u8 {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// The other GF-T rungs — GF-T4 (u8), GF-T8 (u16), GF-T32 (u64). Same thin glue
+// pattern as gft16; the packed value rides in the low bits of the C carrier type.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const gft4_t = u8;
+const gft8_t = u16;
+const gft32_t = u64;
+
+export fn gft4_from_f32(x: f32) callconv(.c) gft4_t {
+    return @as(gft4_t, gft.GFT4.fromF32(x).bits());
+}
+export fn gft4_to_f32(g: gft4_t) callconv(.c) f32 {
+    return gft.GFT4.fromBits(@truncate(g)).toF32();
+}
+export fn gft4_mul(a: gft4_t, b: gft4_t) callconv(.c) gft4_t {
+    return @as(gft4_t, gft.GFT4.mul(gft.GFT4.fromBits(@truncate(a)), gft.GFT4.fromBits(@truncate(b))).bits());
+}
+export fn gft4_is_finite(g: gft4_t) callconv(.c) u8 {
+    return @intFromBool(gft.GFT4.fromBits(@truncate(g)).isFinite());
+}
+
+export fn gft8_from_f32(x: f32) callconv(.c) gft8_t {
+    return @as(gft8_t, gft.GFT8.fromF32(x).bits());
+}
+export fn gft8_to_f32(g: gft8_t) callconv(.c) f32 {
+    return gft.GFT8.fromBits(@truncate(g)).toF32();
+}
+export fn gft8_add(a: gft8_t, b: gft8_t) callconv(.c) gft8_t {
+    return @as(gft8_t, gft.GFT8.add(gft.GFT8.fromBits(@truncate(a)), gft.GFT8.fromBits(@truncate(b))).bits());
+}
+export fn gft8_mul(a: gft8_t, b: gft8_t) callconv(.c) gft8_t {
+    return @as(gft8_t, gft.GFT8.mul(gft.GFT8.fromBits(@truncate(a)), gft.GFT8.fromBits(@truncate(b))).bits());
+}
+export fn gft8_is_finite(g: gft8_t) callconv(.c) u8 {
+    return @intFromBool(gft.GFT8.fromBits(@truncate(g)).isFinite());
+}
+
+export fn gft32_from_f32(x: f32) callconv(.c) gft32_t {
+    return @as(gft32_t, gft.GFT32.fromF32(x).bits());
+}
+export fn gft32_to_f32(g: gft32_t) callconv(.c) f32 {
+    return gft.GFT32.fromBits(@truncate(g)).toF32();
+}
+export fn gft32_add(a: gft32_t, b: gft32_t) callconv(.c) gft32_t {
+    return @as(gft32_t, gft.GFT32.add(gft.GFT32.fromBits(@truncate(a)), gft.GFT32.fromBits(@truncate(b))).bits());
+}
+export fn gft32_mul(a: gft32_t, b: gft32_t) callconv(.c) gft32_t {
+    return @as(gft32_t, gft.GFT32.mul(gft.GFT32.fromBits(@truncate(a)), gft.GFT32.fromBits(@truncate(b))).bits());
+}
+export fn gft32_is_finite(g: gft32_t) callconv(.c) u8 {
+    return @intFromBool(gft.GFT32.fromBits(@truncate(g)).isFinite());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Tests
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -419,4 +473,20 @@ test "C-ABI: gft16_neg / gft16_abs / gft16_is_finite" {
 test "C-ABI: gft16 round-trips through the raw u32 (FFI stability)" {
     const g = gft16_from_f32(-6.28);
     try std.testing.expectEqual(gft16_to_f32(g), gft16_to_f32(gft16_from_f32(gft16_to_f32(g))));
+}
+
+test "C-ABI: gft4 / gft8 / gft32 from/to + carrier widths" {
+    // GF-T4 (u8, 1-bit mantissa -> coarse)
+    try std.testing.expect(gft4_from_f32(2.0) <= 0x3F); // 6-bit value
+    try std.testing.expectApproxEqAbs(@as(f32, 2.0), gft4_to_f32(gft4_from_f32(2.0)), 0.02);
+    try std.testing.expectApproxEqAbs(@as(f32, 4.0), gft4_to_f32(gft4_mul(gft4_from_f32(2.0), gft4_from_f32(2.0))), 0.5);
+    // GF-T8 (u16, 4-bit mantissa)
+    try std.testing.expect(gft8_from_f32(3.0) <= 0x3FF); // 10-bit value
+    try std.testing.expectApproxEqAbs(@as(f32, 3.0), gft8_to_f32(gft8_from_f32(3.0)), 0.1);
+    try std.testing.expectApproxEqAbs(@as(f32, 5.0), gft8_to_f32(gft8_add(gft8_from_f32(2.0), gft8_from_f32(3.0))), 0.2);
+    // GF-T32 (u64, 25-bit mantissa, huge range)
+    try std.testing.expect(gft32_from_f32(1.0) <= 0xFFFFFFFFF); // 36-bit value
+    try std.testing.expectApproxEqAbs(@as(f32, 3.14159), gft32_to_f32(gft32_from_f32(3.14159)), 1e-4);
+    try std.testing.expect(gft32_is_finite(gft32_from_f32(6.022e23)) == 1); // GF-T32 holds it
+    try std.testing.expect(gft32_to_f32(gft32_mul(gft32_from_f32(1e10), gft32_from_f32(1e10))) > 5e19);
 }
