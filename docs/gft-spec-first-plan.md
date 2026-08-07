@@ -1,61 +1,58 @@
-# Spec-first GF-T: making the ternary ladder generated, not hand-written
+# Spec-first GF-T: the real state of `tri_gen`, and what generation would take
 
-Status: **plan** (investigation done; codegen work scoped). The GF-T codec
-(`src/formats/gft.zig`) and its C-ABI + Python binding are working **stop-gaps** —
-the repo's rule (CLAUDE.md §0–2) is that number formats live in `specs/*.tri` and every
-language artifact is emitted by `tools/gen/tri_gen`. This document is the path to bring
-GF-T under that rule.
+Status: **investigation** (corrected 2026-08). An earlier version of this doc assumed
+`tri_gen` generates code from parsed spec fields. **It does not.** This document records
+the actual architecture and the real (larger) work that "generate GF-T from `.tri`"
+would require, so nobody chases a facade.
 
-## What already exists
+## Correction: `tri_gen` is a template COPIER, not a generator
 
-- `specs/gft.tri` — the authoritative GF-T ladder parameters (ladder form: E-trits,
-  mantissa bits, `EXP_OFFSET`, `OFFSET_MAX` per rung). Source of truth for the numbers.
-- `tools/gen/tri_reader.zig` — the `.tri` parser. It **already models ternary**:
-  `Exponent{ bias: u8, trits: u8 = 0, special }` and `Field{ trit_value, trit_count }`,
-  plus a `ternary: ?Ternary` block (used by TF3). So a GF-T rung is expressible as a
-  single-format `.tri` (like `specs/gf16.tri`) with `exponent.trits = 4`, `bias = 0`,
-  and the offset semantics captured in `exponent.special`.
-- `tools/gen/tri_gen.zig` — emits `c / rust / zig / cpp` from a parsed `Spec`.
+`tools/gen/tri_gen.zig` parses the `.tri` (for validation + `--verbose` display), but its
+four code emitters **discard the spec entirely** and copy a fixed GF16 template:
 
-## The three gaps (in order)
+```zig
+fn genZig(alloc, io, spec, ...) !void {
+    _ = spec;                                   // <-- spec ignored
+    const output = try readFileAlloc(alloc, io, "tools/gen/templates/gf16.zig", ...);
+    try writeFile("zig/src/formats/gf16.zig", output, ...);
+}
+```
 
-1. **`tri_gen` leaks on zig 0.16.0.** Running `zig run tools/gen/tri_gen -- --lang zig
-   --input specs/gf16.tri` aborts under the DebugAllocator: `tri_reader.readKey`
-   (`self.allocator.dupe(u8, slice)`, tri_reader.zig:346) is never freed; `Spec.deinit`
-   frees `fields`/typedefs but not every duped key/scalar. **Fix first** — either free
-   the duped keys in `parseSpec`/`deinit`, or use an arena for the parse. This is a
-   prerequisite: codegen can't be trusted while the generator aborts.
+All of `genC` / `genRust` / `genZig` / `genCpp` are `_ = spec;` + copy
+`tools/gen/templates/gf16.{h,c,rs,zig,hpp}` verbatim. So today `tri_gen --input
+specs/anything.tri --lang zig` always writes the **same** GF16 file. There is no
+parameterization by `bits`, `exponent`, `mantissa`, `fields`, or format name.
 
-2. **The `.tri` GF-T model.** Add canonical single-format specs `specs/gft4.tri /
-   gft8.tri / gft16.tri / gft32.tri` mirroring `specs/gf16.tri`'s shape:
-   ```
-   format: GFT16
-   storage: { bits: 32, underlying: u32 }   # 17-bit payload carried in u32
-   fields:  [ sign(1), exponent(trits:4), mantissa(9) ]
-   exponent:
-     trits: 4
-     offset_bias: 40         # e = offset - 40  (NEW key: ternary offset bias)
-     offset_max: 80          # reserved Inf/NaN row (3^4 - 1)
-     encoding: balanced-ternary
-   ```
-   This needs one new `Exponent` field in `tri_reader` (`offset_bias: ?u8`,
-   `encoding: enum{binary, balanced_ternary}`) — additive, does not touch binary specs.
+Consequence: the repo's "spec-first, everything is generated" rule (CLAUDE.md §0–2) is
+**aspirational** — the generator is a stub. The hand-written `gft.zig` / `gf_binary.zig`
+codecs are therefore not a shameful stop-gap; they are the *only* real implementations,
+tested and green across 5 language bindings.
 
-3. **The `tri_gen` ternary-exponent emitter.** When `exponent.encoding ==
-   balanced_ternary`, emit the codec from `src/formats/gft.zig` (already the reference):
-   `from_f32` normalizes to `[1,2)`, `offset = e + offset_bias`, saturate at
-   `offset_max`; `to_f32` inverts. The binary emitter stays as-is; a `switch` on the
-   encoding picks the body. The generated Zig should be **byte-comparable** to the
-   current hand-written `gft.zig` (that is the acceptance test).
+## What real spec-first generation would take (big, in order)
 
-## Acceptance / migration
+1. ~~`tri_gen` leaked duped keys under the DebugAllocator~~ — **fixed** (parseSpec now
+   frees the key each pass; `zig run tri_gen` exits 0). Done.
 
-- `zig run tools/gen/tri_gen --lang all --input specs/gft16.tri` produces
-  `gen/.../gft16.{zig,c,rs,hpp}` that pass the existing GF-T tests unchanged.
-- `zig run tools/gen/check_tri_hashes --update` registers the new specs
-  (`.trinity/tri_hashes.json`); CI `--verify` stays green.
-- Retire the hand-written `gft.zig` in favour of the generated module (keep the thin
-  C-ABI glue in `c_abi.zig`, which is FFI, not format logic).
+2. **Turn `tri_gen` into an actual generator.** This is the large task, not a small
+   branch: replace each `_ = spec;` + template-copy with code that *emits* from the
+   parsed `Spec` — storage width, `[sign|exp|mant]` field layout, bias, specials,
+   `from_f32`/`to_f32`/arith bodies — for each of zig/c/rust/cpp. The current hand-
+   written `gf16` template is the reference output for the binary path; `gf_binary.zig`'s
+   comptime `GF(bits)` factory is effectively the algorithm to port into the emitter.
 
-Until step 1 lands, GF-T stays the hand-written stop-gap — correct and tested (CI green,
-114+ tests), just not yet generated. This ordering keeps every increment shippable.
+3. **Model the balanced-ternary exponent** in `tri_reader` (`Exponent` already has
+   `trits`/`base`; add `offset_bias` + `offset_max` + `encoding`) and add the ternary
+   branch to the (now real) emitter, with `from_f32` normalizing to `[1,2)`,
+   `offset = e + offset_bias`, saturating at `offset_max`.
+
+4. **Acceptance:** generated `gft16.zig` is byte-comparable to today's `gft.zig` and
+   passes the existing GF-T tests unchanged; `check_tri_hashes --update` registers the
+   new specs; CI `--verify` stays green.
+
+## Recommendation
+
+Step 2 (a genuine parameterized generator) is a substantial rewrite of `tri_gen` and
+should be its own tracked effort, not squeezed into an autonomous micro-increment.
+Until it exists, **the hand-written codecs are the correct engineering state** — keep
+growing correctness/coverage/bindings there, and treat "spec-first generation" as a
+separate, honestly-scoped project rather than a per-loop task.
