@@ -241,6 +241,52 @@ comptime {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// GF-T16 — balanced-ternary-exponent GoldenFloat (thin FFI over formats/gft.zig).
+// The raw value is the 17-bit packed encoding carried in a u32 (declared in
+// src/c/gft.h). This is FFI glue only; all arithmetic lives in the gft.zig codec.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const gft = @import("formats/gft.zig");
+
+/// gft16_t is the raw 17-bit GF-T16 pattern in the low bits of a u32.
+const gft16_t = u32;
+
+inline fn gft16ToRaw(g: gft.GFT16) gft16_t {
+    return @as(gft16_t, g.bits());
+}
+inline fn rawToGft16(raw: gft16_t) gft.GFT16 {
+    return gft.GFT16.fromBits(@truncate(raw));
+}
+
+export fn gft16_from_f32(x: f32) callconv(.c) gft16_t {
+    return gft16ToRaw(gft.GFT16.fromF32(x));
+}
+export fn gft16_to_f32(g: gft16_t) callconv(.c) f32 {
+    return rawToGft16(g).toF32();
+}
+export fn gft16_add(a: gft16_t, b: gft16_t) callconv(.c) gft16_t {
+    return gft16ToRaw(gft.GFT16.add(rawToGft16(a), rawToGft16(b)));
+}
+export fn gft16_sub(a: gft16_t, b: gft16_t) callconv(.c) gft16_t {
+    return gft16ToRaw(gft.GFT16.sub(rawToGft16(a), rawToGft16(b)));
+}
+export fn gft16_mul(a: gft16_t, b: gft16_t) callconv(.c) gft16_t {
+    return gft16ToRaw(gft.GFT16.mul(rawToGft16(a), rawToGft16(b)));
+}
+export fn gft16_div(a: gft16_t, b: gft16_t) callconv(.c) gft16_t {
+    return gft16ToRaw(gft.GFT16.div(rawToGft16(a), rawToGft16(b)));
+}
+export fn gft16_neg(g: gft16_t) callconv(.c) gft16_t {
+    return gft16ToRaw(rawToGft16(g).neg());
+}
+export fn gft16_abs(g: gft16_t) callconv(.c) gft16_t {
+    return gft16ToRaw(rawToGft16(g).abs());
+}
+export fn gft16_is_finite(g: gft16_t) callconv(.c) u8 {
+    return @intFromBool(rawToGft16(g).isFinite());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Tests
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -342,4 +388,35 @@ test "C-ABI: library version" {
 test "C-ABI: goldenfloat_trinity returns 3.0" {
     const trinity = goldenfloat_trinity();
     try std.testing.expectApproxEqAbs(@as(f64, 3.0), trinity, 1e-10);
+}
+
+test "C-ABI: gft16_from_f32 and gft16_to_f32" {
+    const val: f32 = 3.14159;
+    const g = gft16_from_f32(val);
+    const back = gft16_to_f32(g);
+    try std.testing.expect(@abs(val - back) / (@abs(val) + 1e-9) < 0.005);
+    // raw is a 17-bit value carried in u32
+    try std.testing.expect(g <= 0x1FFFF);
+}
+
+test "C-ABI: gft16 arithmetic matches the codec" {
+    const a = gft16_from_f32(1.5);
+    const b = gft16_from_f32(2.5);
+    try std.testing.expectApproxEqAbs(@as(f32, 4.0), gft16_to_f32(gft16_add(a, b)), 0.02);
+    try std.testing.expectApproxEqAbs(@as(f32, 1.0), gft16_to_f32(gft16_sub(b, a)), 0.02);
+    try std.testing.expectApproxEqAbs(@as(f32, 3.75), gft16_to_f32(gft16_mul(a, b)), 0.02);
+    try std.testing.expectApproxEqAbs(@as(f32, 0.6), gft16_to_f32(gft16_div(a, b)), 0.02);
+}
+
+test "C-ABI: gft16_neg / gft16_abs / gft16_is_finite" {
+    const x = gft16_from_f32(3.5);
+    try std.testing.expectApproxEqAbs(@as(f32, -3.5), gft16_to_f32(gft16_neg(x)), 0.02);
+    try std.testing.expectApproxEqAbs(@as(f32, 3.5), gft16_to_f32(gft16_abs(gft16_neg(x))), 0.02);
+    try std.testing.expectEqual(@as(u8, 1), gft16_is_finite(gft16_from_f32(1.0)));
+    try std.testing.expectEqual(@as(u8, 0), gft16_is_finite(gft16_from_f32(1e30))); // overflow -> Inf
+}
+
+test "C-ABI: gft16 round-trips through the raw u32 (FFI stability)" {
+    const g = gft16_from_f32(-6.28);
+    try std.testing.expectEqual(gft16_to_f32(g), gft16_to_f32(gft16_from_f32(gft16_to_f32(g))));
 }
