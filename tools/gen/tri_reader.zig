@@ -27,29 +27,17 @@ pub const Spec = struct {
     types: []const TypeDef = &.{},
     constants: []const ConstDef = &.{},
 
-    pub fn deinit(self: *Spec, allocator: std.mem.Allocator) void {
-        // Free field definitions
-        allocator.free(self.fields);
-        allocator.free(self.test_vectors);
+    // All parsed strings and slices are owned by this arena, so deinit is a
+    // single free of the whole arena — no per-field bookkeeping to drift out
+    // of sync with the struct.
+    arena_state: ?*std.heap.ArenaAllocator = null,
 
-        // Free Level 5 (data structures) fields
-        if (self.spec_type) |t| allocator.free(t);
-        for (self.types) |td| {
-            allocator.free(td.name);
-            if (td.generic) |g| allocator.free(g);
-            for (td.fields) |f| {
-                allocator.free(f.name);
-                allocator.free(f.type);
-            }
-            allocator.free(td.fields);
-            if (td.variant == .enum_type) allocator.free(td.enum_values);
+    pub fn deinit(self: *Spec, allocator: std.mem.Allocator) void {
+        if (self.arena_state) |arena| {
+            arena.deinit();
+            allocator.destroy(arena);
+            self.arena_state = null;
         }
-        allocator.free(self.types);
-        for (self.constants) |c| {
-            allocator.free(c.name);
-            allocator.free(c.value);
-        }
-        allocator.free(self.constants);
     }
 };
 
@@ -246,1040 +234,624 @@ pub fn load(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !Spec {
     return spec;
 }
 
-/// Parse .tri format content
+/// Parse .tri format content.
+///
+/// All strings and slices in the returned Spec are owned by an arena stored in
+/// `spec.arena_state`; `spec.deinit(allocator)` frees the arena in one shot.
 pub fn parse(allocator: std.mem.Allocator, content: []const u8) !Spec {
-    var parser = Parser.init(content, allocator);
-    defer parser.deinit();
+    const arena = try allocator.create(std.heap.ArenaAllocator);
+    errdefer allocator.destroy(arena);
+    arena.* = std.heap.ArenaAllocator.init(allocator);
+    errdefer arena.deinit();
 
-    return parser.parseSpec();
+    var parser = Parser{ .content = content, .a = arena.allocator() };
+    var spec = try parser.parseSpec();
+    spec.arena_state = arena;
+    return spec;
 }
 
+/// Indentation-aware `.tri` parser.
+///
+/// `.tri` is a YAML-ish, whitespace-significant format. The old parser walked
+/// the byte stream with per-section functions and had no notion of block scope,
+/// so nested keys leaked into the next top-level section and every numeric field
+/// came back zero. This implementation works in two phases:
+///
+///   1. `lex`        — split into significant lines (indent, list-item marker, text).
+///   2. `buildNodes` — fold the lines into an indentation tree of `Node`s.
+///
+/// The tree is then mapped onto the strongly-typed `Spec`. Because scoping is a
+/// property of the tree, mapping is just "find my child by key" and cannot
+/// over-consume into a sibling section.
 const Parser = struct {
     content: []const u8,
-    pos: usize,
-    line: usize = 1,
-    allocator: std.mem.Allocator,
+    a: std.mem.Allocator,
 
-    fn init(content: []const u8, allocator: std.mem.Allocator) Parser {
-        return .{
-            .content = content,
-            .pos = 0,
-            .allocator = allocator,
-        };
+    /// One significant source line. For a list item (`- ...`) `indent` is the
+    /// column of the dash and `text` is everything after `"- "`.
+    const RawLine = struct {
+        indent: usize,
+        is_item: bool,
+        text: []const u8,
+    };
+
+    /// A node in the indentation tree.
+    ///
+    /// - A mapping entry has `key`/`value` (a leaf) or `key` + `children` (a block).
+    /// - A list item has `is_item = true`; a scalar item keeps its text in `value`,
+    ///   a mapping item keeps its entries in `children`.
+    const Node = struct {
+        key: []const u8 = "",
+        value: []const u8 = "",
+        is_item: bool = false,
+        children: []const Node = &.{},
+
+        /// Find a direct mapping child by key (list items are skipped).
+        fn child(self: Node, k: []const u8) ?Node {
+            for (self.children) |c| {
+                if (!c.is_item and eql(c.key, k)) return c;
+            }
+            return null;
+        }
+    };
+
+    fn eql(a: []const u8, b: []const u8) bool {
+        return std.mem.eql(u8, a, b);
     }
 
-    fn deinit(self: *Parser) void {
-        _ = self;
+    // ── Phase 1: lexing ──────────────────────────────────────────────────
+
+    fn lex(self: *Parser) ![]RawLine {
+        var lines = try std.ArrayList(RawLine).initCapacity(self.a, 0);
+        var it = std.mem.splitScalar(u8, self.content, '\n');
+        while (it.next()) |raw0| {
+            var raw = raw0;
+            if (raw.len > 0 and raw[raw.len - 1] == '\r') raw = raw[0 .. raw.len - 1];
+
+            var indent: usize = 0;
+            while (indent < raw.len and raw[indent] == ' ') indent += 1;
+
+            var rest = raw[indent..];
+            if (rest.len == 0) continue; // blank line
+            if (rest[0] == '#') continue; // full-line comment
+
+            rest = stripInlineComment(rest);
+            rest = std.mem.trimEnd(u8, rest, " \t");
+            if (rest.len == 0) continue;
+
+            var is_item = false;
+            if (std.mem.eql(u8, rest, "-")) {
+                is_item = true;
+                rest = "";
+            } else if (rest.len >= 2 and rest[0] == '-' and rest[1] == ' ') {
+                is_item = true;
+                rest = std.mem.trimStart(u8, rest[2..], " \t");
+            }
+
+            try lines.append(self.a, .{ .indent = indent, .is_item = is_item, .text = rest });
+        }
+        return lines.toOwnedSlice(self.a);
     }
 
-    fn peek(self: *Parser) ?u8 {
-        if (self.pos >= self.content.len) return null;
-        return self.content[self.pos];
-    }
-
-    fn advance(self: *Parser) ?u8 {
-        if (self.pos >= self.content.len) return null;
-        const ch = self.content[self.pos];
-        self.pos += 1;
-        if (ch == '\n') self.line += 1;
-        return ch;
-    }
-
-    fn skipWhitespaceAndComments(self: *Parser) void {
-        while (true) {
-            self.skipWhitespace();
-            if (self.peek()) |ch| {
-                if (ch == '#') {
-                    self.skipComment();
-                } else {
-                    break;
-                }
-            } else {
-                break;
+    /// Strip a trailing `# ...` comment, ignoring `#` inside double quotes and
+    /// requiring the `#` to be preceded by whitespace (so `a#b` stays intact).
+    fn stripInlineComment(text: []const u8) []const u8 {
+        var in_quote = false;
+        var i: usize = 0;
+        while (i < text.len) : (i += 1) {
+            const ch = text[i];
+            if (ch == '"') {
+                in_quote = !in_quote;
+            } else if (ch == '#' and !in_quote and (i == 0 or text[i - 1] == ' ' or text[i - 1] == '\t')) {
+                return text[0..i];
             }
         }
+        return text;
     }
 
-    fn skipComment(self: *Parser) void {
-        if (self.peek()) |ch| {
-            if (ch == '#') {
-                while (self.advance()) |line_ch| {
-                    if (line_ch == '\n') {
-                        self.line += 1;
-                        break;
+    // ── Phase 2: build the indentation tree ──────────────────────────────
+
+    /// Consume lines whose indent is >= `min_indent`, building sibling nodes.
+    /// Children are lines strictly more indented than their parent.
+    fn buildNodes(self: *Parser, lines: []const RawLine, idx: *usize, min_indent: usize) anyerror![]const Node {
+        var nodes = try std.ArrayList(Node).initCapacity(self.a, 0);
+        while (idx.* < lines.len) {
+            const line = lines[idx.*];
+            if (line.indent < min_indent) break;
+            idx.* += 1;
+
+            if (line.is_item) {
+                const kv = splitKV(line.text);
+                if (kv.key.len > 0) {
+                    // Mapping item: first entry is inline, rest follow at the
+                    // content column (dash column + 1 is enough to scope them).
+                    var kids = try std.ArrayList(Node).initCapacity(self.a, 0);
+                    try kids.append(self.a, .{ .key = kv.key, .value = kv.value });
+                    const rest = try self.buildNodes(lines, idx, line.indent + 1);
+                    try kids.appendSlice(self.a, rest);
+                    try nodes.append(self.a, .{ .is_item = true, .children = try kids.toOwnedSlice(self.a) });
+                } else {
+                    // Scalar item (`- some_value`) or an empty `-` with a block.
+                    if (kv.value.len > 0) {
+                        try nodes.append(self.a, .{ .is_item = true, .value = kv.value });
+                    } else {
+                        const kids = try self.buildNodes(lines, idx, line.indent + 1);
+                        try nodes.append(self.a, .{ .is_item = true, .children = kids });
                     }
                 }
-            }
-        }
-    }
-
-    fn skipWhitespace(self: *Parser) void {
-        while (self.peek()) |ch| {
-            if (ch == ' ' or ch == '\t' or ch == '\n' or ch == '\r') {
-                _ = self.advance();
             } else {
-                break;
+                const kv = splitKV(line.text);
+                if (kv.key.len > 0 and kv.value.len == 0) {
+                    const kids = try self.buildNodes(lines, idx, line.indent + 1);
+                    try nodes.append(self.a, .{ .key = kv.key, .children = kids });
+                } else {
+                    try nodes.append(self.a, .{ .key = kv.key, .value = kv.value });
+                }
             }
         }
+        return nodes.toOwnedSlice(self.a);
     }
 
-    fn readKey(self: *Parser) !?[]const u8 {
-        self.skipWhitespaceAndComments();
-        const start = self.pos;
+    const KV = struct { key: []const u8, value: []const u8 };
 
-        while (self.peek()) |ch| {
-            if (ch == ':' or ch == '\n' or ch == '#') {
-                break;
+    /// Split `key: value` on the first colon. No colon → a scalar (`key = ""`).
+    fn splitKV(text: []const u8) KV {
+        if (std.mem.indexOfScalar(u8, text, ':')) |ci| {
+            return .{
+                .key = std.mem.trim(u8, text[0..ci], " \t"),
+                .value = std.mem.trim(u8, text[ci + 1 ..], " \t"),
+            };
+        }
+        return .{ .key = "", .value = std.mem.trim(u8, text, " \t") };
+    }
+
+    // ── Small typed accessors over the tree ──────────────────────────────
+
+    fn intOf(comptime T: type, node: Node, key: []const u8, default: T) T {
+        if (node.child(key)) |c| {
+            return std.fmt.parseInt(T, c.value, 10) catch default;
+        }
+        return default;
+    }
+
+    fn floatOf(node: Node, key: []const u8, default: f64) f64 {
+        if (node.child(key)) |c| {
+            return std.fmt.parseFloat(f64, c.value) catch default;
+        }
+        return default;
+    }
+
+    fn boolOf(node: Node, key: []const u8, default: bool) bool {
+        if (node.child(key)) |c| return std.mem.eql(u8, c.value, "true");
+        return default;
+    }
+
+    /// Duplicate a value into the arena, stripping surrounding double quotes.
+    fn dupUnquote(self: *Parser, s: []const u8) ![]const u8 {
+        var v = s;
+        if (v.len >= 2 and v[0] == '"' and v[v.len - 1] == '"') v = v[1 .. v.len - 1];
+        return self.a.dupe(u8, v);
+    }
+
+    /// Arena-duped copy of a child's (unquoted) value, or `default` when absent.
+    fn strOf(self: *Parser, node: Node, key: []const u8, default: []const u8) ![]const u8 {
+        if (node.child(key)) |c| return self.dupUnquote(c.value);
+        return default;
+    }
+
+    /// Parse an inline `[a, b, c]` array into duped strings.
+    fn parseInlineArray(self: *Parser, value: []const u8) ![]const []const u8 {
+        var inner = std.mem.trim(u8, value, " \t");
+        if (inner.len >= 2 and inner[0] == '[' and inner[inner.len - 1] == ']') {
+            inner = inner[1 .. inner.len - 1];
+        }
+        var list = try std.ArrayList([]const u8).initCapacity(self.a, 0);
+        var it = std.mem.splitScalar(u8, inner, ',');
+        while (it.next()) |elem| {
+            const trimmed = std.mem.trim(u8, elem, " \t");
+            if (trimmed.len == 0) continue;
+            try list.append(self.a, try self.dupUnquote(trimmed));
+        }
+        return list.toOwnedSlice(self.a);
+    }
+
+    /// A child that is either an inline array (`key: [a, b]`) or a block list of
+    /// scalar items, returned as duped strings.
+    fn listOf(self: *Parser, node: Node, key: []const u8) ![]const []const u8 {
+        if (node.child(key)) |c| {
+            if (c.value.len > 0 and c.value[0] == '[') return self.parseInlineArray(c.value);
+            if (c.children.len > 0) {
+                var list = try std.ArrayList([]const u8).initCapacity(self.a, 0);
+                for (c.children) |it| {
+                    if (it.is_item) try list.append(self.a, try self.dupUnquote(it.value));
+                }
+                return list.toOwnedSlice(self.a);
             }
-            _ = self.advance();
         }
-
-        if (self.pos == start) return null;
-
-        var end = self.pos;
-        while (end > start and (self.content[end - 1] == ' ' or self.content[end - 1] == '\t')) {
-            end -= 1;
-        }
-
-        const slice = self.content[start..end];
-        // Allocate a copy to ensure the key persists after parsing
-        const result = try self.allocator.dupe(u8, slice);
-        // Convert []u8 to []const u8 by casting
-        return @as([]const u8, result);
+        return &.{};
     }
 
-    fn readValue(self: *Parser) ![]const u8 {
-        self.skipWhitespaceAndComments();
-        if (self.peek()) |ch| {
-            if (ch == ':') {
-                _ = self.advance();
-                self.skipWhitespaceAndComments();
-            }
-        }
-
-        const start = self.pos;
-
-        if (self.peek()) |ch| {
-            if (ch == '"') {
-                _ = self.advance();
-                return self.readUntil('"');
-            }
-        }
-
-        while (self.advance()) |ch| {
-            if (ch == '\n' or ch == '#') {
-                self.pos -= 1;
-                break;
-            }
-        }
-
-        if (self.pos == start) return error.EmptyValue;
-
-        var end = self.pos;
-        while (end > start and (self.content[end - 1] == ' ' or self.content[end - 1] == '\t')) {
-            end -= 1;
-        }
-
-        const slice = self.content[start..end];
-        // Allocate a copy to ensure the value persists after parsing
-        return self.allocator.dupe(u8, slice);
-    }
-
-    fn readUntil(self: *Parser, delimiter: u8) ![]const u8 {
-        const start = self.pos;
-        while (self.advance()) |ch| {
-            if (ch == delimiter) {
-                const slice = self.content[start .. self.pos - 1];
-                return self.allocator.dupe(u8, slice);
-            }
-        }
-        return error.UnexpectedEndOfFile;
-    }
-
-    fn parseInt(self: *Parser, comptime T: type) !T {
-        const str = try self.readValue();
-        defer self.allocator.free(str);
-        return std.fmt.parseInt(T, str, 10);
-    }
-
-    fn parseFloat(self: *Parser) !f64 {
-        const str = try self.readValue();
-        defer self.allocator.free(str);
-        return std.fmt.parseFloat(f64, str);
-    }
-
-    /// Consume a value and free it, for use when value is discarded
-    fn consumeValue(self: *Parser) void {
-        const value = self.readValue() catch return;
-        self.allocator.free(value);
-    }
+    // ── Mapping the tree onto Spec ───────────────────────────────────────
 
     fn parseSpec(self: *Parser) !Spec {
+        const lines = try self.lex();
+        var idx: usize = 0;
+        const roots = try self.buildNodes(lines, &idx, 0);
+
+        const zero_special = Exponent.SpecialValue{ .exponent = 0, .mantissa = 0 };
         var spec = Spec{
             .format = "GF16",
             .version = 1,
             .level = 0,
-            .storage = undefined,
+            .storage = .{ .bits = 0, .align_bytes = 1, .endianness = "", .underlying = "", .encoding = "binary" },
             .fields = &.{},
-            .exponent = undefined,
-            .rounding = undefined,
-            .phi = undefined,
+            .exponent = .{
+                .bits = 0,
+                .bias = 0,
+                .max = 0,
+                .min = 0,
+                .special = .{ .zero = zero_special, .subnormal = zero_special, .inf = zero_special, .nan = zero_special },
+            },
+            .rounding = .{ .mode = .ties_to_even, .source_type = "", .overflow_policy = "", .underflow_policy = "" },
+            .phi = .{ .total_bits = 0, .exponent_bits = 0, .mantissa_bits = 0, .target_ratio = 0, .ratio = 0, .distance = 0 },
             .ternary = null,
             .vsa = null,
-            .abi = undefined,
-            .conversion = undefined,
+            .abi = .{
+                .c = .{ .typename = "uint16_t" },
+                .rust = .{ .typename = "u16" },
+                .cpp = .{ .typename = "uint16_t" },
+                .zig = .{ .typename = "u16" },
+            },
+            .conversion = .{ .from_f32_steps = &.{}, .to_f32_steps = &.{} },
             .ops = &.{},
             .composite = null,
             .test_vectors = &.{},
         };
 
-        while (try self.readKey()) |maybe_key| {
-            // readKey() dupes the key so it persists across the read; it is only used
-            // for dispatch here (values are duped separately), so free it each pass.
-            defer self.allocator.free(maybe_key);
-            if (std.mem.eql(u8, maybe_key, "format")) {
-                self.consumeValue();
-            } else if (std.mem.eql(u8, maybe_key, "version")) {
-                spec.version = try self.parseInt(u8);
-            } else if (std.mem.eql(u8, maybe_key, "level")) {
-                spec.level = try self.parseInt(u8);
-            } else if (std.mem.eql(u8, maybe_key, "type")) {
-                const type_val = try self.readValue();
-                spec.spec_type = type_val;
-            } else if (std.mem.eql(u8, maybe_key, "storage")) {
-                self.consumeValue();
-            } else if (std.mem.eql(u8, maybe_key, "version")) {
-                spec.version = try self.parseInt(u8);
-            } else if (std.mem.eql(u8, maybe_key, "level")) {
-                spec.level = try self.parseInt(u8);
-            } else if (std.mem.eql(u8, maybe_key, "type")) {
-                spec.spec_type = try self.readValue();
-            } else if (std.mem.eql(u8, maybe_key, "storage")) {
-                spec.storage = try self.parseStorage();
-            } else if (std.mem.eql(u8, maybe_key, "fields")) {
-                spec.fields = try self.parseFieldList();
-            } else if (std.mem.eql(u8, maybe_key, "exponent")) {
-                spec.exponent = try self.parseExponent();
-            } else if (std.mem.eql(u8, maybe_key, "rounding")) {
-                spec.rounding = try self.parseRounding();
-            } else if (std.mem.eql(u8, maybe_key, "phi")) {
-                spec.phi = try self.parsePhi();
-            } else if (std.mem.eql(u8, maybe_key, "ternary")) {
-                spec.ternary = try self.parseTernary();
-            } else if (std.mem.eql(u8, maybe_key, "vsa")) {
-                spec.vsa = try self.parseVsa();
-            } else if (std.mem.eql(u8, maybe_key, "abi")) {
-                spec.abi = try self.parseAbi();
-            } else if (std.mem.eql(u8, maybe_key, "conversion")) {
-                _ = try self.parseConversion();
-            } else if (std.mem.eql(u8, maybe_key, "ops")) {
-                spec.ops = try self.parseOpList();
-            } else if (std.mem.eql(u8, maybe_key, "constants")) {
-                // constants: is a section header
-                self.skipWhitespaceAndComments();
-                if (self.peek()) |ch| {
-                    if (ch == ':') _ = self.advance();
-                }
-                spec.constants = try self.parseConstants();
-            } else if (std.mem.eql(u8, maybe_key, "types")) {
-                // types: is a section header, not a key-value pair
-                // Skip to next line for type definitions
-                self.skipWhitespaceAndComments();
-                if (self.peek()) |ch| {
-                    if (ch == ':') _ = self.advance();
-                }
-                spec.types = try self.parseTypes();
-            } else if (std.mem.eql(u8, maybe_key, "composite")) {
-                spec.composite = try self.parseComposite();
-            } else if (std.mem.eql(u8, maybe_key, "test_vectors")) {
-                spec.test_vectors = try self.parseTestVectors();
-            } else {
-                self.consumeValue();
+        for (roots) |node| {
+            const k = node.key;
+            if (k.len == 0) continue; // stray scalar (e.g. a block-literal description line)
+            if (eql(k, "format")) {
+                spec.format = try self.dupUnquote(node.value);
+            } else if (eql(k, "version")) {
+                spec.version = std.fmt.parseInt(u8, node.value, 10) catch spec.version;
+            } else if (eql(k, "level")) {
+                spec.level = std.fmt.parseInt(u8, node.value, 10) catch spec.level;
+            } else if (eql(k, "type")) {
+                spec.spec_type = try self.dupUnquote(node.value);
+            } else if (eql(k, "storage")) {
+                spec.storage = try self.mapStorage(node);
+            } else if (eql(k, "fields")) {
+                spec.fields = try self.mapFields(node);
+            } else if (eql(k, "exponent")) {
+                spec.exponent = try self.mapExponent(node);
+            } else if (eql(k, "rounding")) {
+                spec.rounding = try self.mapRounding(node);
+            } else if (eql(k, "phi")) {
+                spec.phi = try self.mapPhi(node);
+            } else if (eql(k, "ternary")) {
+                spec.ternary = try self.mapTernary(node);
+            } else if (eql(k, "vsa")) {
+                spec.vsa = try self.mapVsa(node);
+            } else if (eql(k, "abi")) {
+                spec.abi = try self.mapAbi(node);
+            } else if (eql(k, "conversion")) {
+                spec.conversion = try self.mapConversion(node);
+            } else if (eql(k, "ops")) {
+                spec.ops = try self.mapOps(node);
+            } else if (eql(k, "composite")) {
+                spec.composite = try self.mapComposite(node);
+            } else if (eql(k, "test_vectors")) {
+                spec.test_vectors = try self.mapTestVectors(node);
+            } else if (eql(k, "constants")) {
+                spec.constants = try self.mapConstants(node);
+            } else if (eql(k, "types")) {
+                spec.types = try self.mapTypes(node);
             }
         }
 
         return spec;
     }
 
-    fn parseStorage(self: *Parser) !Storage {
-        const bits = self.parseInt(u8) catch 0;
-        const align_bytes = self.parseInt(u8) catch 1;
-        const endianness = self.readValue() catch "";
-        const underlying = self.readValue() catch "";
-        const encoding = self.readValue() catch "binary";
-
+    fn mapStorage(self: *Parser, node: Node) !Storage {
         return .{
-            .bits = bits,
-            .align_bytes = align_bytes,
-            .endianness = endianness,
-            .underlying = underlying,
-            .encoding = encoding,
+            .bits = intOf(u8, node, "bits", 0),
+            // hash_table.tri spells this "alignment"; accept both.
+            .align_bytes = intOf(u8, node, "align_bytes", intOf(u8, node, "alignment", 1)),
+            .endianness = try self.strOf(node, "endianness", ""),
+            .underlying = try self.strOf(node, "underlying", ""),
+            .encoding = try self.strOf(node, "encoding", "binary"),
         };
     }
 
-    fn parseFieldList(self: *Parser) ![]Field {
-        var list = std.ArrayList(Field).initCapacity(self.allocator, 0) catch unreachable;
-        errdefer list.deinit(self.allocator);
-
-        while (true) : (self.skipWhitespaceAndComments()) {
-            if (self.peek()) |ch| {
-                if (ch != '-') break;
-            } else {
-                break;
-            }
-            _ = self.advance(); // Skip '-'
-
-            var field = Field{
-                .name = "",
-                .bits = 0,
-                .position_msb = 0,
-            };
-
-            while (try self.readKey()) |maybe_key| {
-                if (std.mem.eql(u8, maybe_key, "name")) {
-                    field.name = try self.readValue();
-                } else if (std.mem.eql(u8, maybe_key, "bits")) {
-                    field.bits = try self.parseInt(u8);
-                } else if (std.mem.eql(u8, maybe_key, "position_msb")) {
-                    field.position_msb = try self.parseInt(u8);
-                } else if (std.mem.eql(u8, maybe_key, "trit_value")) {
-                    field.trit_value = true;
-                } else if (std.mem.eql(u8, maybe_key, "trit_count")) {
-                    field.trit_count = try self.parseInt(u8);
-                } else if (std.mem.eql(u8, maybe_key, "encoding")) {
-                    field.encoding = try self.readValue();
-                } else {
-                    self.consumeValue();
-                }
-
-                self.skipWhitespaceAndComments();
-                if (self.peek()) |ch| {
-                    if (ch == '\n' or ch == '-') break;
-                }
-            }
-
-            try list.append(self.allocator, field);
+    fn mapFields(self: *Parser, node: Node) ![]Field {
+        var list = try std.ArrayList(Field).initCapacity(self.a, 0);
+        for (node.children) |item| {
+            if (!item.is_item) continue;
+            try list.append(self.a, .{
+                .name = try self.strOf(item, "name", ""),
+                .bits = intOf(u8, item, "bits", 0),
+                .position_msb = intOf(u8, item, "position_msb", 0),
+                .trit_value = boolOf(item, "trit_value", false),
+                .trit_count = intOf(u8, item, "trit_count", 0),
+                .encoding = try self.strOf(item, "encoding", ""),
+            });
         }
-
-        return list.toOwnedSlice(self.allocator);
+        return list.toOwnedSlice(self.a);
     }
 
-    fn parseExponent(self: *Parser) !Exponent {
+    fn mapExponent(self: *Parser, node: Node) !Exponent {
+        _ = self;
+        const zero_special = Exponent.SpecialValue{ .exponent = 0, .mantissa = 0 };
         var special = Exponent.Special{
-            .zero = undefined,
-            .subnormal = undefined,
-            .inf = undefined,
-            .nan = undefined,
+            .zero = zero_special,
+            .subnormal = zero_special,
+            .inf = zero_special,
+            .nan = zero_special,
         };
-
-        var trits: u8 = 0;
-        var base: u8 = 2;
-
-        while (try self.readKey()) |maybe_key| {
-            if (std.mem.eql(u8, maybe_key, "bits")) {
-                self.consumeValue();
-            } else if (std.mem.eql(u8, maybe_key, "bias")) {
-                self.consumeValue();
-            } else if (std.mem.eql(u8, maybe_key, "max")) {
-                self.consumeValue();
-            } else if (std.mem.eql(u8, maybe_key, "min")) {
-                self.consumeValue();
-            } else if (std.mem.eql(u8, maybe_key, "trits")) {
-                trits = try self.parseInt(u8);
-            } else if (std.mem.eql(u8, maybe_key, "base")) {
-                base = try self.parseInt(u8);
-            } else if (std.mem.eql(u8, maybe_key, "special")) {
-                special = try self.parseExponentSpecial();
-            } else {
-                self.consumeValue();
-            }
+        if (node.child("special")) |sp| {
+            if (sp.child("zero")) |c| special.zero = mapSpecialValue(c);
+            if (sp.child("subnormal")) |c| special.subnormal = mapSpecialValue(c);
+            if (sp.child("inf")) |c| special.inf = mapSpecialValue(c);
+            if (sp.child("nan")) |c| special.nan = mapSpecialValue(c);
         }
-
         return .{
-            .bits = try self.parseInt(u8),
-            .bias = try self.parseInt(u8),
-            .max = try self.parseInt(u8),
-            .min = try self.parseInt(u8),
+            .bits = intOf(u8, node, "bits", 0),
+            .bias = intOf(u8, node, "bias", 0),
+            .max = intOf(u8, node, "max", 0),
+            .min = intOf(u8, node, "min", 0),
             .special = special,
-            .trits = trits,
-            .base = base,
+            .trits = intOf(u8, node, "trits", 0),
+            .base = intOf(u8, node, "base", 2),
         };
     }
 
-    fn parseExponentSpecial(self: *Parser) !Exponent.Special {
-        var special = Exponent.Special{
-            .zero = undefined,
-            .subnormal = undefined,
-            .inf = undefined,
-            .nan = undefined,
+    fn mapSpecialValue(node: Node) Exponent.SpecialValue {
+        return .{
+            .exponent = intOf(u8, node, "exponent", 0),
+            .mantissa = intOf(u8, node, "mantissa", 0),
+            .mantissa_nonzero = boolOf(node, "mantissa_nonzero", false),
         };
-
-        while (try self.readKey()) |maybe_key| {
-            if (std.mem.eql(u8, maybe_key, "zero")) {
-                special.zero = try self.parseExponentValue();
-            } else if (std.mem.eql(u8, maybe_key, "subnormal")) {
-                special.subnormal = try self.parseExponentValue();
-            } else if (std.mem.eql(u8, maybe_key, "inf")) {
-                special.inf = try self.parseExponentValue();
-            } else if (std.mem.eql(u8, maybe_key, "nan")) {
-                special.nan = try self.parseExponentValue();
-            } else {
-                self.consumeValue();
-            }
-        }
-
-        return special;
     }
 
-    fn parseExponentValue(self: *Parser) !Exponent.SpecialValue {
-        var value = Exponent.SpecialValue{
-            .exponent = 0,
-            .mantissa = 0,
-        };
-
-        while (try self.readKey()) |maybe_key| {
-            if (std.mem.eql(u8, maybe_key, "exponent")) {
-                value.exponent = try self.parseInt(u8);
-            } else if (std.mem.eql(u8, maybe_key, "mantissa")) {
-                value.mantissa = try self.parseInt(u8);
-            } else if (std.mem.eql(u8, maybe_key, "mantissa_nonzero")) {
-                value.mantissa_nonzero = true;
-            } else {
-                self.consumeValue();
-            }
-        }
-
-        return value;
-    }
-
-    fn parseRounding(self: *Parser) !Rounding {
-        const mode_str = try self.readValue();
-        const mode: Rounding.Mode = if (std.mem.eql(u8, mode_str, "ties-to-even"))
+    fn mapRounding(self: *Parser, node: Node) !Rounding {
+        const mode_str = try self.strOf(node, "mode", "ties-to-even");
+        const mode: Rounding.Mode = if (eql(mode_str, "ties-to-even"))
             .ties_to_even
-        else if (std.mem.eql(u8, mode_str, "ties-to-zero"))
+        else if (eql(mode_str, "ties-to-odd"))
+            .ties_to_odd
+        else if (eql(mode_str, "ties-to-zero") or eql(mode_str, "toward-zero"))
             .toward_zero
+        else if (eql(mode_str, "toward-positive"))
+            .toward_positive
+        else if (eql(mode_str, "toward-negative"))
+            .toward_negative
         else
             .ties_to_even;
 
         return .{
             .mode = mode,
-            .source_type = try self.readValue(),
-            .overflow_policy = try self.readValue(),
-            .underflow_policy = try self.readValue(),
+            .source_type = try self.strOf(node, "source_type", ""),
+            .overflow_policy = try self.strOf(node, "overflow_policy", ""),
+            .underflow_policy = try self.strOf(node, "underflow_policy", ""),
         };
     }
 
-    fn parsePhi(self: *Parser) !Phi {
-        return .{
-            .total_bits = try self.parseInt(u8),
-            .exponent_bits = try self.parseInt(u8),
-            .mantissa_bits = try self.parseInt(u8),
-            .target_ratio = try self.parseFloat(),
-            .ratio = try self.parseFloat(),
-            .distance = try self.parseFloat(),
-        };
-    }
-
-    fn parseTernary(self: *Parser) !Ternary {
-        const trit_values = [_]i8{ -1, 0, 1 };
-
-        return .{
-            .trit_values = &trit_values,
-            .encoding = try self.readValue(),
-            .bits_per_trit = try self.parseInt(u8),
-            .total_trits = try self.parseInt(u8),
-        };
-    }
-
-    fn parseVsa(self: *Parser) !Vsa {
-        var compatible: bool = false;
-        var bind_arity: u8 = 0;
-        var bundle_arity: u8 = 0;
-        var similarity: []const u8 = "cosine";
-
-        while (try self.readKey()) |maybe_key| {
-            if (std.mem.eql(u8, maybe_key, "compatible")) {
-                const val = try self.readValue();
-                compatible = std.mem.eql(u8, val, "true");
-            } else if (std.mem.eql(u8, maybe_key, "bind_arity")) {
-                bind_arity = try self.parseInt(u8);
-            } else if (std.mem.eql(u8, maybe_key, "bundle_arity")) {
-                bundle_arity = try self.parseInt(u8);
-            } else if (std.mem.eql(u8, maybe_key, "similarity")) {
-                similarity = try self.readValue();
-            } else {
-                self.consumeValue();
-            }
-        }
-
-        return .{
-            .compatible = compatible,
-            .bind_arity = bind_arity,
-            .bundle_arity = bundle_arity,
-            .similarity = similarity,
-        };
-    }
-
-    fn parseAbi(self: *Parser) !Abi {
-        var c_name: []const u8 = "uint16_t";
-        var rust_name: []const u8 = "u16";
-        var cpp_name: []const u8 = "uint16_t";
-        var zig_name: []const u8 = "u16";
-
-        while (try self.readKey()) |maybe_key| {
-            if (std.mem.eql(u8, maybe_key, "c")) {
-                c_name = try self.readValue();
-            } else if (std.mem.eql(u8, maybe_key, "rust")) {
-                rust_name = try self.readValue();
-            } else if (std.mem.eql(u8, maybe_key, "cpp")) {
-                cpp_name = try self.readValue();
-            } else if (std.mem.eql(u8, maybe_key, "zig")) {
-                zig_name = try self.readValue();
-            } else {
-                self.consumeValue();
-            }
-        }
-
-        return .{
-            .c = .{ .typename = c_name },
-            .rust = .{ .typename = rust_name },
-            .cpp = .{ .typename = cpp_name },
-            .zig = .{ .typename = zig_name },
-        };
-    }
-
-    fn parseConversion(self: *Parser) !Conversion {
-        var from_steps = std.ArrayList([]const u8).initCapacity(self.allocator, 0) catch unreachable;
-        defer from_steps.deinit(self.allocator);
-        var to_steps = std.ArrayList([]const u8).initCapacity(self.allocator, 0) catch unreachable;
-        defer to_steps.deinit(self.allocator);
-
-        while (try self.readKey()) |maybe_key| {
-            if (std.mem.eql(u8, maybe_key, "from_f32_steps")) {
-                while (true) {
-                    self.skipWhitespaceAndComments();
-                    if (self.peek()) |ch| {
-                        if (ch == '-' or ch == '\n') {
-                            if (ch == '-') {
-                                _ = self.advance();
-                                self.skipWhitespaceAndComments();
-                            }
-                            const step = try self.readValue();
-                            try from_steps.append(self.allocator, step);
-                        } else {
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-                }
-            } else if (std.mem.eql(u8, maybe_key, "to_f32_steps")) {
-                while (true) {
-                    self.skipWhitespaceAndComments();
-                    if (self.peek()) |ch| {
-                        if (ch == '-' or ch == '\n') {
-                            if (ch == '-') {
-                                _ = self.advance();
-                                self.skipWhitespaceAndComments();
-                            }
-                            const step = try self.readValue();
-                            try to_steps.append(self.allocator, step);
-                        } else {
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-                }
-            } else {
-                self.consumeValue();
-            }
-        }
-
-        if (from_steps.items.len == 0) {
-            try from_steps.append(self.allocator, "decode");
-            try from_steps.append(self.allocator, "f32_op");
-            try from_steps.append(self.allocator, "encode");
-        }
-
-        if (to_steps.items.len == 0) {
-            try to_steps.append(self.allocator, "decode");
-            try to_steps.append(self.allocator, "f32_value");
-        }
-
-        return .{
-            .from_f32_steps = try from_steps.toOwnedSlice(self.allocator),
-            .to_f32_steps = try to_steps.toOwnedSlice(self.allocator),
-        };
-    }
-
-    fn parseOpList(self: *Parser) ![]const Op {
-        var list = std.ArrayList(Op).initCapacity(self.allocator, 0) catch unreachable;
-        errdefer list.deinit(self.allocator);
-
-        while (true) : (self.skipWhitespaceAndComments()) {
-            if (self.peek()) |ch| {
-                if (ch != '-') break;
-            } else {
-                break;
-            }
-            _ = self.advance(); // Skip '-'
-
-            const op_name = try self.readValue();
-
-            var op = Op{
-                .name = op_name,
-                .inputs = &.{},
-                .outputs = &.{},
-                .algorithm = "",
-                .domain = "",
-                .table = null,
-            };
-
-            while (try self.readKey()) |maybe_key| {
-                if (std.mem.eql(u8, maybe_key, "inputs")) {
-                    // Parse list of inputs
-                    var inputs = std.ArrayList([]const u8).initCapacity(self.allocator, 0) catch unreachable;
-                    while (true) : (self.skipWhitespaceAndComments()) {
-                        const peek_ch = self.peek() orelse break;
-                        if (peek_ch == '-' or peek_ch == '\n') break;
-                        if (peek_ch == '-') _ = self.advance();
-                        const input = try self.readValue();
-                        try inputs.append(self.allocator, input);
-                    }
-                    op.inputs = try inputs.toOwnedSlice(self.allocator);
-                } else if (std.mem.eql(u8, maybe_key, "outputs")) {
-                    var outputs = std.ArrayList([]const u8).initCapacity(self.allocator, 0) catch unreachable;
-                    while (true) : (self.skipWhitespaceAndComments()) {
-                        const peek_ch = self.peek() orelse break;
-                        if (peek_ch == '-' or peek_ch == '\n') break;
-                        if (peek_ch == '-') _ = self.advance();
-                        const output = try self.readValue();
-                        try outputs.append(self.allocator, output);
-                    }
-                    op.outputs = try outputs.toOwnedSlice(self.allocator);
-                } else if (std.mem.eql(u8, maybe_key, "output")) {
-                    op.output = try self.readValue();
-                } else if (std.mem.eql(u8, maybe_key, "description")) {
-                    op.description = try self.readValue();
-                } else if (std.mem.eql(u8, maybe_key, "intermediate_type")) {
-                    op.intermediate_type = try self.readValue();
-                } else if (std.mem.eql(u8, maybe_key, "algorithm")) {
-                    op.algorithm = try self.readValue();
-                } else if (std.mem.eql(u8, maybe_key, "rounding")) {
-                    op.rounding = try self.readValue();
-                } else if (std.mem.eql(u8, maybe_key, "commutative")) {
-                    const val = try self.readValue();
-                    op.commutative = std.mem.eql(u8, val, "true");
-                } else if (std.mem.eql(u8, maybe_key, "associative_approx")) {
-                    const val = try self.readValue();
-                    op.associative_approx = std.mem.eql(u8, val, "true");
-                } else if (std.mem.eql(u8, maybe_key, "single_rounding")) {
-                    op.single_rounding = true;
-                } else if (std.mem.eql(u8, maybe_key, "domain")) {
-                    op.domain = try self.readValue();
-                } else if (std.mem.eql(u8, maybe_key, "table")) {
-                    op.table = try self.parseOpTable();
-                } else if (std.mem.eql(u8, maybe_key, "element_op")) {
-                    op.element_op = try self.readValue();
-                } else if (std.mem.eql(u8, maybe_key, "reduction")) {
-                    op.reduction = try self.readValue();
-                } else if (std.mem.eql(u8, maybe_key, "bounds")) {
-                    op.bounds = try self.readValue();
-                } else {
-                    self.consumeValue();
-                }
-
-                self.skipWhitespaceAndComments();
-                if (self.peek()) |ch| {
-                    if (ch == '\n' or ch == '-') break;
-                }
-            }
-
-            try list.append(self.allocator, op);
-        }
-
-        return list.toOwnedSlice(self.allocator);
-    }
-
-    fn parseOpTable(self: *Parser) !Op.Table {
-        var entries = std.ArrayList(Op.Entry).initCapacity(self.allocator, 0) catch unreachable;
-        defer entries.deinit(self.allocator);
-
-        while (true) : (self.skipWhitespaceAndComments()) {
-            if (self.peek()) |ch| {
-                if (ch != '"') break;
-            } else {
-                break;
-            }
-
-            const key = try self.readValue(); // "a,b"
-            self.consumeValue(); // ':'
-
-            // Parse value or array
-            if (self.peek()) |ch| {
-                if (ch == '[') {
-                    _ = self.advance();
-                    var values = std.ArrayList([]const u8).initCapacity(self.allocator, 0) catch unreachable;
-                    defer values.deinit(self.allocator);
-
-                    while (true) {
-                        const val = try self.readValue();
-                        try values.append(self.allocator, val);
-
-                        self.skipWhitespaceAndComments();
-                        if (self.peek()) |end_ch| {
-                            if (end_ch == ']') {
-                                _ = self.advance();
-                                break;
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-
-                    const value_array = try values.toOwnedSlice(self.allocator);
-                    try entries.append(self.allocator, .{ .key = key, .value = "", .value_array = value_array });
-                } else {
-                    const value = try self.readValue();
-                    try entries.append(self.allocator, .{ .key = key, .value = value });
-                }
-            }
-
-            self.skipWhitespaceAndComments();
-            if (self.peek()) |ch| {
-                if (ch == '\n' or ch == '-') break;
-            }
-        }
-
-        return .{
-            .entries = try entries.toOwnedSlice(self.allocator),
-        };
-    }
-
-    fn parseComposite(self: *Parser) !Composite {
-        var matmul: ?Composite.MatMul = null;
-        var ternary_conv: ?Composite.TernaryConv = null;
-
-        while (try self.readKey()) |maybe_key| {
-            if (std.mem.eql(u8, maybe_key, "matmul")) {
-                matmul = try self.parseMatMul();
-            } else if (std.mem.eql(u8, maybe_key, "ternary_conv")) {
-                ternary_conv = try self.parseTernaryConv();
-            } else {
-                self.consumeValue();
-            }
-        }
-
-        return .{
-            .matmul = matmul,
-            .ternary_conv = ternary_conv,
-        };
-    }
-
-    fn parseMatMul(self: *Parser) !Composite.MatMul {
+    fn mapPhi(self: *Parser, node: Node) !Phi {
         _ = self;
         return .{
-            .A = "TF3[M, K]",
-            .B = "TF3[K, N]",
-            .output = "TF3[M, N]",
-            .accumulator = "i32",
-            .inner_op = "dot",
-            .tiling = .{ .block_m = 16, .block_n = 16, .block_k = 32 },
+            .total_bits = intOf(u8, node, "total_bits", 0),
+            .exponent_bits = intOf(u8, node, "exponent_bits", 0),
+            .mantissa_bits = intOf(u8, node, "mantissa_bits", 0),
+            .target_ratio = floatOf(node, "target_ratio", 0),
+            .ratio = floatOf(node, "ratio", 0),
+            .distance = floatOf(node, "distance", 0),
         };
     }
 
-    fn parseTernaryConv(self: *Parser) !Composite.TernaryConv {
-        var sparse: bool = false;
-
-        while (try self.readKey()) |maybe_key| {
-            if (std.mem.eql(u8, maybe_key, "sparse")) {
-                const val = try self.readValue();
-                sparse = std.mem.eql(u8, val, "true");
-            } else {
-                self.consumeValue();
-            }
-        }
-
+    fn mapTernary(self: *Parser, node: Node) !Ternary {
+        const trit_values = try self.a.dupe(i8, &[_]i8{ -1, 0, 1 });
         return .{
-            .input = "TF3[H, W, C_in]",
-            .weights = "TF3[K, K, C_in, C_out]",
-            .output = "TF3[H, W, C_out]",
-            .algorithm = "im2col_matmul",
-            .sparse = sparse,
+            .trit_values = trit_values,
+            .encoding = try self.strOf(node, "encoding", ""),
+            .bits_per_trit = intOf(u8, node, "bits_per_trit", 0),
+            .total_trits = intOf(u8, node, "total_trits", 0),
         };
     }
 
-    fn parseTestVectors(self: *Parser) ![]TestVector {
-        var list = std.ArrayList(TestVector).initCapacity(self.allocator, 0) catch unreachable;
-        errdefer list.deinit(self.allocator);
+    fn mapVsa(self: *Parser, node: Node) !Vsa {
+        return .{
+            .compatible = boolOf(node, "compatible", false),
+            .bind_arity = intOf(u8, node, "bind_arity", 0),
+            .bundle_arity = intOf(u8, node, "bundle_arity", 0),
+            .similarity = try self.strOf(node, "similarity", "cosine"),
+        };
+    }
 
-        while (true) : (self.skipWhitespaceAndComments()) {
-            if (self.peek()) |ch| {
-                if (ch != '-') break;
+    fn mapAbi(self: *Parser, node: Node) !Abi {
+        return .{
+            .c = .{ .typename = try self.typenameOf(node, "c", "uint16_t") },
+            .rust = .{ .typename = try self.typenameOf(node, "rust", "u16") },
+            .cpp = .{ .typename = try self.typenameOf(node, "cpp", "uint16_t") },
+            .zig = .{ .typename = try self.typenameOf(node, "zig", "u16") },
+        };
+    }
+
+    fn typenameOf(self: *Parser, node: Node, key: []const u8, default: []const u8) ![]const u8 {
+        if (node.child(key)) |sub| return self.strOf(sub, "typename", default);
+        return default;
+    }
+
+    fn mapConversion(self: *Parser, node: Node) !Conversion {
+        var from = try self.listOf(node, "from_f32_steps");
+        var to = try self.listOf(node, "to_f32_steps");
+        if (from.len == 0) {
+            from = try self.a.dupe([]const u8, &[_][]const u8{ "decode", "f32_op", "encode" });
+        }
+        if (to.len == 0) {
+            to = try self.a.dupe([]const u8, &[_][]const u8{ "decode", "f32_value" });
+        }
+        return .{ .from_f32_steps = from, .to_f32_steps = to };
+    }
+
+    fn mapOps(self: *Parser, node: Node) ![]const Op {
+        var list = try std.ArrayList(Op).initCapacity(self.a, 0);
+        for (node.children) |c| {
+            // Two spellings: mapping-style (`add:` with nested keys — used by the
+            // real specs) or list-style (`- name: add`).
+            const op_node = c;
+            var name: []const u8 = "";
+            if (c.is_item) {
+                name = try self.strOf(c, "name", "");
+            } else if (c.key.len > 0) {
+                name = try self.a.dupe(u8, c.key);
             } else {
-                break;
+                continue;
             }
-            _ = self.advance(); // Skip '-'
 
-            var vec = TestVector{
-                .name = "",
-                .f32 = 0.0,
-                .raw_hex = "",
+            try list.append(self.a, .{
+                .name = name,
+                .inputs = try self.listOf(op_node, "inputs"),
+                .outputs = try self.listOf(op_node, "outputs"),
+                .output = try self.strOf(op_node, "output", ""),
+                .description = try self.strOf(op_node, "description", ""),
+                .intermediate_type = try self.strOf(op_node, "intermediate_type", ""),
+                .algorithm = try self.strOf(op_node, "algorithm", ""),
+                .rounding = try self.strOf(op_node, "rounding", ""),
+                .commutative = boolOf(op_node, "commutative", false),
+                .associative_approx = boolOf(op_node, "associative_approx", false),
+                .single_rounding = boolOf(op_node, "single_rounding", false),
+                .domain = try self.strOf(op_node, "domain", ""),
+                .table = null,
+                .element_op = try self.strOf(op_node, "element_op", ""),
+                .reduction = try self.strOf(op_node, "reduction", ""),
+                .bounds = try self.strOf(op_node, "bounds", ""),
+            });
+        }
+        return list.toOwnedSlice(self.a);
+    }
+
+    fn mapComposite(self: *Parser, node: Node) !Composite {
+        var matmul: ?Composite.MatMul = null;
+        var ternary_conv: ?Composite.TernaryConv = null;
+        if (node.child("matmul")) |mm| {
+            matmul = .{
+                .A = try self.strOf(mm, "A", ""),
+                .B = try self.strOf(mm, "B", ""),
+                .output = try self.strOf(mm, "output", ""),
+                .accumulator = try self.strOf(mm, "accumulator", "i32"),
+                .inner_op = try self.strOf(mm, "inner_op", "dot"),
+                .tiling = .{
+                    .block_m = intOf(u8, mm, "block_m", 16),
+                    .block_n = intOf(u8, mm, "block_n", 16),
+                    .block_k = intOf(u8, mm, "block_k", 32),
+                },
+            };
+        }
+        if (node.child("ternary_conv")) |cn| {
+            ternary_conv = .{
+                .input = try self.strOf(cn, "input", ""),
+                .weights = try self.strOf(cn, "weights", ""),
+                .output = try self.strOf(cn, "output", ""),
+                .algorithm = try self.strOf(cn, "algorithm", "im2col_matmul"),
+                .sparse = boolOf(cn, "sparse", false),
+            };
+        }
+        return .{ .matmul = matmul, .ternary_conv = ternary_conv };
+    }
+
+    fn mapTestVectors(self: *Parser, node: Node) ![]TestVector {
+        var list = try std.ArrayList(TestVector).initCapacity(self.a, 0);
+        for (node.children) |item| {
+            if (!item.is_item) continue;
+            try list.append(self.a, .{
+                .name = try self.strOf(item, "name", ""),
+                .f32 = floatOf(item, "f32", 0),
+                .raw_hex = try self.strOf(item, "raw_hex", ""),
+            });
+        }
+        return list.toOwnedSlice(self.a);
+    }
+
+    fn mapConstants(self: *Parser, node: Node) ![]const ConstDef {
+        var list = try std.ArrayList(ConstDef).initCapacity(self.a, 0);
+        for (node.children) |c| {
+            if (c.is_item or c.key.len == 0) continue;
+            try list.append(self.a, .{
+                .name = try self.a.dupe(u8, c.key),
+                .value = try self.dupUnquote(c.value),
+            });
+        }
+        return list.toOwnedSlice(self.a);
+    }
+
+    fn mapTypes(self: *Parser, node: Node) ![]const TypeDef {
+        var list = try std.ArrayList(TypeDef).initCapacity(self.a, 0);
+        for (node.children) |t| {
+            if (t.is_item or t.key.len == 0) continue;
+
+            var td = TypeDef{
+                .name = try self.a.dupe(u8, t.key),
+                .variant = .struct_type,
             };
 
-            while (try self.readKey()) |maybe_key| {
-                if (std.mem.eql(u8, maybe_key, "name")) {
-                    vec.name = try self.readValue();
-                } else if (std.mem.eql(u8, maybe_key, "f32")) {
-                    vec.f32 = try self.parseFloat();
-                } else if (std.mem.eql(u8, maybe_key, "raw_hex")) {
-                    vec.raw_hex = try self.readValue();
-                } else {
-                    self.consumeValue();
-                }
+            if (t.child("generic")) |g| td.generic = try self.dupUnquote(g.value);
 
-                self.skipWhitespaceAndComments();
-                if (self.peek()) |ch| {
-                    if (ch == '\n' or ch == '-') break;
-                }
+            if (t.child("enum")) |e| {
+                td.variant = .enum_type;
+                td.enum_values = try self.parseInlineArray(e.value);
             }
 
-            try list.append(self.allocator, vec);
-        }
-
-        return list.toOwnedSlice(self.allocator);
-    }
-
-    fn parseConstants(self: *Parser) ![]const ConstDef {
-        // Parse constants: section
-        // Format: indent 2 (4 spaces): NAME: value
-        // Example:
-        //   MAX_LEVEL: 16
-        //   PROBABILITY: 0.5
-
-        var constants = try std.ArrayList(ConstDef).initCapacity(self.allocator, 0);
-        errdefer constants.deinit(self.allocator);
-
-        // Get current position (after "constants:" key)
-        const start_pos = self.pos;
-
-        // Split remaining content into lines
-        var lines_it = std.mem.splitScalar(u8, self.content[start_pos..], '\n');
-
-        while (lines_it.next()) |raw_line| {
-            // Skip empty lines and comments
-            const trimmed = std.mem.trimStart(u8, raw_line, " \t\r");
-            if (trimmed.len == 0 or trimmed[0] == '#') continue;
-
-            // Count indentation (2-space units)
-            const indent = countIndent(raw_line);
-
-            // Check for top-level section ending (ops:, composite:, types:, etc.)
-            if (indent == 0) {
-                if (std.mem.indexOfScalar(u8, trimmed, ':')) |colon_idx| {
-                    const key = trimmed[0..colon_idx];
-                    if (std.mem.eql(u8, key, "ops") or std.mem.eql(u8, key, "composite") or
-                        std.mem.eql(u8, key, "test_vectors") or std.mem.eql(u8, key, "description") or
-                        std.mem.eql(u8, key, "storage") or std.mem.eql(u8, key, "level") or
-                        std.mem.eql(u8, key, "format") or std.mem.eql(u8, key, "version") or
-                        std.mem.eql(u8, key, "type") or std.mem.eql(u8, key, "types"))
-                    {
-                        break;
-                    }
-                }
-            }
-
-            // Constant definition at indent 1 (2 spaces): "MAX_LEVEL: 16"
-            if (indent == 1) {
-                if (std.mem.indexOfScalar(u8, trimmed, ':')) |colon_idx| {
-                    const const_name = std.mem.trimEnd(u8, trimmed[0..colon_idx], " \t");
-                    const const_value = std.mem.trim(u8, trimmed[colon_idx + 1 ..], " \t\r");
-                    try constants.append(self.allocator, .{
-                        .name = try self.allocator.dupe(u8, const_name),
-                        .value = try self.allocator.dupe(u8, const_value),
+            if (t.child("fields")) |fields_node| {
+                var fields = try std.ArrayList(TypeField).initCapacity(self.a, 0);
+                for (fields_node.children) |item| {
+                    if (!item.is_item) continue;
+                    var ftype = try self.strOf(item, "type", "");
+                    if (ftype.len == 0) ftype = try self.a.dupe(u8, "auto");
+                    try fields.append(self.a, .{
+                        .name = try self.strOf(item, "name", ""),
+                        .type = ftype,
                     });
                 }
+                td.fields = try fields.toOwnedSlice(self.a);
             }
+
+            try list.append(self.a, td);
         }
-
-        return constants.toOwnedSlice(self.allocator);
-    }
-
-    fn parseTypes(self: *Parser) ![]const TypeDef {
-        // Line-based parser for indentation-based type definitions
-        // This handles YAML-like structure where type names are at indent 2
-        // and their fields are nested at indent 6
-
-        var types = try std.ArrayList(TypeDef).initCapacity(self.allocator, 0);
-        errdefer types.deinit(self.allocator);
-
-        // Get current position (after "types:" key)
-        const start_pos = self.pos;
-
-        // Split remaining content into lines
-        var lines_it = std.mem.splitScalar(u8, self.content[start_pos..], '\n');
-
-        var current_type: ?TypeDef = null;
-        var current_fields: ?std.ArrayList(TypeField) = null;
-        var in_fields_section = false;
-
-        while (lines_it.next()) |raw_line| {
-            // Skip empty lines and comments
-            const trimmed = std.mem.trimStart(u8, raw_line, " \t\r");
-            if (trimmed.len == 0 or trimmed[0] == '#') continue;
-
-            // Count indentation (2-space units)
-            const indent = countIndent(raw_line);
-
-            // Check for top-level section ending (ops:, composite:, etc.)
-            if (indent == 0) {
-                if (std.mem.indexOfScalar(u8, trimmed, ':')) |colon_idx| {
-                    const key = trimmed[0..colon_idx];
-                    if (std.mem.eql(u8, key, "ops") or std.mem.eql(u8, key, "composite") or
-                        std.mem.eql(u8, key, "test_vectors") or std.mem.eql(u8, key, "description") or
-                        std.mem.eql(u8, key, "storage") or std.mem.eql(u8, key, "level") or
-                        std.mem.eql(u8, key, "format") or std.mem.eql(u8, key, "version") or
-                        std.mem.eql(u8, key, "type"))
-                    {
-                        // Save current type if exists
-                        if (current_type) |*t| {
-                            if (current_fields) |*f| {
-                                t.fields = try f.toOwnedSlice(self.allocator);
-                            }
-                            try types.append(self.allocator, t.*);
-                            current_type = null;
-                            current_fields = null;
-                        }
-                        break;
-                    }
-                }
-            }
-
-            // Type definition at indent 1 (2 spaces): "Entry:" or "HashTable:"
-            if (indent == 1) {
-                // Save previous type
-                if (current_type) |*t| {
-                    if (current_fields) |*f| {
-                        t.fields = try f.toOwnedSlice(self.allocator);
-                    }
-                    try types.append(self.allocator, t.*);
-                }
-
-                // Parse new type name (e.g., "Entry:" -> "Entry")
-                if (std.mem.lastIndexOfScalar(u8, trimmed, ':')) |colon_idx| {
-                    const type_name = std.mem.trimEnd(u8, trimmed[0..colon_idx], " \t");
-                    current_type = TypeDef{
-                        .name = try self.allocator.dupe(u8, type_name),
-                        .variant = .struct_type,
-                    };
-                    current_fields = std.ArrayList(TypeField).initCapacity(self.allocator, 0) catch unreachable;
-                    in_fields_section = false;
-                }
-            }
-
-            // "fields:" property at indent 2 (4 spaces)
-            if (indent == 2 and std.mem.startsWith(u8, trimmed, "fields:")) {
-                in_fields_section = true;
-                continue;
-            }
-
-            // "generic:" property at indent 2 (4 spaces)
-            if (indent == 2 and std.mem.startsWith(u8, trimmed, "generic:")) {
-                if (current_type) |*t| {
-                    const generic_val = std.mem.trim(u8, trimmed["generic:".len..], " \t\r");
-                    t.generic = try self.allocator.dupe(u8, generic_val);
-                }
-                continue;
-            }
-
-            // "enum:" property at indent 2 (4 spaces)
-            if (indent == 2 and std.mem.startsWith(u8, trimmed, "enum:")) {
-                if (current_type) |*t| {
-                    const enum_line = trimmed["enum:".len..];
-                    const enum_val = std.mem.trim(u8, enum_line, " \t\r");
-                    // Parse "[Red, Black]" -> ["Red", "Black"]
-                    if (enum_val.len > 2 and enum_val[0] == '[' and enum_val[enum_val.len - 1] == ']') {
-                        const values_str = enum_val[1 .. enum_val.len - 1];
-                        var values = try std.ArrayList([]const u8).initCapacity(self.allocator, 0);
-                        var iter = std.mem.splitScalar(u8, values_str, ',');
-                        while (iter.next()) |v| {
-                            const trimmed_val = std.mem.trim(u8, v, " \t");
-                            if (trimmed_val.len > 0) {
-                                try values.append(self.allocator, try self.allocator.dupe(u8, trimmed_val));
-                            }
-                        }
-                        t.enum_values = try values.toOwnedSlice(self.allocator);
-                        t.variant = .enum_type;
-                    }
-                }
-                continue;
-            }
-
-            // Field definition at indent 3 (6 spaces): "- name: key"
-            if (indent == 3 and in_fields_section and current_fields != null and std.mem.startsWith(u8, trimmed, "-")) {
-                var field_line = trimmed[1..]; // Skip "-"
-                field_line = std.mem.trimStart(u8, field_line, " \t");
-
-                // Parse "name: key" part
-                if (std.mem.indexOfScalar(u8, field_line, ':')) |name_colon| {
-                    const name_value = std.mem.trim(u8, field_line[name_colon + 1 ..], " \t\r");
-
-                    // Look ahead on next line for "type: <type>" (indent 4)
-                    var field_type: []const u8 = "";
-
-                    if (lines_it.next()) |next_raw| {
-                        const next_trimmed = std.mem.trimStart(u8, next_raw, " \t\r");
-                        const next_indent = countIndent(next_raw);
-
-                        // Check if next line is "- name:" -> end of this field
-                        if (next_indent == 3 and std.mem.startsWith(u8, next_trimmed, "-")) {
-                            // No type on next line, use default (empty)
-                            field_type = "";
-                        } else if (next_indent >= 3 and std.mem.startsWith(u8, next_trimmed, "type:")) {
-                            // Found "type:" on next line (could be indent 3 or 4)
-                            const type_line = next_trimmed["type:".len..];
-                            field_type = std.mem.trim(u8, type_line, " \t\r\"");
-                        }
-                    }
-
-                    if (field_type.len == 0) field_type = "auto";
-
-                    if (current_fields) |*f| {
-                        try f.append(self.allocator, .{
-                            .name = try self.allocator.dupe(u8, name_value),
-                            .type = try self.allocator.dupe(u8, field_type),
-                        });
-                    }
-                }
-            }
-        }
-
-        // Save last type
-        if (current_type) |*t| {
-            if (current_fields) |*f| {
-                t.fields = try f.toOwnedSlice(self.allocator);
-            }
-            try types.append(self.allocator, t.*);
-        }
-
-        // Update parser position to end of types section
-        const end_pos = if (lines_it.index) |idx| start_pos + idx else start_pos;
-        self.pos = end_pos;
-
-        return try types.toOwnedSlice(self.allocator);
-    }
-
-    /// Count indentation level (2-space units)
-    fn countIndent(line: []const u8) usize {
-        var count: usize = 0;
-        for (line) |ch| {
-            if (ch == ' ') {
-                count += 1;
-            } else {
-                break;
-            }
-        }
-        return count / 2;
+        return list.toOwnedSlice(self.a);
     }
 };
+
+test "parse gf8.tri populates storage/exponent/phi" {
+    const content = @embedFile("spec_gf8");
+    var spec = try parse(std.testing.allocator, content);
+    defer spec.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("GF8", spec.format);
+    try std.testing.expectEqual(@as(u8, 8), spec.storage.bits);
+    try std.testing.expectEqual(@as(u8, 3), spec.exponent.bits);
+    try std.testing.expectEqual(@as(u8, 3), spec.exponent.bias);
+    try std.testing.expectEqual(@as(u8, 7), spec.exponent.max);
+    try std.testing.expectEqual(@as(u8, 0), spec.exponent.min);
+    try std.testing.expectEqual(@as(u8, 4), spec.phi.mantissa_bits);
+
+    // Field layout and specials must round-trip too, not just the scalars above.
+    try std.testing.expectEqual(@as(usize, 3), spec.fields.len);
+    try std.testing.expectEqualStrings("sign", spec.fields[0].name);
+    try std.testing.expectEqual(@as(u8, 4), spec.fields[2].bits);
+    try std.testing.expectEqual(@as(u8, 7), spec.exponent.special.inf.exponent);
+    try std.testing.expect(spec.exponent.special.nan.mantissa_nonzero);
+}
+
+test "parse gf16.tri populates storage/exponent/phi" {
+    const content = @embedFile("spec_gf16");
+    var spec = try parse(std.testing.allocator, content);
+    defer spec.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("GF16", spec.format);
+    try std.testing.expectEqual(@as(u8, 16), spec.storage.bits);
+    try std.testing.expectEqual(@as(u8, 6), spec.exponent.bits);
+    try std.testing.expectEqual(@as(u8, 31), spec.exponent.bias);
+    try std.testing.expectEqual(@as(u8, 63), spec.exponent.max);
+    try std.testing.expectEqual(@as(u8, 9), spec.phi.mantissa_bits);
+}

@@ -137,6 +137,29 @@ pub fn build(b: *std.Build) void {
         .root_module = transcendent_tests_root,
     });
 
+    // ─────────────────────────────────────────────────────────────────
+    // Tests — .tri spec parser (tri_reader)
+    // Spec files live in specs/, outside tools/gen/, so they cannot be
+    // @embedFile'd directly (module-path restriction). Supply them as named
+    // anonymous imports the test embeds via @embedFile("spec_gf8"/"spec_gf16").
+    // ─────────────────────────────────────────────────────────────────
+    const tri_reader_tests_root = b.createModule(.{
+        .root_source_file = b.path("tools/gen/tri_reader.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    tri_reader_tests_root.addAnonymousImport("spec_gf8", .{
+        .root_source_file = b.path("specs/gf8.tri"),
+    });
+    tri_reader_tests_root.addAnonymousImport("spec_gf16", .{
+        .root_source_file = b.path("specs/gf16.tri"),
+    });
+    const tri_reader_tests = b.addTest(.{
+        .name = "tri-reader-tests",
+        .root_module = tri_reader_tests_root,
+    });
+    const run_tri_reader_tests = b.addRunArtifact(tri_reader_tests);
+
     const run_tests = b.addRunArtifact(formats_tests);
     const run_transcendent_tests = b.addRunArtifact(transcendent_tests);
 
@@ -194,6 +217,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_phi_attention_tests.step);
     test_step.dependOn(&run_trinity_init_tests.step);
     test_step.dependOn(&run_jepa_t_tests.step);
+    test_step.dependOn(&run_tri_reader_tests.step);
 
     const igla_bench_module = b.createModule(.{
         .root_source_file = b.path("benches/igla_gf16_bench.zig"),
