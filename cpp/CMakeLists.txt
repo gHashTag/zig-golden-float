@@ -115,6 +115,23 @@ else()
     target_compile_options(test_gf_ladder PRIVATE -Wall -Wextra -pedantic)
 endif()
 
+# Cross-language conformance (reads testdata/gf_conformance.csv, path via argv[1])
+add_executable(test_conformance
+    tests/test_conformance.cpp
+)
+target_link_libraries(test_conformance
+    PRIVATE
+    ${GOLDENFLOAT}
+)
+target_compile_features(test_conformance
+    PRIVATE
+    cxx_std_17)
+if(MSVC)
+    target_compile_options(test_conformance PRIVATE /W4)
+else()
+    target_compile_options(test_conformance PRIVATE -Wall -Wextra -pedantic)
+endif()
+
 # ============================================================================
 # Optional: Install Targets
 # ============================================================================

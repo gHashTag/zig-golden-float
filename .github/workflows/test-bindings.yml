@@ -72,6 +72,7 @@ jobs:
           python -m goldenfloat.tests.test_gft16
           python -m goldenfloat.tests.test_gft_rungs
           python -m goldenfloat.tests.test_gf_ladder
+          python -m goldenfloat.tests.test_conformance
         env:
           GOLDENFLOAT_LIB_DIR: ${{ github.workspace }}/zig-out/lib
 
@@ -93,10 +94,12 @@ jobs:
           cmake --build build --target test_gft16
           cmake --build build --target test_gft_rungs
           cmake --build build --target test_gf_ladder
+          cmake --build build --target test_conformance
           LD_LIBRARY_PATH=$GITHUB_WORKSPACE/zig-out/lib ./build/test_gf16
           LD_LIBRARY_PATH=$GITHUB_WORKSPACE/zig-out/lib ./build/test_gft16
           LD_LIBRARY_PATH=$GITHUB_WORKSPACE/zig-out/lib ./build/test_gft_rungs
           LD_LIBRARY_PATH=$GITHUB_WORKSPACE/zig-out/lib ./build/test_gf_ladder
+          LD_LIBRARY_PATH=$GITHUB_WORKSPACE/zig-out/lib ./build/test_conformance $GITHUB_WORKSPACE/testdata/gf_conformance.csv
 
       - name: Install Go
         if: matrix.language == 'go'
