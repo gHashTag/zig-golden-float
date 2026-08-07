@@ -47,7 +47,7 @@ extern "C" {
  *   [8:0]    Mantissa (9 bits, fractional part)
  *
  * **Value Formula:**
- *   value = (-1)^sign × (0.5 + mant/512) × 2^(exp - 31)
+ *   value = (-1)^sign × (1 + mant/512) × 2^(exp - 31)
  *
  * **Special Values:**
  *   - exp=0, mant=0: Zero (signed by sign bit)

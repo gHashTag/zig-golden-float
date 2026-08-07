@@ -252,6 +252,11 @@ test "GF ladder: exact-bit golden vectors (encoding regression guard)" {
     try E(@as(GF12.Repr, 0x3C0), GF12.fromF32(1.5).bits_());
     try E(@as(GF12.Repr, 0x400), GF12.fromF32(2.0).bits_());
     try E(@as(GF12.Repr, 0xC20), GF12.fromF32(-2.5).bits_());
+    // gf16 [1:6:9] b31 — the primary production rung (shared with golden_float16.GF16)
+    try E(@as(GF16.Repr, 0x3E00), GF16.fromF32(1.0).bits_());
+    try E(@as(GF16.Repr, 0x3F00), GF16.fromF32(1.5).bits_());
+    try E(@as(GF16.Repr, 0x4000), GF16.fromF32(2.0).bits_());
+    try E(@as(GF16.Repr, 0xC080), GF16.fromF32(-2.5).bits_());
     // gf20 [1:7:12] b63
     try E(@as(GF20.Repr, 0x3F000), GF20.fromF32(1.0).bits_());
     try E(@as(GF20.Repr, 0x3F800), GF20.fromF32(1.5).bits_());
