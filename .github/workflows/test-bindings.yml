@@ -92,9 +92,11 @@ jobs:
           cmake --build build --target test_gf16
           cmake --build build --target test_gft16
           cmake --build build --target test_gft_rungs
+          cmake --build build --target test_gf_ladder
           LD_LIBRARY_PATH=$GITHUB_WORKSPACE/zig-out/lib ./build/test_gf16
           LD_LIBRARY_PATH=$GITHUB_WORKSPACE/zig-out/lib ./build/test_gft16
           LD_LIBRARY_PATH=$GITHUB_WORKSPACE/zig-out/lib ./build/test_gft_rungs
+          LD_LIBRARY_PATH=$GITHUB_WORKSPACE/zig-out/lib ./build/test_gf_ladder
 
       - name: Install Go
         if: matrix.language == 'go'

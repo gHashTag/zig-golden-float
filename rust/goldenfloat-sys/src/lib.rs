@@ -115,6 +115,58 @@ extern "C" {
     pub fn gft32_neg(g: gft32_t) -> gft32_t;
     pub fn gft32_abs(g: gft32_t) -> gft32_t;
     pub fn gft32_is_finite(g: gft32_t) -> u8;
+
+    // Binary GF ladder (φ²-sized rungs from gf_binary.zig). GF16 is the rich gf16_*
+    // API above; GF4 is omitted (degenerate). Packed value in the low carrier bits.
+    pub fn gf8_from_f32(x: f32) -> gf8_t;
+    pub fn gf8_to_f32(g: gf8_t) -> f32;
+    pub fn gf8_add(a: gf8_t, b: gf8_t) -> gf8_t;
+    pub fn gf8_sub(a: gf8_t, b: gf8_t) -> gf8_t;
+    pub fn gf8_mul(a: gf8_t, b: gf8_t) -> gf8_t;
+    pub fn gf8_div(a: gf8_t, b: gf8_t) -> gf8_t;
+    pub fn gf8_neg(g: gf8_t) -> gf8_t;
+    pub fn gf8_abs(g: gf8_t) -> gf8_t;
+    pub fn gf8_is_finite(g: gf8_t) -> u8;
+
+    pub fn gf12_from_f32(x: f32) -> gf12_t;
+    pub fn gf12_to_f32(g: gf12_t) -> f32;
+    pub fn gf12_add(a: gf12_t, b: gf12_t) -> gf12_t;
+    pub fn gf12_sub(a: gf12_t, b: gf12_t) -> gf12_t;
+    pub fn gf12_mul(a: gf12_t, b: gf12_t) -> gf12_t;
+    pub fn gf12_div(a: gf12_t, b: gf12_t) -> gf12_t;
+    pub fn gf12_neg(g: gf12_t) -> gf12_t;
+    pub fn gf12_abs(g: gf12_t) -> gf12_t;
+    pub fn gf12_is_finite(g: gf12_t) -> u8;
+
+    pub fn gf20_from_f32(x: f32) -> gf20_t;
+    pub fn gf20_to_f32(g: gf20_t) -> f32;
+    pub fn gf20_add(a: gf20_t, b: gf20_t) -> gf20_t;
+    pub fn gf20_sub(a: gf20_t, b: gf20_t) -> gf20_t;
+    pub fn gf20_mul(a: gf20_t, b: gf20_t) -> gf20_t;
+    pub fn gf20_div(a: gf20_t, b: gf20_t) -> gf20_t;
+    pub fn gf20_neg(g: gf20_t) -> gf20_t;
+    pub fn gf20_abs(g: gf20_t) -> gf20_t;
+    pub fn gf20_is_finite(g: gf20_t) -> u8;
+
+    pub fn gf24_from_f32(x: f32) -> gf24_t;
+    pub fn gf24_to_f32(g: gf24_t) -> f32;
+    pub fn gf24_add(a: gf24_t, b: gf24_t) -> gf24_t;
+    pub fn gf24_sub(a: gf24_t, b: gf24_t) -> gf24_t;
+    pub fn gf24_mul(a: gf24_t, b: gf24_t) -> gf24_t;
+    pub fn gf24_div(a: gf24_t, b: gf24_t) -> gf24_t;
+    pub fn gf24_neg(g: gf24_t) -> gf24_t;
+    pub fn gf24_abs(g: gf24_t) -> gf24_t;
+    pub fn gf24_is_finite(g: gf24_t) -> u8;
+
+    pub fn gf32_from_f32(x: f32) -> gf32_t;
+    pub fn gf32_to_f32(g: gf32_t) -> f32;
+    pub fn gf32_add(a: gf32_t, b: gf32_t) -> gf32_t;
+    pub fn gf32_sub(a: gf32_t, b: gf32_t) -> gf32_t;
+    pub fn gf32_mul(a: gf32_t, b: gf32_t) -> gf32_t;
+    pub fn gf32_div(a: gf32_t, b: gf32_t) -> gf32_t;
+    pub fn gf32_neg(g: gf32_t) -> gf32_t;
+    pub fn gf32_abs(g: gf32_t) -> gf32_t;
+    pub fn gf32_is_finite(g: gf32_t) -> u8;
 }
 
 /// Raw GF-T16 value: the 17-bit ternary-exponent pattern in the low bits of a u32.
@@ -134,6 +186,28 @@ pub struct gft8_t(pub u16);
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 #[allow(non_camel_case_types)]
 pub struct gft32_t(pub u64);
+
+/// Raw binary-GF ladder values — packed N-bit pattern in the low bits of the carrier.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+#[allow(non_camel_case_types)]
+pub struct gf8_t(pub u8);
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+#[allow(non_camel_case_types)]
+pub struct gf12_t(pub u16);
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+#[allow(non_camel_case_types)]
+pub struct gf20_t(pub u32);
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+#[allow(non_camel_case_types)]
+pub struct gf24_t(pub u32);
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+#[allow(non_camel_case_types)]
+pub struct gf32_t(pub u32);
 
 #[cfg(test)]
 mod tests {
@@ -210,4 +284,40 @@ mod tests {
         assert_eq!(unsafe { gft32_is_finite(gft32_from_f32(1e30)) }, 1);
         assert_eq!(unsafe { gft32_is_finite(gft32_from_f32(f32::INFINITY)) }, 0);
     }
+
+    // Binary GF ladder: one test per rung. Values stay inside Gf8's tight ~[0.25,15.5]
+    // range; the non-finite path is exercised via inf (uniform across rungs).
+    macro_rules! ladder_test {
+        ($name:ident, $from:ident, $to:ident, $add:ident, $sub:ident, $mul:ident,
+         $div:ident, $neg:ident, $abs:ident, $fin:ident, $rt:expr, $op:expr) => {
+            #[test]
+            fn $name() {
+                for &v in &[0.5f32, 1.0, 1.5, 2.0, 3.0, -2.5, 4.0] {
+                    let q = unsafe { $to($from(v)) };
+                    assert!((q - v).abs() / (v.abs() + 1e-9) < $rt, "roundtrip {v} -> {q}");
+                }
+                let a = unsafe { $from(1.5) };
+                let b = unsafe { $from(2.5) };
+                assert!((unsafe { $to($add(a, b)) } - 4.0).abs() < $op);
+                assert!((unsafe { $to($sub(b, a)) } - 1.0).abs() < $op);
+                assert!((unsafe { $to($mul(a, b)) } - 3.75).abs() < $op);
+                assert!((unsafe { $to($div(b, a)) } - (2.5 / 1.5)).abs() < $op);
+                assert!((unsafe { $to($neg(a)) } + 1.5).abs() < $op);
+                assert!((unsafe { $to($abs($neg(a))) } - 1.5).abs() < $op);
+                assert_eq!(unsafe { $fin($from(1.0)) }, 1);
+                assert_eq!(unsafe { $fin($from(f32::INFINITY)) }, 0);
+            }
+        };
+    }
+
+    ladder_test!(test_gf8_ladder, gf8_from_f32, gf8_to_f32, gf8_add, gf8_sub, gf8_mul,
+        gf8_div, gf8_neg, gf8_abs, gf8_is_finite, 0.05, 0.05);
+    ladder_test!(test_gf12_ladder, gf12_from_f32, gf12_to_f32, gf12_add, gf12_sub, gf12_mul,
+        gf12_div, gf12_neg, gf12_abs, gf12_is_finite, 0.01, 0.01);
+    ladder_test!(test_gf20_ladder, gf20_from_f32, gf20_to_f32, gf20_add, gf20_sub, gf20_mul,
+        gf20_div, gf20_neg, gf20_abs, gf20_is_finite, 0.001, 0.001);
+    ladder_test!(test_gf24_ladder, gf24_from_f32, gf24_to_f32, gf24_add, gf24_sub, gf24_mul,
+        gf24_div, gf24_neg, gf24_abs, gf24_is_finite, 0.0005, 0.0005);
+    ladder_test!(test_gf32_ladder, gf32_from_f32, gf32_to_f32, gf32_add, gf32_sub, gf32_mul,
+        gf32_div, gf32_neg, gf32_abs, gf32_is_finite, 0.0002, 0.0002);
 }
