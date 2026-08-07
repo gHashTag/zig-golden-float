@@ -1,0 +1,86 @@
+# GF-T Ladder Format Specification (Source of Truth)
+# Balanced-ternary-EXPONENT GoldenFloat: GF-T4 / GF-T8 / GF-T16 / GF-T32.
+# Companion to the binary GF ladder (specs/gf8.tri, specs/gf16.tri).
+#
+# GF-T stores the exponent as a balanced-ternary number (digits -1/0/+1, held as
+# codes 0/1/2 shifted to an unsigned OFFSET in [0, 3^E - 1]). The exponent is added
+# NATIVELY in balanced ternary -- no binary exponent field, no regime decode
+# (unlike posit / tekum) -- while the mantissa keeps GF's uniform binary precision.
+#
+#   value = (-1)^sign * (1 + M / 2^m) * 2^e,   e = offset - EXP_OFFSET
+#   EXP_OFFSET = (3^E - 1) / 2   (the balanced zero point; offset EXP_OFFSET => e = 0)
+#   OFFSET_MAX = 3^E - 1         (the top row is RESERVED: Inf / NaN)
+#   an offset is FINITE iff offset < OFFSET_MAX (out-of-range offsets are invalid)
+
+ladder: GF-T
+version: 1
+level: 0
+exponent_encoding: balanced-ternary
+
+rungs:
+  - name: GF-T4
+    exp_trits: 2
+    mant_bits: 1
+    exp_offset: 4
+    offset_max: 8          # 3^2 - 1
+    exp_range: [-4, 4]
+    dynamic_range_decades: 2.4
+    layout: "[ sign(1) | E = 2 balanced-ternary trits | M = 1 bit ]"
+
+  - name: GF-T8
+    exp_trits: 3
+    mant_bits: 4
+    exp_offset: 13
+    offset_max: 26         # 3^3 - 1
+    exp_range: [-13, 13]
+    dynamic_range_decades: 8
+    layout: "[ sign(1) | E = 3 balanced-ternary trits | M = 4 bits ]"
+
+  - name: GF-T16
+    exp_trits: 4
+    mant_bits: 9
+    exp_offset: 40
+    offset_max: 80         # 3^4 - 1
+    exp_range: [-40, 40]
+    dynamic_range_decades: 24
+    layout: "[ sign(1) | E = 4 balanced-ternary trits | M = 9 bits ]"
+    note: keeps GF16's phi-optimal 9-bit mantissa across the whole range (tekum16 tapers to ~4 bits at the extremes)
+
+  - name: GF-T32
+    exp_trits: 6
+    mant_bits: 25
+    exp_offset: 364
+    offset_max: 728        # 3^6 - 1
+    exp_range: [-364, 364]
+    dynamic_range_decades: 219
+    layout: "[ sign(1) | E = 6 balanced-ternary trits | M = 25 bits ]"
+
+special:
+  # For every rung: the reserved top offset row encodes the non-finite values.
+  zero:
+    offset: exp_offset     # e = 0; mantissa 0 => +0
+    mantissa: 0
+  inf:
+    offset: offset_max     # 3^E - 1
+    mantissa: 0
+  nan:
+    offset: offset_max
+    mantissa_nonzero: true
+
+validity:
+  # An offset outside [0, offset_max] is NOT a legal encoding (garbage), distinct
+  # from the reserved special row at offset_max. A payability / finiteness gate MUST
+  # require offset < offset_max (rejects BOTH the special row and out-of-range).
+  finite: "offset < offset_max"
+
+rounding:
+  mode: ties-to-even
+  source_type: f32
+  overflow_policy: saturate_to_inf
+
+provenance:
+  source_of_truth: t27/specs/numeric/gft{4,8,16,32}.t27
+  relation: >
+    GF-T is the ternary-exponent sibling of the binary GF ladder. Where GF sizes each
+    rung by e = round((N-1)/phi^2), GF-T fixes the exponent trit-count per rung
+    (E = 2, 3, 4, 6 for GF-T4/8/16/32) and adds the exponent in balanced ternary.
