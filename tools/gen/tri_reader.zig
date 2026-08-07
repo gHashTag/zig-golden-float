@@ -434,6 +434,9 @@ const Parser = struct {
         };
 
         while (try self.readKey()) |maybe_key| {
+            // readKey() dupes the key so it persists across the read; it is only used
+            // for dispatch here (values are duped separately), so free it each pass.
+            defer self.allocator.free(maybe_key);
             if (std.mem.eql(u8, maybe_key, "format")) {
                 self.consumeValue();
             } else if (std.mem.eql(u8, maybe_key, "version")) {
