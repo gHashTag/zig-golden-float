@@ -24,6 +24,7 @@
 //!
 
 const std = @import("std");
+const gf_binary = @import("gf_binary.zig");
 
 // ═════════════════════════════════════════════════════════════════════════
 // TRINITY CONSTANTS
@@ -84,53 +85,19 @@ pub const GF16 = packed struct(u16) {
     /// comptime calculation (0.049 for GF16)
     // pub const phi_distance: comptime_float = @import("std").math.fabs(6.0 / 9.0 - 1.0 / PHI);
 
-    /// Create GF16 from f32 with φ-optimized encoding
+    /// Create GF16 from f32.
+    ///
+    /// Delegates to the single normative codec `gf_binary.GF16` (the φ²-sized
+    /// binary rung factory) so GF16 has exactly ONE encoding across the repo:
+    /// the standard `(1 + M/512)·2^(E−31)` significand with the full 9-bit
+    /// mantissa (FORMAT-SPEC-001, specs/gf16.tri). e.g. 1.0 → 0x3E00.
     pub fn fromF32(v: f32) GF16 {
-        if (v == 0.0) return .{ .mant = 0, .exp = 0, .sign = 0 };
-
-        if (std.math.isNan(v)) {
-            return .{ .mant = 1, .exp = 0x3F, .sign = 0 };
-        }
-
-        if (std.math.isInf(v)) {
-            return .{ .mant = 0, .exp = 0x3F, .sign = @intFromBool(v < 0) };
-        }
-
-        const sign_bit: u1 = @intFromBool(v < 0);
-        const abs_v = @abs(v);
-
-        // Find exponent (normalize to [0.5, 2))
-        var exp: i8 = 0;
-        var mant_f = abs_v;
-
-        while (mant_f >= 1.0 and exp < 31) : (exp += 1) mant_f /= 2.0;
-        while (mant_f < 0.5 and exp > -32) : (exp -= 1) mant_f *= 2.0;
-
-        const exp_i8: i8 = exp;
-        const exp_bias: i8 = 31;
-        const exp_u6: u6 = @intCast(exp_bias + exp_i8);
-        const mant_u9: u9 = @intFromFloat((mant_f - 0.5) * 512.0);
-
-        return .{
-            .mant = @min(mant_u9, 511),
-            .exp = exp_u6,
-            .sign = sign_bit,
-        };
+        return @bitCast(gf_binary.GF16.fromF32(v).bits_());
     }
 
-    /// Convert GF16 to f32
+    /// Convert GF16 to f32 (via the same normative `gf_binary.GF16` codec).
     pub fn toF32(self: GF16) f32 {
-        if (self.exp == 0 and self.mant == 0) {
-            return if (self.sign == 1) -0.0 else 0.0;
-        }
-        if (self.exp == 0x3F) {
-            return if (self.sign == 1) -std.math.inf(f32) else std.math.inf(f32);
-        }
-
-        const exp_unbiased = @as(i32, self.exp) - 31;
-        const mant_f = 0.5 + @as(f32, @floatFromInt(self.mant)) / 512.0;
-        const value = mant_f * std.math.pow(f32, 2.0, @floatFromInt(exp_unbiased));
-        return if (self.sign == 1) -value else value;
+        return gf_binary.GF16.fromBits(@bitCast(self)).toF32();
     }
 
     /// GF16 addition (via f32 for precision)
@@ -375,6 +342,35 @@ test "GF16 roundtrip negative" {
         const err = @abs(v - result) / (@abs(v) + 0.001);
         try std.testing.expect(err < 0.05);
     }
+}
+
+test "GF16 exact-bit encoding is the standard (1 + M/512) form" {
+    // Pin the wire format: 1.0 -> 0x3E00 (E=31, mantissa 0), NOT the old
+    // waste-a-bit 0x4000. Full 9-bit mantissa is now reachable. See specs/gf16.tri
+    // and testdata/gf_conformance.csv (gf16 rows).
+    const E = std.testing.expectEqual;
+    try E(@as(u16, 0x3E00), @as(u16, @bitCast(GF16.fromF32(1.0))));
+    try E(@as(u16, 0x3F00), @as(u16, @bitCast(GF16.fromF32(1.5))));
+    try E(@as(u16, 0x4000), @as(u16, @bitCast(GF16.fromF32(2.0))));
+    try E(@as(u16, 0x4100), @as(u16, @bitCast(GF16.fromF32(3.0))));
+    try E(@as(u16, 0x3C00), @as(u16, @bitCast(GF16.fromF32(0.5))));
+    try E(@as(u16, 0xBE00), @as(u16, @bitCast(GF16.fromF32(-1.0))));
+    try E(@as(u16, 0xC080), @as(u16, @bitCast(GF16.fromF32(-2.5))));
+}
+
+test "GF16 is bit-identical to the normative gf_binary.GF16 codec" {
+    // One implementation: golden_float16.GF16 delegates to gf_binary.GF16, so
+    // every value must encode to the exact same raw u16. Guards against re-drift.
+    const vals = [_]f32{ 0.0, 1.0, -1.0, 0.5, 1.5, 2.0, 3.0, -2.5, 3.14159, 100.0, 0.001, 12345.0, 1e30, -1e30 };
+    for (vals) |v| {
+        const a: u16 = @bitCast(GF16.fromF32(v));
+        const b: u16 = gf_binary.GF16.fromF32(v).bits_();
+        try std.testing.expectEqual(b, a);
+    }
+    // NaN encodes consistently too (exp all-ones, mantissa != 0).
+    const na: u16 = @bitCast(GF16.fromF32(std.math.nan(f32)));
+    const nb: u16 = gf_binary.GF16.fromF32(std.math.nan(f32)).bits_();
+    try std.testing.expectEqual(nb, na);
 }
 
 test "GF16 arithmetic" {

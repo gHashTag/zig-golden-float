@@ -20,7 +20,7 @@ gf16:
     intermediate_type: f32
     steps:
       - extract_sign_bit
-      - normalize_to_0_5_to_1_range
+      - normalize_to_1_to_2_range
       - compute_exponent_with_bias_31
       - round_mantissa_to_9_bits
       - pack_into_u16
@@ -34,7 +34,7 @@ gf16:
       - unpack_fields
       - check_special_cases
       - unbiased_exponent = exp - 31
-      - mantissa_scaled = mant / 512 + 0.5
+      - mantissa_scaled = 1 + mant / 512
       - value = mantissa_scaled * 2^unbiased_exponent
       - apply_sign
 
