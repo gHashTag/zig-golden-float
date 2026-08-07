@@ -272,3 +272,27 @@ test "GF-T storage widths (nominal name vs real bits)" {
     try std.testing.expectEqual(@as(u32, 17), GFT16.BITS); // 1 + 7 + 9
     try std.testing.expectEqual(@as(u32, 36), GFT32.BITS); // 1 + 10 + 25
 }
+
+// Exact-bit golden vectors — pin the ternary-exponent encoding. A tolerance-based
+// round-trip is blind to an offset/bias shift; these pin it. Hand-check:
+// GFT16(-2.5) = sign 1, |2.5| = 1.25·2^1 -> offset EXP_OFFSET+1 = 41, mant 0.25·512 =
+// 128 = 0x80 -> (41<<9) | 0x80 | (1<<16) = 0x15280. Update deliberately if the codec
+// layout changes.
+test "GF-T: exact-bit golden vectors (encoding regression guard)" {
+    const E = std.testing.expectEqual;
+    // gft8 (E3 M4, offset 13)
+    try E(@as(GFT8.Repr, 0x0D0), GFT8.fromF32(1.0).bits());
+    try E(@as(GFT8.Repr, 0x0E0), GFT8.fromF32(2.0).bits());
+    try E(@as(GFT8.Repr, 0x2D0), GFT8.fromF32(-1.0).bits());
+    try E(@as(GFT8.Repr, 0x2E4), GFT8.fromF32(-2.5).bits());
+    // gft16 (E4 M9, offset 40)
+    try E(@as(GFT16.Repr, 0x05000), GFT16.fromF32(1.0).bits());
+    try E(@as(GFT16.Repr, 0x05200), GFT16.fromF32(2.0).bits());
+    try E(@as(GFT16.Repr, 0x15000), GFT16.fromF32(-1.0).bits());
+    try E(@as(GFT16.Repr, 0x15280), GFT16.fromF32(-2.5).bits());
+    // gft32 (E6 M25, offset 364)
+    try E(@as(GFT32.Repr, 0x2D8000000), GFT32.fromF32(1.0).bits());
+    try E(@as(GFT32.Repr, 0x2DA000000), GFT32.fromF32(2.0).bits());
+    try E(@as(GFT32.Repr, 0xAD8000000), GFT32.fromF32(-1.0).bits());
+    try E(@as(GFT32.Repr, 0xADA800000), GFT32.fromF32(-2.5).bits());
+}

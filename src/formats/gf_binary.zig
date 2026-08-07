@@ -233,3 +233,38 @@ test "GF bits roundtrip" {
     const x = GF20.fromF32(-6.28);
     try std.testing.expectEqual(x.bits_(), GF20.fromBits(x.bits_()).bits_());
 }
+
+// Exact-bit golden vectors — pin the encoding, not just an approximate round-trip.
+// Tolerance tests are blind to a systematic layout shift (e.g. a wrong exponent bias
+// still round-trips symmetrically); these catch it. Values are exact in a 4-bit
+// mantissa and inside GF8's tight range. Hand-check: GF8(-2.5) = sign 1, |2.5| =
+// 1.25·2^1 -> exp field bias+1 = 4 = 0b100, mant 0.25·16 = 4 = 0b0100 -> 0b1_100_0100
+// = 0xC4. A deliberate codec change must update these on purpose.
+test "GF ladder: exact-bit golden vectors (encoding regression guard)" {
+    const E = std.testing.expectEqual;
+    // gf8 [1:3:4] b3
+    try E(@as(GF8.Repr, 0x30), GF8.fromF32(1.0).bits_());
+    try E(@as(GF8.Repr, 0x38), GF8.fromF32(1.5).bits_());
+    try E(@as(GF8.Repr, 0x40), GF8.fromF32(2.0).bits_());
+    try E(@as(GF8.Repr, 0xC4), GF8.fromF32(-2.5).bits_());
+    // gf12 [1:4:7] b7
+    try E(@as(GF12.Repr, 0x380), GF12.fromF32(1.0).bits_());
+    try E(@as(GF12.Repr, 0x3C0), GF12.fromF32(1.5).bits_());
+    try E(@as(GF12.Repr, 0x400), GF12.fromF32(2.0).bits_());
+    try E(@as(GF12.Repr, 0xC20), GF12.fromF32(-2.5).bits_());
+    // gf20 [1:7:12] b63
+    try E(@as(GF20.Repr, 0x3F000), GF20.fromF32(1.0).bits_());
+    try E(@as(GF20.Repr, 0x3F800), GF20.fromF32(1.5).bits_());
+    try E(@as(GF20.Repr, 0x40000), GF20.fromF32(2.0).bits_());
+    try E(@as(GF20.Repr, 0xC0400), GF20.fromF32(-2.5).bits_());
+    // gf24 [1:9:14] b255
+    try E(@as(GF24.Repr, 0x3FC000), GF24.fromF32(1.0).bits_());
+    try E(@as(GF24.Repr, 0x3FE000), GF24.fromF32(1.5).bits_());
+    try E(@as(GF24.Repr, 0x400000), GF24.fromF32(2.0).bits_());
+    try E(@as(GF24.Repr, 0xC01000), GF24.fromF32(-2.5).bits_());
+    // gf32 [1:12:19] b2047
+    try E(@as(GF32.Repr, 0x3FF80000), GF32.fromF32(1.0).bits_());
+    try E(@as(GF32.Repr, 0x3FFC0000), GF32.fromF32(1.5).bits_());
+    try E(@as(GF32.Repr, 0x40000000), GF32.fromF32(2.0).bits_());
+    try E(@as(GF32.Repr, 0xC0020000), GF32.fromF32(-2.5).bits_());
+}
