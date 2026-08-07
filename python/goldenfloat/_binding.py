@@ -138,6 +138,21 @@ def _get_lib():
         _lib.goldenfloat_version.restype = ctypes.c_char_p
         _lib.goldenfloat_version.argtypes = []
 
+        # GF-T16 (ternary-exponent) — raw 17-bit value carried in a uint32.
+        _gft16_t = ctypes.c_uint32
+        _lib.gft16_from_f32.restype = _gft16_t
+        _lib.gft16_from_f32.argtypes = [ctypes.c_float]
+        _lib.gft16_to_f32.restype = ctypes.c_float
+        _lib.gft16_to_f32.argtypes = [_gft16_t]
+        for _name in ("gft16_add", "gft16_sub", "gft16_mul", "gft16_div"):
+            getattr(_lib, _name).restype = _gft16_t
+            getattr(_lib, _name).argtypes = [_gft16_t, _gft16_t]
+        for _name in ("gft16_neg", "gft16_abs"):
+            getattr(_lib, _name).restype = _gft16_t
+            getattr(_lib, _name).argtypes = [_gft16_t]
+        _lib.gft16_is_finite.restype = ctypes.c_uint8
+        _lib.gft16_is_finite.argtypes = [_gft16_t]
+
     return _lib
 
 
@@ -270,3 +285,42 @@ def goldenfloat_phi_inv_sq() -> float:
 def goldenfloat_trinity() -> float:
     """Get Trinity constant (3.0)."""
     return _get_lib().goldenfloat_trinity()
+
+
+# ---- GF-T16 (ternary-exponent) public wrappers ----
+def gft16_from_f32(x: float) -> int:
+    """Convert f32 to GF-T16 (raw 17-bit value in a uint32)."""
+    return _get_lib().gft16_from_f32(x)
+
+
+def gft16_to_f32(g: int) -> float:
+    """Convert GF-T16 to f32."""
+    return _get_lib().gft16_to_f32(g)
+
+
+def gft16_add(a: int, b: int) -> int:
+    return _get_lib().gft16_add(a, b)
+
+
+def gft16_sub(a: int, b: int) -> int:
+    return _get_lib().gft16_sub(a, b)
+
+
+def gft16_mul(a: int, b: int) -> int:
+    return _get_lib().gft16_mul(a, b)
+
+
+def gft16_div(a: int, b: int) -> int:
+    return _get_lib().gft16_div(a, b)
+
+
+def gft16_neg(g: int) -> int:
+    return _get_lib().gft16_neg(g)
+
+
+def gft16_abs(g: int) -> int:
+    return _get_lib().gft16_abs(g)
+
+
+def gft16_is_finite(g: int) -> bool:
+    return bool(_get_lib().gft16_is_finite(g))

@@ -9,6 +9,7 @@ Repository: https://github.com/gHashTag/zig-golden-float
 """
 
 from .gf16 import Gf16
+from .gft16 import Gft16
 
 __version__ = "2.0.0"
-__all__ = ["Gf16"]
+__all__ = ["Gf16", "Gft16"]
