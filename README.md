@@ -43,9 +43,21 @@ One normative rule sizes every binary rung (FORMAT-SPEC-001 v1.2):
 | GF32 | 32 | `[1:12:19]` | 2047 | Spec |
 
 The ladder continues to GF1024 (17 binary rungs total); GF16 is the sole primary
-production rung. † The normative bias for GF8 is `2^(e−1)−1 = 3`; the shipped
-`src/formats/gf8.zig` currently encodes bias 7 — a known code/spec discrepancy
-tracked for reconciliation (this PR fixes the README layout only).
+production rung. The whole rule-derived ladder is implemented in
+[`src/formats/gf_binary.zig`](src/formats/gf_binary.zig) as a comptime factory —
+`gf_binary.GF4/GF8/GF12/GF16/GF20/GF24/GF32`, or `gf_binary.GF(bits)` for any width:
+
+```zig
+const golden = @import("golden-float");
+const x = golden.gf_binary.GF12.fromF32(3.14159); // [1:4:7], bias 7
+std.debug.print("{d}\n", .{x.toF32()});
+const Custom = golden.gf_binary.GF(48);           // rule-sized on demand
+```
+
+(GF8/GF16 additionally have dedicated φ-FMA implementations in `formats`.) † The
+normative bias for GF8 is `2^(e−1)−1 = 3` and `gf_binary.GF8` uses it; the older
+standalone `gf8.zig` codec encodes bias 7 — a known code/spec discrepancy tracked
+for reconciliation.
 
 ### GF-T — balanced-ternary-exponent ladder
 
