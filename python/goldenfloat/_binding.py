@@ -170,6 +170,29 @@ def _get_lib():
             getattr(_lib, f"{_pfx}_is_finite").restype = ctypes.c_uint8
             getattr(_lib, f"{_pfx}_is_finite").argtypes = [_carrier]
 
+        # Binary GF ladder (φ²-sized rungs from gf_binary.zig). Full ABI:
+        # from/to/add/sub/mul/div/neg/abs/is_finite. GF16 is the rich gf16_* API;
+        # GF4 is omitted (degenerate). Packed value rides in the low carrier bits.
+        for _pfx, _carrier in (
+            ("gf8", ctypes.c_uint8),
+            ("gf12", ctypes.c_uint16),
+            ("gf20", ctypes.c_uint32),
+            ("gf24", ctypes.c_uint32),
+            ("gf32", ctypes.c_uint32),
+        ):
+            getattr(_lib, f"{_pfx}_from_f32").restype = _carrier
+            getattr(_lib, f"{_pfx}_from_f32").argtypes = [ctypes.c_float]
+            getattr(_lib, f"{_pfx}_to_f32").restype = ctypes.c_float
+            getattr(_lib, f"{_pfx}_to_f32").argtypes = [_carrier]
+            for _op in (f"{_pfx}_add", f"{_pfx}_sub", f"{_pfx}_mul", f"{_pfx}_div"):
+                getattr(_lib, _op).restype = _carrier
+                getattr(_lib, _op).argtypes = [_carrier, _carrier]
+            for _op in (f"{_pfx}_neg", f"{_pfx}_abs"):
+                getattr(_lib, _op).restype = _carrier
+                getattr(_lib, _op).argtypes = [_carrier]
+            getattr(_lib, f"{_pfx}_is_finite").restype = ctypes.c_uint8
+            getattr(_lib, f"{_pfx}_is_finite").argtypes = [_carrier]
+
     return _lib
 
 
