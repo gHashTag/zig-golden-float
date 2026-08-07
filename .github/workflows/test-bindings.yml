@@ -90,8 +90,10 @@ jobs:
           cmake -S . -B build -DGOLDENFLOAT_LIB_DIR=$GITHUB_WORKSPACE/zig-out/lib
           cmake --build build --target test_gf16
           cmake --build build --target test_gft16
+          cmake --build build --target test_gft_rungs
           LD_LIBRARY_PATH=$GITHUB_WORKSPACE/zig-out/lib ./build/test_gf16
           LD_LIBRARY_PATH=$GITHUB_WORKSPACE/zig-out/lib ./build/test_gft16
+          LD_LIBRARY_PATH=$GITHUB_WORKSPACE/zig-out/lib ./build/test_gft_rungs
 
       - name: Install Go
         if: matrix.language == 'go'
