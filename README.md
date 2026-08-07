@@ -63,7 +63,43 @@ with `e = offset − EXP_OFFSET`; the top offset row `3^E − 1` is reserved (In
 
 GF-T16 keeps GF16's φ-optimal 9-bit mantissa across its whole range, where
 tekum16 tapers to ~4 bits at the extremes. The authoritative parameters live in
-[`specs/gft.tri`](specs/gft.tri).
+[`specs/gft.tri`](specs/gft.tri); the codec is [`src/formats/gft.zig`](src/formats/gft.zig).
+
+### Using GF-T in code
+
+```zig
+const std = @import("std");
+const golden = @import("golden-float");
+
+pub fn main() void {
+    // Pick a rung by name: GFT4 / GFT8 / GFT16 / GFT32.
+    const a = golden.GFT16.fromF32(3.14159);
+    const b = golden.GFT16.fromF32(2.71828);
+
+    const prod = a.mul(b);            // add / sub / mul / div
+    std.debug.print("{d}\n", .{prod.toF32()}); // ~8.539
+
+    // Inspect / round-trip the raw storage bits (FFI, serialization).
+    const raw = a.bits();             // unsigned integer (GFT16.Repr)
+    const a2 = golden.GFT16.fromBits(raw);
+    std.debug.assert(a2.bits() == raw);
+
+    // Specials behave like a float: Inf saturates, NaN is contagious.
+    std.debug.assert(!golden.GFT16.fromF32(1e30).isFinite()); // overflow -> Inf
+    std.debug.assert(golden.GFT16.fromF32(1e-30).toF32() == 0); // underflow -> 0
+
+    // GF-T32 reaches ~219 decades (1e30, 6.022e23, ...) at 25-bit precision.
+    const avo = golden.GFT32.fromF32(6.022e23);
+    std.debug.print("{d}\n", .{avo.toF32()});
+}
+```
+
+Every rung is one instance of a comptime factory, so you can mint a custom rung
+too: `const MyRung = golden.gft.GFT(5, 12); // 5 exp-trits, 12 mantissa bits`.
+Each type exposes `fromF32` / `toF32` / `add` / `sub` / `mul` / `div` / `neg` /
+`abs` / `bits` / `fromBits` / `isFinite` plus the constants `EXP_TRITS`,
+`MANT_BITS`, `EXP_OFFSET`, `OFFSET_MAX`, `BITS`, `Repr`. A runnable copy lives in
+[`examples/gft_usage.zig`](examples/gft_usage.zig).
 
 ## Quick Start
 
@@ -84,7 +120,7 @@ std.debug.print("{d}\n", .{z.toF32()}); // 5.85...
 
 ```
 src/
-├── formats/         GF16, GF8, fp16, bf16, GFTernary codecs
+├── formats/         GF16, GF8, fp16, bf16, GFTernary codecs + gft.zig (GF-T4/8/16/32)
 ├── math/            constants, transcendental (sin, cos, exp, log)
 ├── ternary/         HybridBigInt, packed trit storage
 ├── vsa/             core, HRR, 10K-dim hypervectors, FPGA bind

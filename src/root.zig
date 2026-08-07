@@ -19,6 +19,18 @@
 /// Number formats: GF16, TF3
 pub const formats = @import("src/formats/golden_float16.zig");
 
+/// GF-T ternary-exponent ladder: GFT4 / GFT8 / GFT16 / GFT32 (+ generic `GFT(E, M)`).
+/// ```zig
+/// const golden = @import("golden-float");
+/// const x = golden.gft.GFT16.fromF32(3.14159);
+/// ```
+pub const gft = @import("src/formats/gft.zig");
+/// Convenience re-exports of the four GF-T rungs.
+pub const GFT4 = gft.GFT4;
+pub const GFT8 = gft.GFT8;
+pub const GFT16 = gft.GFT16;
+pub const GFT32 = gft.GFT32;
+
 // ═══════════════════════════════════════════════════════════════
 // VSA MODULES
 // ═══════════════════════════════════════════════════════════════════
