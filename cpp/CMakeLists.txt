@@ -81,6 +81,23 @@ else()
     target_compile_options(test_gft16 PRIVATE -Wall -Wextra -pedantic)
 endif()
 
+# GF-T8 / GF-T32 binding test (self-contained, no JSON dependency)
+add_executable(test_gft_rungs
+    tests/test_gft_rungs.cpp
+)
+target_link_libraries(test_gft_rungs
+    PRIVATE
+    ${GOLDENFLOAT}
+)
+target_compile_features(test_gft_rungs
+    PRIVATE
+    cxx_std_17)
+if(MSVC)
+    target_compile_options(test_gft_rungs PRIVATE /W4)
+else()
+    target_compile_options(test_gft_rungs PRIVATE -Wall -Wextra -pedantic)
+endif()
+
 # ============================================================================
 # Optional: Install Targets
 # ============================================================================

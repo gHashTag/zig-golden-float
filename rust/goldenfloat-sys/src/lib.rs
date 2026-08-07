@@ -93,6 +93,28 @@ extern "C" {
     pub fn gft16_neg(g: gft16_t) -> gft16_t;
     pub fn gft16_abs(g: gft16_t) -> gft16_t;
     pub fn gft16_is_finite(g: gft16_t) -> u8;
+
+    // GF-T8 (E=3 trits, M=4 bits) — 10-bit value carried in a gft8_t (u16).
+    pub fn gft8_from_f32(x: f32) -> gft8_t;
+    pub fn gft8_to_f32(g: gft8_t) -> f32;
+    pub fn gft8_add(a: gft8_t, b: gft8_t) -> gft8_t;
+    pub fn gft8_sub(a: gft8_t, b: gft8_t) -> gft8_t;
+    pub fn gft8_mul(a: gft8_t, b: gft8_t) -> gft8_t;
+    pub fn gft8_div(a: gft8_t, b: gft8_t) -> gft8_t;
+    pub fn gft8_neg(g: gft8_t) -> gft8_t;
+    pub fn gft8_abs(g: gft8_t) -> gft8_t;
+    pub fn gft8_is_finite(g: gft8_t) -> u8;
+
+    // GF-T32 (E=6 trits, M=25 bits) — 36-bit value carried in a gft32_t (u64).
+    pub fn gft32_from_f32(x: f32) -> gft32_t;
+    pub fn gft32_to_f32(g: gft32_t) -> f32;
+    pub fn gft32_add(a: gft32_t, b: gft32_t) -> gft32_t;
+    pub fn gft32_sub(a: gft32_t, b: gft32_t) -> gft32_t;
+    pub fn gft32_mul(a: gft32_t, b: gft32_t) -> gft32_t;
+    pub fn gft32_div(a: gft32_t, b: gft32_t) -> gft32_t;
+    pub fn gft32_neg(g: gft32_t) -> gft32_t;
+    pub fn gft32_abs(g: gft32_t) -> gft32_t;
+    pub fn gft32_is_finite(g: gft32_t) -> u8;
 }
 
 /// Raw GF-T16 value: the 17-bit ternary-exponent pattern in the low bits of a u32.
@@ -100,6 +122,18 @@ extern "C" {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 #[allow(non_camel_case_types)]
 pub struct gft16_t(pub u32);
+
+/// Raw GF-T8 value: the 10-bit ternary-exponent pattern in the low bits of a u16.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+#[allow(non_camel_case_types)]
+pub struct gft8_t(pub u16);
+
+/// Raw GF-T32 value: the 36-bit ternary-exponent pattern in the low bits of a u64.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+#[allow(non_camel_case_types)]
+pub struct gft32_t(pub u64);
 
 #[cfg(test)]
 mod tests {
@@ -134,5 +168,46 @@ mod tests {
         // is_finite: 1.0 finite, 1e30 overflows to Inf.
         assert_eq!(unsafe { gft16_is_finite(gft16_from_f32(1.0)) }, 1);
         assert_eq!(unsafe { gft16_is_finite(gft16_from_f32(1e30)) }, 0);
+    }
+
+    #[test]
+    fn test_gft8_ffi() {
+        // 4-bit mantissa -> ~3%; keep values inside GF-T8's [2^-13, 2^12] range.
+        for &v in &[1.0f32, -1.0, 0.5, 2.0, 3.0, -3.0, 100.0, 0.05] {
+            let q = unsafe { gft8_to_f32(gft8_from_f32(v)) };
+            assert!((q - v).abs() / (v.abs() + 1e-9) < 0.04, "roundtrip {v} -> {q}");
+        }
+        let a = unsafe { gft8_from_f32(1.5) };
+        let b = unsafe { gft8_from_f32(2.5) };
+        assert!((unsafe { gft8_to_f32(gft8_add(a, b)) } - 4.0).abs() < 0.05);
+        assert!((unsafe { gft8_to_f32(gft8_sub(b, a)) } - 1.0).abs() < 0.05);
+        assert!((unsafe { gft8_to_f32(gft8_mul(a, b)) } - 3.75).abs() < 0.05);
+        assert!((unsafe { gft8_to_f32(gft8_div(b, a)) } - (2.5 / 1.5)).abs() < 0.06);
+        assert!((unsafe { gft8_to_f32(gft8_neg(a)) } + 1.5).abs() < 0.05);
+        assert!((unsafe { gft8_to_f32(gft8_abs(gft8_neg(a))) } - 1.5).abs() < 0.05);
+        assert!(unsafe { gft8_from_f32(3.0).0 } <= 0x3FF); // 10-bit
+        assert_eq!(unsafe { gft8_is_finite(gft8_from_f32(1.0)) }, 1);
+        assert_eq!(unsafe { gft8_is_finite(gft8_from_f32(1e30)) }, 0);
+    }
+
+    #[test]
+    fn test_gft32_ffi() {
+        // 25-bit mantissa -> near-exact; 219 decades.
+        for &v in &[1.0f32, -1.0, 0.5, 2.0, 3.14159, -3.14159, 100.0, 0.001, 12345.0, 1e30] {
+            let q = unsafe { gft32_to_f32(gft32_from_f32(v)) };
+            assert!((q - v).abs() / (v.abs() + 1e-9) < 0.005, "roundtrip {v} -> {q}");
+        }
+        let a = unsafe { gft32_from_f32(1.5) };
+        let b = unsafe { gft32_from_f32(2.5) };
+        assert!((unsafe { gft32_to_f32(gft32_add(a, b)) } - 4.0).abs() < 0.001);
+        assert!((unsafe { gft32_to_f32(gft32_sub(b, a)) } - 1.0).abs() < 0.001);
+        assert!((unsafe { gft32_to_f32(gft32_mul(a, b)) } - 3.75).abs() < 0.001);
+        assert!((unsafe { gft32_to_f32(gft32_div(b, a)) } - (2.5 / 1.5)).abs() < 0.001);
+        assert!((unsafe { gft32_to_f32(gft32_neg(a)) } + 1.5).abs() < 0.001);
+        assert!((unsafe { gft32_to_f32(gft32_abs(gft32_neg(a))) } - 1.5).abs() < 0.001);
+        assert!(unsafe { gft32_from_f32(3.0).0 } <= 0xF_FFFF_FFFF); // 36-bit
+        // Every finite f32 is finite in GF-T32; only inf overflows.
+        assert_eq!(unsafe { gft32_is_finite(gft32_from_f32(1e30)) }, 1);
+        assert_eq!(unsafe { gft32_is_finite(gft32_from_f32(f32::INFINITY)) }, 0);
     }
 }
