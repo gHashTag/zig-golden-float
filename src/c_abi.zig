@@ -365,6 +365,161 @@ export fn gft32_is_finite(g: gft32_t) callconv(.c) u8 {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Binary GF ladder — the φ²-sized rungs from the gf_binary.zig factory.
+// GF16 is already covered by the rich gf16_* API above (identical [1:6:9] b31), so
+// this exposes GF8/GF12/GF20/GF24/GF32. GF4 is intentionally omitted: [1:1:2] gives a
+// 1-bit exponent (exp 0 = zero, exp 1 = reserved Inf/NaN) with NO normal values.
+// The packed N-bit value rides in the low bits of the next byte-sized carrier.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const gfl = @import("formats/gf_binary.zig");
+
+// ---- GF8 (8-bit value in u8) ----
+export fn gf8_from_f32(x: f32) callconv(.c) u8 {
+    return @as(u8, gfl.GF8.fromF32(x).bits_());
+}
+export fn gf8_to_f32(g: u8) callconv(.c) f32 {
+    return gfl.GF8.fromBits(@truncate(g)).toF32();
+}
+export fn gf8_add(a: u8, b: u8) callconv(.c) u8 {
+    return @as(u8, gfl.GF8.add(gfl.GF8.fromBits(@truncate(a)), gfl.GF8.fromBits(@truncate(b))).bits_());
+}
+export fn gf8_sub(a: u8, b: u8) callconv(.c) u8 {
+    return @as(u8, gfl.GF8.sub(gfl.GF8.fromBits(@truncate(a)), gfl.GF8.fromBits(@truncate(b))).bits_());
+}
+export fn gf8_mul(a: u8, b: u8) callconv(.c) u8 {
+    return @as(u8, gfl.GF8.mul(gfl.GF8.fromBits(@truncate(a)), gfl.GF8.fromBits(@truncate(b))).bits_());
+}
+export fn gf8_div(a: u8, b: u8) callconv(.c) u8 {
+    return @as(u8, gfl.GF8.div(gfl.GF8.fromBits(@truncate(a)), gfl.GF8.fromBits(@truncate(b))).bits_());
+}
+export fn gf8_neg(g: u8) callconv(.c) u8 {
+    return @as(u8, gfl.GF8.neg(gfl.GF8.fromBits(@truncate(g))).bits_());
+}
+export fn gf8_abs(g: u8) callconv(.c) u8 {
+    return @as(u8, gfl.GF8.abs(gfl.GF8.fromBits(@truncate(g))).bits_());
+}
+export fn gf8_is_finite(g: u8) callconv(.c) u8 {
+    return @intFromBool(gfl.GF8.fromBits(@truncate(g)).isFinite());
+}
+
+// ---- GF12 (12-bit value in u16) ----
+export fn gf12_from_f32(x: f32) callconv(.c) u16 {
+    return @as(u16, gfl.GF12.fromF32(x).bits_());
+}
+export fn gf12_to_f32(g: u16) callconv(.c) f32 {
+    return gfl.GF12.fromBits(@truncate(g)).toF32();
+}
+export fn gf12_add(a: u16, b: u16) callconv(.c) u16 {
+    return @as(u16, gfl.GF12.add(gfl.GF12.fromBits(@truncate(a)), gfl.GF12.fromBits(@truncate(b))).bits_());
+}
+export fn gf12_sub(a: u16, b: u16) callconv(.c) u16 {
+    return @as(u16, gfl.GF12.sub(gfl.GF12.fromBits(@truncate(a)), gfl.GF12.fromBits(@truncate(b))).bits_());
+}
+export fn gf12_mul(a: u16, b: u16) callconv(.c) u16 {
+    return @as(u16, gfl.GF12.mul(gfl.GF12.fromBits(@truncate(a)), gfl.GF12.fromBits(@truncate(b))).bits_());
+}
+export fn gf12_div(a: u16, b: u16) callconv(.c) u16 {
+    return @as(u16, gfl.GF12.div(gfl.GF12.fromBits(@truncate(a)), gfl.GF12.fromBits(@truncate(b))).bits_());
+}
+export fn gf12_neg(g: u16) callconv(.c) u16 {
+    return @as(u16, gfl.GF12.neg(gfl.GF12.fromBits(@truncate(g))).bits_());
+}
+export fn gf12_abs(g: u16) callconv(.c) u16 {
+    return @as(u16, gfl.GF12.abs(gfl.GF12.fromBits(@truncate(g))).bits_());
+}
+export fn gf12_is_finite(g: u16) callconv(.c) u8 {
+    return @intFromBool(gfl.GF12.fromBits(@truncate(g)).isFinite());
+}
+
+// ---- GF20 (20-bit value in u32) ----
+export fn gf20_from_f32(x: f32) callconv(.c) u32 {
+    return @as(u32, gfl.GF20.fromF32(x).bits_());
+}
+export fn gf20_to_f32(g: u32) callconv(.c) f32 {
+    return gfl.GF20.fromBits(@truncate(g)).toF32();
+}
+export fn gf20_add(a: u32, b: u32) callconv(.c) u32 {
+    return @as(u32, gfl.GF20.add(gfl.GF20.fromBits(@truncate(a)), gfl.GF20.fromBits(@truncate(b))).bits_());
+}
+export fn gf20_sub(a: u32, b: u32) callconv(.c) u32 {
+    return @as(u32, gfl.GF20.sub(gfl.GF20.fromBits(@truncate(a)), gfl.GF20.fromBits(@truncate(b))).bits_());
+}
+export fn gf20_mul(a: u32, b: u32) callconv(.c) u32 {
+    return @as(u32, gfl.GF20.mul(gfl.GF20.fromBits(@truncate(a)), gfl.GF20.fromBits(@truncate(b))).bits_());
+}
+export fn gf20_div(a: u32, b: u32) callconv(.c) u32 {
+    return @as(u32, gfl.GF20.div(gfl.GF20.fromBits(@truncate(a)), gfl.GF20.fromBits(@truncate(b))).bits_());
+}
+export fn gf20_neg(g: u32) callconv(.c) u32 {
+    return @as(u32, gfl.GF20.neg(gfl.GF20.fromBits(@truncate(g))).bits_());
+}
+export fn gf20_abs(g: u32) callconv(.c) u32 {
+    return @as(u32, gfl.GF20.abs(gfl.GF20.fromBits(@truncate(g))).bits_());
+}
+export fn gf20_is_finite(g: u32) callconv(.c) u8 {
+    return @intFromBool(gfl.GF20.fromBits(@truncate(g)).isFinite());
+}
+
+// ---- GF24 (24-bit value in u32) ----
+export fn gf24_from_f32(x: f32) callconv(.c) u32 {
+    return @as(u32, gfl.GF24.fromF32(x).bits_());
+}
+export fn gf24_to_f32(g: u32) callconv(.c) f32 {
+    return gfl.GF24.fromBits(@truncate(g)).toF32();
+}
+export fn gf24_add(a: u32, b: u32) callconv(.c) u32 {
+    return @as(u32, gfl.GF24.add(gfl.GF24.fromBits(@truncate(a)), gfl.GF24.fromBits(@truncate(b))).bits_());
+}
+export fn gf24_sub(a: u32, b: u32) callconv(.c) u32 {
+    return @as(u32, gfl.GF24.sub(gfl.GF24.fromBits(@truncate(a)), gfl.GF24.fromBits(@truncate(b))).bits_());
+}
+export fn gf24_mul(a: u32, b: u32) callconv(.c) u32 {
+    return @as(u32, gfl.GF24.mul(gfl.GF24.fromBits(@truncate(a)), gfl.GF24.fromBits(@truncate(b))).bits_());
+}
+export fn gf24_div(a: u32, b: u32) callconv(.c) u32 {
+    return @as(u32, gfl.GF24.div(gfl.GF24.fromBits(@truncate(a)), gfl.GF24.fromBits(@truncate(b))).bits_());
+}
+export fn gf24_neg(g: u32) callconv(.c) u32 {
+    return @as(u32, gfl.GF24.neg(gfl.GF24.fromBits(@truncate(g))).bits_());
+}
+export fn gf24_abs(g: u32) callconv(.c) u32 {
+    return @as(u32, gfl.GF24.abs(gfl.GF24.fromBits(@truncate(g))).bits_());
+}
+export fn gf24_is_finite(g: u32) callconv(.c) u8 {
+    return @intFromBool(gfl.GF24.fromBits(@truncate(g)).isFinite());
+}
+
+// ---- GF32 (32-bit value in u32) ----
+export fn gf32_from_f32(x: f32) callconv(.c) u32 {
+    return @as(u32, gfl.GF32.fromF32(x).bits_());
+}
+export fn gf32_to_f32(g: u32) callconv(.c) f32 {
+    return gfl.GF32.fromBits(@truncate(g)).toF32();
+}
+export fn gf32_add(a: u32, b: u32) callconv(.c) u32 {
+    return @as(u32, gfl.GF32.add(gfl.GF32.fromBits(@truncate(a)), gfl.GF32.fromBits(@truncate(b))).bits_());
+}
+export fn gf32_sub(a: u32, b: u32) callconv(.c) u32 {
+    return @as(u32, gfl.GF32.sub(gfl.GF32.fromBits(@truncate(a)), gfl.GF32.fromBits(@truncate(b))).bits_());
+}
+export fn gf32_mul(a: u32, b: u32) callconv(.c) u32 {
+    return @as(u32, gfl.GF32.mul(gfl.GF32.fromBits(@truncate(a)), gfl.GF32.fromBits(@truncate(b))).bits_());
+}
+export fn gf32_div(a: u32, b: u32) callconv(.c) u32 {
+    return @as(u32, gfl.GF32.div(gfl.GF32.fromBits(@truncate(a)), gfl.GF32.fromBits(@truncate(b))).bits_());
+}
+export fn gf32_neg(g: u32) callconv(.c) u32 {
+    return @as(u32, gfl.GF32.neg(gfl.GF32.fromBits(@truncate(g))).bits_());
+}
+export fn gf32_abs(g: u32) callconv(.c) u32 {
+    return @as(u32, gfl.GF32.abs(gfl.GF32.fromBits(@truncate(g))).bits_());
+}
+export fn gf32_is_finite(g: u32) callconv(.c) u8 {
+    return @intFromBool(gfl.GF32.fromBits(@truncate(g)).isFinite());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Tests
 // ═════════════════════════════════════════════════════════════════════════════
 

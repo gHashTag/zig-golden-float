@@ -71,6 +71,7 @@ jobs:
           python -m goldenfloat.tests.test_gf16
           python -m goldenfloat.tests.test_gft16
           python -m goldenfloat.tests.test_gft_rungs
+          python -m goldenfloat.tests.test_gf_ladder
         env:
           GOLDENFLOAT_LIB_DIR: ${{ github.workspace }}/zig-out/lib
 
