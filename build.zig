@@ -111,6 +111,20 @@ pub fn build(b: *std.Build) void {
     const run_gft_tests = b.addRunArtifact(gft_tests);
 
     // ─────────────────────────────────────────────────────────────────
+    // Tests — GF binary-exponent ladder factory (GF4/8/12/16/20/24/32)
+    // ─────────────────────────────────────────────────────────────────
+    const gf_binary_tests_root = b.createModule(.{
+        .root_source_file = b.path("src/formats/gf_binary.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const gf_binary_tests = b.addTest(.{
+        .name = "gf-binary-tests",
+        .root_module = gf_binary_tests_root,
+    });
+    const run_gf_binary_tests = b.addRunArtifact(gf_binary_tests);
+
+    // ─────────────────────────────────────────────────────────────────
     // Tests — transcendental functions (Wave 4B)
     // ─────────────────────────────────────────────────────────────────
     const transcendent_tests_root = b.createModule(.{
@@ -173,6 +187,7 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&run_tests.step);
     test_step.dependOn(&run_gft_tests.step);
+    test_step.dependOn(&run_gf_binary_tests.step);
     test_step.dependOn(&run_transcendent_tests.step);
     test_step.dependOn(&run_c_abi_tests.step);
     test_step.dependOn(&run_trinity_tests.step);

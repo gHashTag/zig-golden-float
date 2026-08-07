@@ -31,6 +31,15 @@ pub const GFT8 = gft.GFT8;
 pub const GFT16 = gft.GFT16;
 pub const GFT32 = gft.GFT32;
 
+/// Binary GF ladder derived from the φ² sizing rule: GF4/8/12/16/20/24/32 (+ `GF(bits)`).
+/// GF8/GF16 also have dedicated φ-FMA implementations in `formats`; this is the full
+/// ladder / reference for the other rungs.
+/// ```zig
+/// const golden = @import("golden-float");
+/// const x = golden.gf_binary.GF12.fromF32(3.14159);
+/// ```
+pub const gf_binary = @import("src/formats/gf_binary.zig");
+
 // ═══════════════════════════════════════════════════════════════
 // VSA MODULES
 // ═══════════════════════════════════════════════════════════════════
