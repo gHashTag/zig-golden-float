@@ -231,4 +231,33 @@ pub fn build(b: *std.Build) void {
     const run_igla_bench = b.addRunArtifact(igla_bench);
     const igla_bench_step = b.step("bench-igla", "Run IGLA-GF16 architecture verification (Module 7)");
     igla_bench_step.dependOn(&run_igla_bench.step);
+
+    // ─────────────────────────────────────────────────────────────────
+    // Tests — Invariant Tests (Track 4)
+    // ─────────────────────────────────────────────────────────────────
+    const invariant_tests_root = b.createModule(.{
+        .root_source_file = b.path("tests/invariant_tests.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "golden_float16", .module = formats_tests_root },
+            .{ .name = "gf8", .module = b.createModule(.{
+                .root_source_file = b.path("src/formats/gf8.zig"),
+                .target = target,
+                .optimize = optimize,
+            }) },
+        },
+    });
+    const invariant_tests = b.addTest(.{
+        .name = "invariant-tests",
+        .root_module = invariant_tests_root,
+    });
+    const run_invariant_tests = b.addRunArtifact(invariant_tests);
+
+    // Add invariant tests to the main test step
+    test_step.dependOn(&run_invariant_tests.step);
+
+    // Separate step for invariant tests only
+    const invariant_step = b.step("test-invariant", "Run invariant tests (7 formats × 6 invariants = 42 tests)");
+    invariant_step.dependOn(&run_invariant_tests.step);
 }
