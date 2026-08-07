@@ -69,6 +69,8 @@ jobs:
           cd python
           pip install -e . -q
           python -m goldenfloat.tests.test_gf16
+          python -m goldenfloat.tests.test_gft16
+          python -m goldenfloat.tests.test_gft_rungs
         env:
           GOLDENFLOAT_LIB_DIR: ${{ github.workspace }}/zig-out/lib
 

@@ -153,6 +153,19 @@ def _get_lib():
         _lib.gft16_is_finite.restype = ctypes.c_uint8
         _lib.gft16_is_finite.argtypes = [_gft16_t]
 
+        # Other GF-T rungs (subset ABI: from/to/add/mul/is_finite). The packed
+        # value rides in the low bits of the carrier: gft8 -> u16, gft32 -> u64.
+        for _pfx, _carrier in (("gft8", ctypes.c_uint16), ("gft32", ctypes.c_uint64)):
+            getattr(_lib, f"{_pfx}_from_f32").restype = _carrier
+            getattr(_lib, f"{_pfx}_from_f32").argtypes = [ctypes.c_float]
+            getattr(_lib, f"{_pfx}_to_f32").restype = ctypes.c_float
+            getattr(_lib, f"{_pfx}_to_f32").argtypes = [_carrier]
+            for _op in (f"{_pfx}_add", f"{_pfx}_mul"):
+                getattr(_lib, _op).restype = _carrier
+                getattr(_lib, _op).argtypes = [_carrier, _carrier]
+            getattr(_lib, f"{_pfx}_is_finite").restype = ctypes.c_uint8
+            getattr(_lib, f"{_pfx}_is_finite").argtypes = [_carrier]
+
     return _lib
 
 
@@ -324,3 +337,45 @@ def gft16_abs(g: int) -> int:
 
 def gft16_is_finite(g: int) -> bool:
     return bool(_get_lib().gft16_is_finite(g))
+
+
+# GF-T8 (E=3 trits, M=4 bits) — 10-bit value in a uint16.
+def gft8_from_f32(x: float) -> int:
+    return _get_lib().gft8_from_f32(x)
+
+
+def gft8_to_f32(g: int) -> float:
+    return _get_lib().gft8_to_f32(g)
+
+
+def gft8_add(a: int, b: int) -> int:
+    return _get_lib().gft8_add(a, b)
+
+
+def gft8_mul(a: int, b: int) -> int:
+    return _get_lib().gft8_mul(a, b)
+
+
+def gft8_is_finite(g: int) -> bool:
+    return bool(_get_lib().gft8_is_finite(g))
+
+
+# GF-T32 (E=6 trits, M=25 bits) — 36-bit value in a uint64.
+def gft32_from_f32(x: float) -> int:
+    return _get_lib().gft32_from_f32(x)
+
+
+def gft32_to_f32(g: int) -> float:
+    return _get_lib().gft32_to_f32(g)
+
+
+def gft32_add(a: int, b: int) -> int:
+    return _get_lib().gft32_add(a, b)
+
+
+def gft32_mul(a: int, b: int) -> int:
+    return _get_lib().gft32_mul(a, b)
+
+
+def gft32_is_finite(g: int) -> bool:
+    return bool(_get_lib().gft32_is_finite(g))
