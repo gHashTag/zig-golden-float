@@ -132,7 +132,8 @@ std.debug.print("{d}\n", .{z.toF32()}); // 5.85...
 
 ```
 src/
-├── formats/         GF16, GF8, fp16, bf16, GFTernary codecs + gft.zig (GF-T4/8/16/32)
+├── formats/         GF16/GF8 (golden_float16), gf_binary.zig (GF ladder GF4..GF32),
+│                     gft.zig (GF-T4/8/16/32), fp16, bf16, GFTernary codecs
 ├── math/            constants, transcendental (sin, cos, exp, log)
 ├── ternary/         HybridBigInt, packed trit storage
 ├── vsa/             core, HRR, 10K-dim hypervectors, FPGA bind
@@ -146,10 +147,31 @@ src/
 | Language | Path | Status |
 |----------|------|--------|
 | **Zig** | `src/` | Native |
-| **C/C++** | `src/c/gf16.h` + `cpp/` | C-ABI + header-only wrapper |
+| **C/C++** | `src/c/{gf16,gf_ladder,gft}.h` + `cpp/` | C-ABI + header-only wrappers |
 | **Rust** | `rust/goldenfloat-sys/` | FFI crate |
 | **Python** | `python/goldenfloat/` | ctypes bridge |
 | **Go** | `go/goldenfloat/` | cgo wrapper |
+
+### Format coverage across bindings
+
+Every rung below is a thin FFI wrapper over the **same** `libgoldenfloat` shared
+library, so all languages execute the identical Zig codec — the wrappers differ only
+in surface syntax.
+
+| Format family | Zig | C-ABI | C++ | Rust | Python | Go |
+|---------------|:---:|:-----:|:---:|:----:|:------:|:--:|
+| **GF16** (rich: arith, cmp, min/max, fma, φ-quant, predicates) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Binary GF ladder** GF8 / GF12 / GF20 / GF24 / GF32 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **GF-T16** (arith, neg/abs, is_finite) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **GF-T8 / GF-T32** (arith, neg/abs, is_finite) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **GF-T4** (minimal E2M1 — from/to/mul/is_finite) | ✓ | ✓ | — | — | — | — |
+| **GF4** (`[1:1:2]`, degenerate — no normal values) | factory | — | — | — | — | — |
+
+Wrapper names follow the rung: C++ `goldenfloat::Gf12` / `Gft8`, Rust `gf12_t` /
+`gft8_t`, Python `goldenfloat.Gf12` / `Gft8`, Go `goldenfloat.Gf12` / `Gft8`. The
+binary ladder covers `from/to_f32`, `add/sub/mul/div`, unary `neg`, `abs`, and
+`is_finite`; GF16 additionally carries the rich comparison / FMA / φ-quantization API.
+GF4 is intentionally unwrapped — a 1-bit exponent leaves only zero / Inf / NaN.
 
 ### Building & Testing
 
