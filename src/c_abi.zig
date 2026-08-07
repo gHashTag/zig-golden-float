@@ -320,6 +320,18 @@ export fn gft8_add(a: gft8_t, b: gft8_t) callconv(.c) gft8_t {
 export fn gft8_mul(a: gft8_t, b: gft8_t) callconv(.c) gft8_t {
     return @as(gft8_t, gft.GFT8.mul(gft.GFT8.fromBits(@truncate(a)), gft.GFT8.fromBits(@truncate(b))).bits());
 }
+export fn gft8_sub(a: gft8_t, b: gft8_t) callconv(.c) gft8_t {
+    return @as(gft8_t, gft.GFT8.sub(gft.GFT8.fromBits(@truncate(a)), gft.GFT8.fromBits(@truncate(b))).bits());
+}
+export fn gft8_div(a: gft8_t, b: gft8_t) callconv(.c) gft8_t {
+    return @as(gft8_t, gft.GFT8.div(gft.GFT8.fromBits(@truncate(a)), gft.GFT8.fromBits(@truncate(b))).bits());
+}
+export fn gft8_neg(g: gft8_t) callconv(.c) gft8_t {
+    return @as(gft8_t, gft.GFT8.neg(gft.GFT8.fromBits(@truncate(g))).bits());
+}
+export fn gft8_abs(g: gft8_t) callconv(.c) gft8_t {
+    return @as(gft8_t, gft.GFT8.abs(gft.GFT8.fromBits(@truncate(g))).bits());
+}
 export fn gft8_is_finite(g: gft8_t) callconv(.c) u8 {
     return @intFromBool(gft.GFT8.fromBits(@truncate(g)).isFinite());
 }
@@ -335,6 +347,18 @@ export fn gft32_add(a: gft32_t, b: gft32_t) callconv(.c) gft32_t {
 }
 export fn gft32_mul(a: gft32_t, b: gft32_t) callconv(.c) gft32_t {
     return @as(gft32_t, gft.GFT32.mul(gft.GFT32.fromBits(@truncate(a)), gft.GFT32.fromBits(@truncate(b))).bits());
+}
+export fn gft32_sub(a: gft32_t, b: gft32_t) callconv(.c) gft32_t {
+    return @as(gft32_t, gft.GFT32.sub(gft.GFT32.fromBits(@truncate(a)), gft.GFT32.fromBits(@truncate(b))).bits());
+}
+export fn gft32_div(a: gft32_t, b: gft32_t) callconv(.c) gft32_t {
+    return @as(gft32_t, gft.GFT32.div(gft.GFT32.fromBits(@truncate(a)), gft.GFT32.fromBits(@truncate(b))).bits());
+}
+export fn gft32_neg(g: gft32_t) callconv(.c) gft32_t {
+    return @as(gft32_t, gft.GFT32.neg(gft.GFT32.fromBits(@truncate(g))).bits());
+}
+export fn gft32_abs(g: gft32_t) callconv(.c) gft32_t {
+    return @as(gft32_t, gft.GFT32.abs(gft.GFT32.fromBits(@truncate(g))).bits());
 }
 export fn gft32_is_finite(g: gft32_t) callconv(.c) u8 {
     return @intFromBool(gft.GFT32.fromBits(@truncate(g)).isFinite());

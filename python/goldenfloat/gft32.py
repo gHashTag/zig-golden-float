@@ -14,7 +14,11 @@ from ._binding import (
     gft32_from_f32,
     gft32_to_f32,
     gft32_add,
+    gft32_sub,
     gft32_mul,
+    gft32_div,
+    gft32_neg,
+    gft32_abs,
     gft32_is_finite,
 )
 
@@ -37,8 +41,20 @@ class Gft32:
     def __add__(self, other: "Gft32") -> "Gft32":
         return Gft32(gft32_add(self.raw, other.raw))
 
+    def __sub__(self, other: "Gft32") -> "Gft32":
+        return Gft32(gft32_sub(self.raw, other.raw))
+
     def __mul__(self, other: "Gft32") -> "Gft32":
         return Gft32(gft32_mul(self.raw, other.raw))
+
+    def __truediv__(self, other: "Gft32") -> "Gft32":
+        return Gft32(gft32_div(self.raw, other.raw))
+
+    def __neg__(self) -> "Gft32":
+        return Gft32(gft32_neg(self.raw))
+
+    def __abs__(self) -> "Gft32":
+        return Gft32(gft32_abs(self.raw))
 
     def is_finite(self) -> bool:
         return gft32_is_finite(self.raw)

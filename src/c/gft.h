@@ -76,13 +76,21 @@ uint8_t gft4_is_finite(gft4_t g);
 gft8_t  gft8_from_f32(float x);
 float   gft8_to_f32(gft8_t g);
 gft8_t  gft8_add(gft8_t a, gft8_t b);
+gft8_t  gft8_sub(gft8_t a, gft8_t b);
 gft8_t  gft8_mul(gft8_t a, gft8_t b);
+gft8_t  gft8_div(gft8_t a, gft8_t b);
+gft8_t  gft8_neg(gft8_t g);
+gft8_t  gft8_abs(gft8_t g);
 uint8_t gft8_is_finite(gft8_t g);
 
 gft32_t gft32_from_f32(float x);
 float   gft32_to_f32(gft32_t g);
 gft32_t gft32_add(gft32_t a, gft32_t b);
+gft32_t gft32_sub(gft32_t a, gft32_t b);
 gft32_t gft32_mul(gft32_t a, gft32_t b);
+gft32_t gft32_div(gft32_t a, gft32_t b);
+gft32_t gft32_neg(gft32_t g);
+gft32_t gft32_abs(gft32_t g);
 uint8_t gft32_is_finite(gft32_t g);
 
 #ifdef __cplusplus
