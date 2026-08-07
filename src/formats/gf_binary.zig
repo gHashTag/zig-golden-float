@@ -268,3 +268,27 @@ test "GF ladder: exact-bit golden vectors (encoding regression guard)" {
     try E(@as(GF32.Repr, 0x40000000), GF32.fromF32(2.0).bits_());
     try E(@as(GF32.Repr, 0xC0020000), GF32.fromF32(-2.5).bits_());
 }
+
+// Normative-rule conformance — machine-check that every rung's factory constants satisfy
+// the ONE sizing rule the spec encodes (FORMAT-SPEC-001):
+//   e = round((N-1)/φ²),  m = N-1-e,  bias = 2^(e-1)-1,  exp_max = 2^e-1
+// Re-derived here independently of the factory, so a future edit to GF() that drifts from
+// the rule fails loudly. This is the class of guard that was missing when GF8 carried a
+// wrong bias (spec bias=7 vs canonical=3, #84). (A full spec<->.tri parse-time check is a
+// separate effort — tri_reader lives outside this module's import path.)
+test "GF ladder: factory constants obey the normative φ² rule" {
+    const rungs = [_]u32{ 8, 12, 16, 20, 24, 32 };
+    inline for (rungs) |N| {
+        const T = GF(N);
+        const e: u32 = @intFromFloat(@round(@as(f64, N - 1) / PHI_SQ));
+        const m: u32 = N - 1 - e;
+        const bias: u32 = (@as(u32, 1) << @intCast(e - 1)) - 1;
+        const exp_max: u32 = (@as(u32, 1) << @intCast(e)) - 1;
+        try std.testing.expectEqual(e, T.EXP_BITS);
+        try std.testing.expectEqual(m, T.MANT_BITS);
+        try std.testing.expectEqual(bias, T.BIAS);
+        try std.testing.expectEqual(exp_max, T.EXP_MAX);
+        try std.testing.expectEqual(@as(u32, N), T.BITS);
+        try std.testing.expectEqual(N, 1 + T.EXP_BITS + T.MANT_BITS); // fields tile the width
+    }
+}
