@@ -60,6 +60,31 @@ uint8_t gft16_is_finite(gft16_t g);
 /** Number of mantissa bits. */
 #define GFT16_MANT_BITS  9
 
+/* ---- The other GF-T rungs (packed value in the low bits of the carrier) ---- */
+/** GF-T4  : E=2 trits, M=1 bit  (6-bit value in a uint8).  EXP_OFFSET=4,  max=8.   */
+typedef uint8_t  gft4_t;
+/** GF-T8  : E=3 trits, M=4 bits (10-bit value in a uint16). EXP_OFFSET=13, max=26. */
+typedef uint16_t gft8_t;
+/** GF-T32 : E=6 trits, M=25 bits (36-bit value in a uint64). EXP_OFFSET=364, max=728, ~219 decades. */
+typedef uint64_t gft32_t;
+
+gft4_t  gft4_from_f32(float x);
+float   gft4_to_f32(gft4_t g);
+gft4_t  gft4_mul(gft4_t a, gft4_t b);
+uint8_t gft4_is_finite(gft4_t g);
+
+gft8_t  gft8_from_f32(float x);
+float   gft8_to_f32(gft8_t g);
+gft8_t  gft8_add(gft8_t a, gft8_t b);
+gft8_t  gft8_mul(gft8_t a, gft8_t b);
+uint8_t gft8_is_finite(gft8_t g);
+
+gft32_t gft32_from_f32(float x);
+float   gft32_to_f32(gft32_t g);
+gft32_t gft32_add(gft32_t a, gft32_t b);
+gft32_t gft32_mul(gft32_t a, gft32_t b);
+uint8_t gft32_is_finite(gft32_t g);
+
 #ifdef __cplusplus
 }
 #endif
