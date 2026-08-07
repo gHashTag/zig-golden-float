@@ -1,6 +1,7 @@
 # GoldenFloat cross-language conformance vectors.
 # Shared source of truth: every binding must encode value -> bits identically
 # (all wrappers call the same libgoldenfloat C-ABI). Regenerate deliberately.
+# Covers finite values + specials (inf/-inf/nan/+-0) + over/underflow (1e30/1e-30).
 # columns: rung,value,bits_hex   (bits = raw packed pattern in the carrier)
 rung,value,bits
 gf8,1.0,0x30
@@ -10,6 +11,13 @@ gf8,3.0,0x48
 gf8,0.5,0x20
 gf8,-1.0,0xb0
 gf8,-2.5,0xc4
+gf8,inf,0x70
+gf8,-inf,0xf0
+gf8,nan,0x71
+gf8,0.0,0x0
+gf8,-0.0,0x80
+gf8,1e+30,0x70
+gf8,1e-30,0x0
 gf12,1.0,0x380
 gf12,1.5,0x3c0
 gf12,2.0,0x400
@@ -17,6 +25,13 @@ gf12,3.0,0x440
 gf12,0.5,0x300
 gf12,-1.0,0xb80
 gf12,-2.5,0xc20
+gf12,inf,0x780
+gf12,-inf,0xf80
+gf12,nan,0x781
+gf12,0.0,0x0
+gf12,-0.0,0x800
+gf12,1e+30,0x780
+gf12,1e-30,0x0
 gf20,1.0,0x3f000
 gf20,1.5,0x3f800
 gf20,2.0,0x40000
@@ -24,6 +39,13 @@ gf20,3.0,0x40800
 gf20,0.5,0x3e000
 gf20,-1.0,0xbf000
 gf20,-2.5,0xc0400
+gf20,inf,0x7f000
+gf20,-inf,0xff000
+gf20,nan,0x7f001
+gf20,0.0,0x0
+gf20,-0.0,0x80000
+gf20,1e+30,0x7f000
+gf20,1e-30,0x0
 gf24,1.0,0x3fc000
 gf24,1.5,0x3fe000
 gf24,2.0,0x400000
@@ -31,6 +53,13 @@ gf24,3.0,0x402000
 gf24,0.5,0x3f8000
 gf24,-1.0,0xbfc000
 gf24,-2.5,0xc01000
+gf24,inf,0x7fc000
+gf24,-inf,0xffc000
+gf24,nan,0x7fc001
+gf24,0.0,0x0
+gf24,-0.0,0x800000
+gf24,1e+30,0x58a4f9
+gf24,1e-30,0x26d121
 gf32,1.0,0x3ff80000
 gf32,1.5,0x3ffc0000
 gf32,2.0,0x40000000
@@ -38,6 +67,13 @@ gf32,3.0,0x40040000
 gf32,0.5,0x3ff00000
 gf32,-1.0,0xbff80000
 gf32,-2.5,0xc0020000
+gf32,inf,0x7ff80000
+gf32,-inf,0xfff80000
+gf32,nan,0x7ff80001
+gf32,0.0,0x0
+gf32,-0.0,0x80000000
+gf32,1e+30,0x43149f2d
+gf32,1e-30,0x3cda2426
 gft8,1.0,0xd0
 gft8,1.5,0xd8
 gft8,2.0,0xe0
@@ -45,6 +81,13 @@ gft8,3.0,0xe8
 gft8,0.5,0xc0
 gft8,-1.0,0x2d0
 gft8,-2.5,0x2e4
+gft8,inf,0x1a0
+gft8,-inf,0x3a0
+gft8,nan,0x1a1
+gft8,0.0,0x0
+gft8,-0.0,0x200
+gft8,1e+30,0x1a0
+gft8,1e-30,0x0
 gft16,1.0,0x5000
 gft16,1.5,0x5100
 gft16,2.0,0x5200
@@ -52,6 +95,13 @@ gft16,3.0,0x5300
 gft16,0.5,0x4e00
 gft16,-1.0,0x15000
 gft16,-2.5,0x15280
+gft16,inf,0xa000
+gft16,-inf,0x1a000
+gft16,nan,0xa001
+gft16,0.0,0x0
+gft16,-0.0,0x10000
+gft16,1e+30,0xa000
+gft16,1e-30,0x0
 gft32,1.0,0x2d8000000
 gft32,1.5,0x2d9000000
 gft32,2.0,0x2da000000
@@ -59,3 +109,10 @@ gft32,3.0,0x2db000000
 gft32,0.5,0x2d6000000
 gft32,-1.0,0xad8000000
 gft32,-2.5,0xada800000
+gft32,inf,0x5b0000000
+gft32,-inf,0xdb0000000
+gft32,nan,0x5b0000001
+gft32,0.0,0x0
+gft32,-0.0,0x800000000
+gft32,1e+30,0x39f27cb28
+gft32,1e-30,0x210890980
