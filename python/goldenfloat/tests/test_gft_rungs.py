@@ -17,7 +17,11 @@ def test_gft8_arithmetic_finite():
     a = Gft8.from_f32(1.5)
     b = Gft8.from_f32(2.5)
     assert abs((a + b).to_f32() - 4.0) < 0.05
+    assert abs((b - a).to_f32() - 1.0) < 0.05
     assert abs((a * b).to_f32() - 3.75) < 0.05
+    assert abs((b / a).to_f32() - (2.5 / 1.5)) < 0.06  # 4-bit mantissa
+    assert abs((-a).to_f32() + 1.5) < 0.05
+    assert abs(abs(-a).to_f32() - 1.5) < 0.05
     assert Gft8.from_f32(1.0).is_finite()
     assert not Gft8.from_f32(1e30).is_finite()  # out of range -> Inf
 
@@ -33,7 +37,11 @@ def test_gft32_arithmetic_finite():
     a = Gft32.from_f32(1.5)
     b = Gft32.from_f32(2.5)
     assert abs((a + b).to_f32() - 4.0) < 0.001
+    assert abs((b - a).to_f32() - 1.0) < 0.001
     assert abs((a * b).to_f32() - 3.75) < 0.001
+    assert abs((b / a).to_f32() - (2.5 / 1.5)) < 0.001
+    assert abs((-a).to_f32() + 1.5) < 0.001
+    assert abs(abs(-a).to_f32() - 1.5) < 0.001
     # Every finite f32 is finite in GF-T32 (219 decades); only inf overflows.
     assert Gft32.from_f32(1e30).is_finite()
     assert not Gft32.from_f32(float("inf")).is_finite()

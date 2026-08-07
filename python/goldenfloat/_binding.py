@@ -153,16 +153,20 @@ def _get_lib():
         _lib.gft16_is_finite.restype = ctypes.c_uint8
         _lib.gft16_is_finite.argtypes = [_gft16_t]
 
-        # Other GF-T rungs (subset ABI: from/to/add/mul/is_finite). The packed
-        # value rides in the low bits of the carrier: gft8 -> u16, gft32 -> u64.
+        # Other GF-T rungs (full ABI: from/to/add/sub/mul/div/neg/abs/is_finite).
+        # The packed value rides in the low bits of the carrier: gft8 -> u16,
+        # gft32 -> u64.
         for _pfx, _carrier in (("gft8", ctypes.c_uint16), ("gft32", ctypes.c_uint64)):
             getattr(_lib, f"{_pfx}_from_f32").restype = _carrier
             getattr(_lib, f"{_pfx}_from_f32").argtypes = [ctypes.c_float]
             getattr(_lib, f"{_pfx}_to_f32").restype = ctypes.c_float
             getattr(_lib, f"{_pfx}_to_f32").argtypes = [_carrier]
-            for _op in (f"{_pfx}_add", f"{_pfx}_mul"):
+            for _op in (f"{_pfx}_add", f"{_pfx}_sub", f"{_pfx}_mul", f"{_pfx}_div"):
                 getattr(_lib, _op).restype = _carrier
                 getattr(_lib, _op).argtypes = [_carrier, _carrier]
+            for _op in (f"{_pfx}_neg", f"{_pfx}_abs"):
+                getattr(_lib, _op).restype = _carrier
+                getattr(_lib, _op).argtypes = [_carrier]
             getattr(_lib, f"{_pfx}_is_finite").restype = ctypes.c_uint8
             getattr(_lib, f"{_pfx}_is_finite").argtypes = [_carrier]
 
@@ -352,8 +356,24 @@ def gft8_add(a: int, b: int) -> int:
     return _get_lib().gft8_add(a, b)
 
 
+def gft8_sub(a: int, b: int) -> int:
+    return _get_lib().gft8_sub(a, b)
+
+
 def gft8_mul(a: int, b: int) -> int:
     return _get_lib().gft8_mul(a, b)
+
+
+def gft8_div(a: int, b: int) -> int:
+    return _get_lib().gft8_div(a, b)
+
+
+def gft8_neg(g: int) -> int:
+    return _get_lib().gft8_neg(g)
+
+
+def gft8_abs(g: int) -> int:
+    return _get_lib().gft8_abs(g)
 
 
 def gft8_is_finite(g: int) -> bool:
@@ -373,8 +393,24 @@ def gft32_add(a: int, b: int) -> int:
     return _get_lib().gft32_add(a, b)
 
 
+def gft32_sub(a: int, b: int) -> int:
+    return _get_lib().gft32_sub(a, b)
+
+
 def gft32_mul(a: int, b: int) -> int:
     return _get_lib().gft32_mul(a, b)
+
+
+def gft32_div(a: int, b: int) -> int:
+    return _get_lib().gft32_div(a, b)
+
+
+def gft32_neg(g: int) -> int:
+    return _get_lib().gft32_neg(g)
+
+
+def gft32_abs(g: int) -> int:
+    return _get_lib().gft32_abs(g)
 
 
 def gft32_is_finite(g: int) -> bool:

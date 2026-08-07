@@ -13,7 +13,11 @@ from ._binding import (
     gft8_from_f32,
     gft8_to_f32,
     gft8_add,
+    gft8_sub,
     gft8_mul,
+    gft8_div,
+    gft8_neg,
+    gft8_abs,
     gft8_is_finite,
 )
 
@@ -36,8 +40,20 @@ class Gft8:
     def __add__(self, other: "Gft8") -> "Gft8":
         return Gft8(gft8_add(self.raw, other.raw))
 
+    def __sub__(self, other: "Gft8") -> "Gft8":
+        return Gft8(gft8_sub(self.raw, other.raw))
+
     def __mul__(self, other: "Gft8") -> "Gft8":
         return Gft8(gft8_mul(self.raw, other.raw))
+
+    def __truediv__(self, other: "Gft8") -> "Gft8":
+        return Gft8(gft8_div(self.raw, other.raw))
+
+    def __neg__(self) -> "Gft8":
+        return Gft8(gft8_neg(self.raw))
+
+    def __abs__(self) -> "Gft8":
+        return Gft8(gft8_abs(self.raw))
 
     def is_finite(self) -> bool:
         return gft8_is_finite(self.raw)
