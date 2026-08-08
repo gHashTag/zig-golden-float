@@ -45,6 +45,14 @@ rungs:
     dynamic_range_decades: 24
     layout: "[ sign(1) | E = 4 balanced-ternary trits | M = 9 bits ]"
     note: keeps GF16's phi-optimal 9-bit mantissa across the whole range (tekum16 tapers to ~4 bits at the extremes)
+    open_issue: |
+      This rung uses 1 + 4 + 9 = 14 of its 16 positions; two are unallocated. It is
+      the only rung derived from its parent (GF16's mantissa kept, GF16's six-bit
+      exponent replaced by four trits) rather than from the width rule. Spending
+      them as M = 11 divides the error by 4.00 at unchanged range and costs 19% in
+      LUTs at no loss of frequency (measured, XC7A200T). NOT changed here: it would
+      invalidate the conformance vectors and the published silicon results. Decide
+      deliberately, then change the rung and regenerate both.
 
   - name: GF-T32
     exp_trits: 6
@@ -54,6 +62,59 @@ rungs:
     exp_range: [-364, 364]
     dynamic_range_decades: 219
     layout: "[ sign(1) | E = 6 balanced-ternary trits | M = 25 bits ]"
+
+  # Rungs GF-T64 and above added 2026-08-08, derived rather than tabulated.
+  # The ladder's width rule is 1 + E_t + M = N, counting one position per trit;
+  # GF-T4, GF-T8 and GF-T32 already satisfy it exactly, and these five follow it.
+  # A research note (trinity-fpga/research/GF_T_GOLD_STANDARD_LADDER_2026-08-05.md)
+  # carries different mantissa widths for these rungs -- 52, 115, 242, 497, 1006 --
+  # which fall 4 to 6 positions short of their declared widths and disagree with
+  # this file about GF-T32 as well. Those values are superseded; this file governs.
+
+  - name: GF-T64
+    exp_trits: 7
+    mant_bits: 56
+    exp_offset: 1093
+    offset_max: 2186         # 3^7 - 1
+    exp_range: [-1093, 1093]
+    dynamic_range_decades: 658
+    layout: "[ sign(1) | E = 7 balanced-ternary trits | M = 56 bits ]"
+
+  - name: GF-T128
+    exp_trits: 8
+    mant_bits: 119
+    exp_offset: 3280
+    offset_max: 6560         # 3^8 - 1
+    exp_range: [-3280, 3280]
+    dynamic_range_decades: 1975
+    layout: "[ sign(1) | E = 8 balanced-ternary trits | M = 119 bits ]"
+
+  - name: GF-T256
+    exp_trits: 9
+    mant_bits: 246
+    exp_offset: 9841
+    offset_max: 19682         # 3^9 - 1
+    exp_range: [-9841, 9841]
+    dynamic_range_decades: 5925
+    layout: "[ sign(1) | E = 9 balanced-ternary trits | M = 246 bits ]"
+
+  - name: GF-T512
+    exp_trits: 10
+    mant_bits: 501
+    exp_offset: 29524
+    offset_max: 59048         # 3^10 - 1
+    exp_range: [-29524, 29524]
+    dynamic_range_decades: 17775
+    layout: "[ sign(1) | E = 10 balanced-ternary trits | M = 501 bits ]"
+
+  - name: GF-T1024
+    exp_trits: 11
+    mant_bits: 1012
+    exp_offset: 88573
+    offset_max: 177146         # 3^11 - 1
+    exp_range: [-88573, 88573]
+    dynamic_range_decades: 53326
+    layout: "[ sign(1) | E = 11 balanced-ternary trits | M = 1012 bits ]"
 
 special:
   # For every rung: the reserved top offset row encodes the non-finite values.
