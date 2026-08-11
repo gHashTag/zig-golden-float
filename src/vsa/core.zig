@@ -653,7 +653,10 @@ pub fn similarity_quantum(a: *const HybridBigInt, b: *const HybridBigInt, phase_
 
 /// Apply phase shift to hypervector (for quantum interference)
 /// Rotates the vector in the complex phase plane
-pub fn applyPhase(vec: *const HybridBigInt, phase_shift: f32, allocator: std.mem.Allocator) !HybridBigInt {
+// Mutable, for the same reason qbind is: it delegates to permute, which takes a
+// mutable pointer because the value caches its own unpacked form. It has no
+// callers yet, so nothing else moves with this.
+pub fn applyPhase(vec: *HybridBigInt, phase_shift: f32, allocator: std.mem.Allocator) !HybridBigInt {
     _ = allocator; // Reserved for future allocation needs
     // In a full quantum VSA, this would rotate complex amplitudes
     // For ternary VSA, we simulate via permute-like operation
