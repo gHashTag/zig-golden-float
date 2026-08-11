@@ -193,7 +193,10 @@ pub const FPGAInterface = struct {
             const bit_offset = (i * 2) % 8;
             // Same rule as the packing side: response[byte_idx] is a u8, so the
             // shift amount has to be a u3.
-            const encoded = (response[byte_idx] >> @as(u3, @intCast(bit_offset))) & 0x03;
+            // Typed u2 rather than left as u8: decodeTrit takes a u2, and the
+            // mask has already narrowed the value to two bits, so the cast
+            // states what the mask guarantees.
+            const encoded: u2 = @intCast((response[byte_idx] >> @as(u3, @intCast(bit_offset))) & 0x03);
             result.unpacked_cache[i] = decodeTrit(encoded);
         }
 
@@ -265,7 +268,10 @@ pub const FPGAInterface = struct {
             const bit_offset = (i * 2) % 8;
             // Same rule as the packing side: response[byte_idx] is a u8, so the
             // shift amount has to be a u3.
-            const encoded = (response[byte_idx] >> @as(u3, @intCast(bit_offset))) & 0x03;
+            // Typed u2 rather than left as u8: decodeTrit takes a u2, and the
+            // mask has already narrowed the value to two bits, so the cast
+            // states what the mask guarantees.
+            const encoded: u2 = @intCast((response[byte_idx] >> @as(u3, @intCast(bit_offset))) & 0x03);
             result.unpacked_cache[i] = decodeTrit(encoded);
         }
 
