@@ -10,7 +10,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 // Import architecture-specific backends
-const arm64 = @import("../../jit_arm64.zig");
+const arm64 = @import("jit_arm64.zig");
 const x86_64 = @import("jit_x86_64.zig");
 
 // ═══════════════════════════════════════════════════════════════════════════════

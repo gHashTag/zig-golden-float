@@ -111,3 +111,10 @@ test "every public declaration of this module is analysed" {
     // while its CI stayed green throughout (zig-hdc#2).
     @import("std").testing.refAllDeclsRecursive(@This());
 }
+
+// vsa_jit was never exported, so nothing ever compiled it, so nobody found
+// that vm/jit_unified.zig imported "../../jit_arm64.zig" — a path that
+// escapes the module root and could not resolve on any machine. The file
+// sat beside it the whole time. Exporting it is what makes the compiler
+// look, and the compiler looking is the only reason the defect surfaced.
+pub const vsa_jit = @import("vsa_jit.zig");
