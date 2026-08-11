@@ -515,8 +515,14 @@ test "fpga bind: cpu fallback" {
 
     // Fill with test data
     for (0..16) |i| {
-        a.unpacked_cache[i] = @intCast(@rem(i, 3) - 1);
-        b.unpacked_cache[i] = @intCast(@rem(i + 1, 3) - 1);
+        // The subtraction has to happen in a signed type. i is a usize, so
+        // @rem(i, 3) is a usize too, and the first iteration computed 0 - 1 in
+        // unsigned arithmetic and panicked on the overflow. The cycle intended
+        // is -1, 0, +1, which needs somewhere for the -1 to live.
+        const idx: i8 = @intCast(@rem(i, 3));
+        const idx_b: i8 = @intCast(@rem(i + 1, 3));
+        a.unpacked_cache[i] = idx - 1;
+        b.unpacked_cache[i] = idx_b - 1;
     }
 
     const result = try cpu.bind(&a, &b);
