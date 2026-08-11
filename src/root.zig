@@ -72,6 +72,13 @@ pub const bigint = @import("ternary/hybrid.zig");
 /// Packed trit storage
 pub const packed_trit = @import("ternary/packed_trit.zig");
 
+// packed_vsa was reachable from nowhere: not from root, not through
+// vsa/core.zig. Its five functions are the packed-representation half of the
+// VSA surface, and a downstream package that wanted them had to vendor a copy
+// of the file — which is exactly how the copies in this fleet started
+// diverging. Same failure as vsa_jit: present, correct, unexported.
+pub const packed_vsa = @import("vsa/packed_vsa.zig");
+
 /// Ternary primitives from bigint
 pub const ternary_primitives = @import("ternary/bigint.zig");
 
