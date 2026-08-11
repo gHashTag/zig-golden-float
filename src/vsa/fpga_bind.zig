@@ -38,9 +38,9 @@ pub const FPGAInterface = struct {
             return error.UnsupportedOS;
 
         // Try to open the UART device
+        // OpenFlags dropped the separate .read/.write booleans for .mode.
         const port = std.fs.openFileAbsolute(device_path, .{
-            .read = true,
-            .write = true,
+            .mode = .read_write,
         }) catch |err| {
             std.log.err("Failed to open FPGA UART device: {}", .{err});
             return err;
@@ -146,7 +146,7 @@ pub const FPGAInterface = struct {
 
         // Pack vector A
         for (0..dim) |i| {
-            const trit_val: i2 = if (i < a.trit_len) a.unpacked_cache[i] else 0;
+            const trit_val: i2 = if (i < a.trit_len) @intCast(a.unpacked_cache[i]) else 0;
             const encoded = encodeTrit(trit_val);
             const byte_idx = (i * 2) / 8;
             const bit_offset = (i * 2) % 8;
@@ -159,7 +159,7 @@ pub const FPGAInterface = struct {
         // Pack vector B (offset by bytes_needed)
         const b_offset = bytes_needed;
         for (0..dim) |i| {
-            const trit_val: i2 = if (i < b.trit_len) b.unpacked_cache[i] else 0;
+            const trit_val: i2 = if (i < b.trit_len) @intCast(b.unpacked_cache[i]) else 0;
             const encoded = encodeTrit(trit_val);
             const byte_idx = b_offset + (i * 2) / 8;
             const bit_offset = (i * 2) % 8;
@@ -209,7 +209,7 @@ pub const FPGAInterface = struct {
 
         // Pack vectors (same as bind)
         for (0..dim) |i| {
-            const trit_val: i2 = if (i < a.trit_len) a.unpacked_cache[i] else 0;
+            const trit_val: i2 = if (i < a.trit_len) @intCast(a.unpacked_cache[i]) else 0;
             const encoded = encodeTrit(trit_val);
             const byte_idx = (i * 2) / 8;
             const bit_offset = (i * 2) % 8;
@@ -221,7 +221,7 @@ pub const FPGAInterface = struct {
 
         const b_offset = bytes_needed;
         for (0..dim) |i| {
-            const trit_val: i2 = if (i < b.trit_len) b.unpacked_cache[i] else 0;
+            const trit_val: i2 = if (i < b.trit_len) @intCast(b.unpacked_cache[i]) else 0;
             const encoded = encodeTrit(trit_val);
             const byte_idx = b_offset + (i * 2) / 8;
             const bit_offset = (i * 2) % 8;
@@ -264,7 +264,7 @@ pub const FPGAInterface = struct {
 
         // Pack vectors
         for (0..dim) |i| {
-            const trit_val: i2 = if (i < a.trit_len) a.unpacked_cache[i] else 0;
+            const trit_val: i2 = if (i < a.trit_len) @intCast(a.unpacked_cache[i]) else 0;
             const encoded = encodeTrit(trit_val);
             const byte_idx = (i * 2) / 8;
             const bit_offset = (i * 2) % 8;
@@ -276,7 +276,7 @@ pub const FPGAInterface = struct {
 
         const b_offset = bytes_needed;
         for (0..dim) |i| {
-            const trit_val: i2 = if (i < b.trit_len) b.unpacked_cache[i] else 0;
+            const trit_val: i2 = if (i < b.trit_len) @intCast(b.unpacked_cache[i]) else 0;
             const encoded = encodeTrit(trit_val);
             const byte_idx = b_offset + (i * 2) / 8;
             const bit_offset = (i * 2) % 8;

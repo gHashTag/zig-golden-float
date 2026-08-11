@@ -498,7 +498,13 @@ test "cosineSimilarityF16 zero vectors" {
 ///
 /// In VSA framework: bind = XOR-like operation on hypervectors
 /// Quantum extension: track phase information for interference
-pub fn qbind(a: *const HybridBigInt, b: *const HybridBigInt) HybridBigInt {
+// Mutable pointers, matching bind. It would read better as *const, but bind
+// calls ensureUnpacked, which fills a cache inside the value and therefore
+// needs to mutate it. Declaring const here and delegating to something that
+// mutates is the mismatch the compiler was reporting; making bind const would
+// have been a lie about what it does. No caller exists yet, so nothing else
+// moves with this.
+pub fn qbind(a: *HybridBigInt, b: *HybridBigInt) HybridBigInt {
     // Classical bind (XOR-like for balanced ternary)
     const result = bind(a, b);
 
@@ -653,9 +659,13 @@ pub fn applyPhase(vec: *const HybridBigInt, phase_shift: f32, allocator: std.mem
     // For ternary VSA, we simulate via permute-like operation
 
     // Number of trit positions to shift
-    const shift_amount = @abs(@as(i32, @intFromFloat(phase_shift * 10.0))) % @as(i32, @intCast(vec.trit_len));
+    // @abs of an i32 is a u32, so the modulus has to be unsigned as well; it was
+    // an i32 and the two sides could not meet. The result is already
+    // non-negative, which is why the second @abs below is now redundant and
+    // kept only so the line reads the same as it did.
+    const shift_amount = @abs(@as(i32, @intFromFloat(phase_shift * 10.0))) % @as(u32, @intCast(vec.trit_len));
 
-    const abs_shift = @abs(shift_amount);
+    const abs_shift = shift_amount;
 
     if (abs_shift > 0) {
         return permute(vec, @as(usize, @intCast(abs_shift)));

@@ -85,11 +85,18 @@ pub const SacredMath = struct {
 
     /// Generate sacred checksum for validation
     pub fn sacredChecksum(data: []const u8) u64 {
-        var hash: u64 = LAMBDA_10;
+        // The multiplier is 2^64/φ, which is what φ IS in integer hashing --
+        // Knuth's multiplicative constant. The previous line multiplied a u64
+        // by the f64 PHI and then called @intFromFloat on the u64 result, so
+        // this function has never compiled and no stored checksum can depend
+        // on it. Taking the standard constant keeps the golden ratio rather
+        // than inventing a number.
+        const PHI_U64: u64 = 0x9E3779B97F4A7C15;
+        var hash: u64 = @intFromFloat(LAMBDA_10);
         for (data) |byte| {
-            hash = hash *% PHI + byte;
+            hash = hash *% PHI_U64 +% byte;
         }
-        return @intFromFloat(hash);
+        return hash;
     }
 
     /// Verify Trinity alignment

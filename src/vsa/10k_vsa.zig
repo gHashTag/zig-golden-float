@@ -240,7 +240,9 @@ pub const HyperVector10K = struct {
 
     /// Format as hex string
     pub fn formatHex(self: *const Self, allocator: std.mem.Allocator) ![]u8 {
-        return std.fmt.allocPrint(allocator, "{s}", .{std.fmt.fmtSliceHexLower(&self.data)});
+        // std.fmt.fmtSliceHexLower was removed in 0.15; {x} on the slice is the
+        // replacement and produces the same lowercase hex.
+        return std.fmt.allocPrint(allocator, "{x}", .{&self.data});
     }
 };
 
@@ -322,7 +324,12 @@ pub fn benchmark(_: std.mem.Allocator, iterations: usize) !BenchmarkResult {
 
 /// Print benchmark results
 pub fn printBenchmark(result: BenchmarkResult) void {
-    const stdout = std.io.getStdOut().writer();
+    // std.io.getStdOut() was removed in 0.15. A File writer needs a buffer it
+    // does not own, so the buffer lives here and the interface borrows it.
+    var stdout_buffer: [4096]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
+    defer stdout.flush() catch {};
 
     stdout.print(
         \\╔════════════════════════════════════════════════════════════════════════════╗
