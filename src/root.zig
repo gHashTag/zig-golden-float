@@ -97,3 +97,17 @@ pub const PHI_INV_SQ = formats.PHI_INV_SQ;
 
 /// Trinity Identity: φ² + 1/φ² = 3
 pub const TRINITY = formats.TRINITY;
+
+test "every public declaration of this module is analysed" {
+    // src/root.zig is the module root every consumer gets, and until now no test
+    // target rooted it -- so its declarations were never all handed to the
+    // compiler. Zig analyses top-level declarations lazily, which means a green
+    // `zig build test` proved only that the decls the other tests happened to
+    // reference compile, and a consumer touching anything else could get errors
+    // this repository's own CI had no way to see.
+    //
+    // That is not hypothetical. The same omission in gHashTag/zig-hdc hid five
+    // distinct API-drift errors against the version of this package it pins,
+    // while its CI stayed green throughout (zig-hdc#2).
+    @import("std").testing.refAllDeclsRecursive(@This());
+}

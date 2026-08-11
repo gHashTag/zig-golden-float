@@ -74,6 +74,16 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // The module root, analysed in full. Nothing rooted src/root.zig before, so
+    // the surface consumers actually import was the one part never compiled.
+    const root_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/root.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+
     const c_abi_tests = b.addTest(.{
         .name = "c-abi-tests",
         .root_module = c_abi_test_module,
@@ -231,4 +241,5 @@ pub fn build(b: *std.Build) void {
     const run_igla_bench = b.addRunArtifact(igla_bench);
     const igla_bench_step = b.step("bench-igla", "Run IGLA-GF16 architecture verification (Module 7)");
     igla_bench_step.dependOn(&run_igla_bench.step);
+    test_step.dependOn(&b.addRunArtifact(root_tests).step);
 }
