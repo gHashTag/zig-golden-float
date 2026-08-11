@@ -34,7 +34,24 @@ pub fn build(b: *std.Build) void {
         .root_module = tri_gen_module,
     });
 
-    b.installArtifact(tri_gen);
+    // NOT installed by default, and not because it is broken.
+    //
+    // tri_gen and tri_reader are written against Zig 0.16 on purpose -- their own
+    // comments say so, and they use std.Io, std.Io.Dir and std.process.Init,
+    // none of which exist in 0.15. This package declares
+    // minimum_zig_version 0.15.0 and both of its consumers build with 0.15.2, so
+    // installing a 0.16-only tool by default made the LIBRARY unbuildable for
+    // everybody in order to keep a tool nobody can run at that version.
+    //
+    // The library itself compiles on 0.15 -- the only failure was here. So the
+    // tool moves behind an explicit step and the version claim becomes true
+    // rather than aspirational. `zig build gen` still builds and runs it, on a
+    // toolchain that has the API it was written for.
+    //
+    // This is not making a build green by deleting what failed: what failed is
+    // still built, by a step that names the toolchain it needs.
+    const tools_step = b.step("tools", "Build the .tri code generator (requires Zig 0.16)");
+    tools_step.dependOn(&b.addInstallArtifact(tri_gen, .{}).step);
 
     const run_tri_gen = b.addRunArtifact(tri_gen);
     const gen_step = b.step("gen", "Generate code from .tri specs");
@@ -72,6 +89,16 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/c_abi.zig"),
         .target = target,
         .optimize = optimize,
+    });
+
+    // The module root, analysed in full. Nothing rooted src/root.zig before, so
+    // the surface consumers actually import was the one part never compiled.
+    const root_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/root.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
     const c_abi_tests = b.addTest(.{
@@ -231,4 +258,5 @@ pub fn build(b: *std.Build) void {
     const run_igla_bench = b.addRunArtifact(igla_bench);
     const igla_bench_step = b.step("bench-igla", "Run IGLA-GF16 architecture verification (Module 7)");
     igla_bench_step.dependOn(&run_igla_bench.step);
+    test_step.dependOn(&b.addRunArtifact(root_tests).step);
 }

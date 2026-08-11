@@ -64,16 +64,22 @@ pub const TaskNode = struct {
         return true;
     }
     pub fn satisfyDependency(self: *TaskNode) bool {
-        const remaining = self.wait_count.fetchSub(1, .release) - 1;
+        // std.atomic.fence was removed in 0.15. The acquire it supplied belongs
+        // on the operation itself: acq_rel gives the release for this decrement
+        // and the acquire for observing the last one, which is exactly what the
+        // separate fence was there to add.
+        const remaining = self.wait_count.fetchSub(1, .acq_rel) - 1;
         if (remaining == 0) {
-            std.atomic.fence(.acquire);
             self.state = .ready;
             return true;
         }
         return false;
     }
     pub fn getEffectivePriority(self: *const TaskNode) f64 {
-        const base = switch (self.priority) {
+        // Annotated because the arms are comptime_float and the switch is on a
+        // runtime value: a comptime-only type cannot depend on runtime control
+        // flow, which is what the compiler was saying.
+        const base: f64 = switch (self.priority) {
             .critical => 1.0,
             .high => 0.8,
             .normal => 0.6,
