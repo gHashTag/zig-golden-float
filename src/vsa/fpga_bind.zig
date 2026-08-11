@@ -191,7 +191,9 @@ pub const FPGAInterface = struct {
         for (0..dim) |i| {
             const byte_idx = 2 + (i * 2) / 8;
             const bit_offset = (i * 2) % 8;
-            const encoded = (response[byte_idx] >> bit_offset) & 0x03;
+            // Same rule as the packing side: response[byte_idx] is a u8, so the
+            // shift amount has to be a u3.
+            const encoded = (response[byte_idx] >> @as(u3, @intCast(bit_offset))) & 0x03;
             result.unpacked_cache[i] = decodeTrit(encoded);
         }
 
@@ -261,7 +263,9 @@ pub const FPGAInterface = struct {
         for (0..dim) |i| {
             const byte_idx = 2 + (i * 2) / 8;
             const bit_offset = (i * 2) % 8;
-            const encoded = (response[byte_idx] >> bit_offset) & 0x03;
+            // Same rule as the packing side: response[byte_idx] is a u8, so the
+            // shift amount has to be a u3.
+            const encoded = (response[byte_idx] >> @as(u3, @intCast(bit_offset))) & 0x03;
             result.unpacked_cache[i] = decodeTrit(encoded);
         }
 
@@ -319,9 +323,13 @@ pub const FPGAInterface = struct {
         // Parse dot product (signed 11-bit: -256 to +256)
         const dot_lsb = response[1];
         const dot_msb = response[2] & 0x07;
-        var dot: i11 = @as(i11, @bitCast(@as(u11, @intCast(dot_msb)) << 8 | dot_lsb));
-        // Sign extend
-        if (dot_msb & 0x04) dot |= 0xF800;
+        const dot: i11 = @as(i11, @bitCast(@as(u11, @intCast(dot_msb)) << 8 | dot_lsb));
+        // No manual sign extension. Zig's `if` takes a bool and `dot_msb & 0x04`
+        // is a u8, so this never compiled -- and the operation it was reaching
+        // for is already done: @bitCast from u11 to i11 reads the top bit as the
+        // sign, which is exactly what bit 2 of dot_msb is. The old line also
+        // or-ed 0xF800 into an i11, a value that does not fit in one, so it
+        // could not have run even if the condition had been well typed.
 
         // Normalize by dimension (cosine similarity for unit vectors)
         // For raw similarity: just return dot / dim
