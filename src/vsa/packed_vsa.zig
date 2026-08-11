@@ -8,9 +8,11 @@
 // φ² + 1/φ² = 3
 
 const std = @import("std");
-const packed_trit = @import("packed_trit.zig");
-const hybrid = @import("hybrid.zig");
-const vsa = @import("vsa.zig");
+const packed_trit = @import("../ternary/packed_trit.zig");
+const hybrid = @import("../ternary/hybrid.zig");
+// There is no vsa.zig; bind, bundle2 and randomVector are all in the
+// sibling core.zig.
+const vsa = @import("core.zig");
 
 const PackedBigInt = packed_trit.PackedBigInt;
 const HybridBigInt = hybrid.HybridBigInt;
@@ -328,9 +330,9 @@ test "packed unbind retrieval" {
     // to: bind(Paris, bind(capital_of, France))
     // with: unbind(fact, bind(Paris, capital_of)) → France
 
-    const paris = randomPackedVector(100, Entity.hashString("Paris"));
-    const capital_of = randomPackedVector(100, Entity.hashString("capital_of") ^ 0xDEADBEEF);
-    const france = randomPackedVector(100, Entity.hashString("France"));
+    const paris = randomPackedVector(100, hashString("Paris"));
+    const capital_of = randomPackedVector(100, hashString("capital_of") ^ 0xDEADBEEF);
+    const france = randomPackedVector(100, hashString("France"));
 
     // Encode to: Paris is capital_of France
     const pred_obj = packedBind(&capital_of, &france);
@@ -352,7 +354,24 @@ test "packed unbind retrieval" {
     try std.testing.expect(sim_paris > sim_france);
 }
 
-const Entity = @import("knowledge_graph.zig").Entity;
+// Was `@import("knowledge_graph.zig").Entity` — a file that does not exist
+// in this repository. It exists in gHashTag/zig-knowledge-graph, whose own
+// knowledge_graph.zig imports "packed_vsa.zig", which does not exist THERE.
+// One directory was split into two repositories and every relative import
+// was left pointing at the sibling that stayed behind, so neither half
+// compiles.
+//
+// The dependency was also inverted: a VSA primitive should not need a type
+// from a knowledge-graph consumer. The three tests below used Entity only
+// for djb2 over a string, to derive a seed. That function is reproduced
+// here verbatim so the seeds — and therefore the tests — are unchanged.
+fn hashString(s: []const u8) u64 {
+    var hash: u64 = 5381;
+    for (s) |c| {
+        hash = ((hash << 5) +% hash) +% c;
+    }
+    return hash;
+}
 
 test "large vector bind correctness (1000 trits)" {
     var h_a = vsa.randomVector(1000, 12345);
