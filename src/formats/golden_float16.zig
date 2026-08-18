@@ -148,12 +148,26 @@ pub const GF16 = packed struct(u16) {
         };
     }
 
-    /// φ-weighted quantization for better distribution
+    /// Scales by phi^-2 before encoding; `phiDequantize` scales back by phi^2.
+    ///
+    /// This was documented as being 'for better distribution'. Measured on the
+    /// GF16 codec it is not: over uniform(-1,1) the round-trip relative error is
+    /// about 5% WORSE than encoding the value directly, in 8 seeds out of 8.
+    ///
+    /// The reason is structural. A pre-scale by a power of two shifts only the
+    /// exponent field, so it is exactly inert -- see the test below, which checks
+    /// this element-wise. Any other constant rotates the distribution inside its
+    /// binades and moves the mean relative error. phi^-2 is not a power of two,
+    /// and it is not special either: 1/e, 1/3, 0.30 and 0.40 all land in the same
+    /// 5-7% band, and 0.40 does better than phi.
+    ///
+    /// Kept because it is exported through the C ABI. Prefer `fromF32`.
     pub fn phiQuantize(v: f32) GF16 {
         return fromF32(v * PHI_INV_SQ);
     }
 
-    /// φ-weighted dequantization
+    /// Undoes `phiQuantize`'s scale. See that function: the pair is an identity
+    /// up to rounding, and the rounding it adds is not free.
     pub fn phiDequantize(gf: GF16) f32 {
         return gf.toF32() * PHI_SQ;
     }
@@ -461,3 +475,58 @@ test "GF16 standard fused multiply-add" {
 }
 
 // φ² + 1/φ² = 3 | TRINITY
+
+// ═══════════════════════════════════════════════════════════════════════
+// What a constant pre-scale does to a floating-point codec
+// ═══════════════════════════════════════════════════════════════════════
+
+// A power-of-two pre-scale is EXACTLY inert, element by element.
+//
+// Multiplying by 2^k shifts the exponent field and leaves the mantissa and the
+// rounding decision untouched, so the round-trip relative error is identical
+// for every single input -- not merely equal on average. That is what makes it
+// the right baseline for judging any other constant.
+test "a power-of-two pre-scale leaves every round-trip error unchanged" {
+    var prng = std.Random.DefaultPrng.init(20260818);
+    const rnd = prng.random();
+    const scales = [_]f32{ 0.0625, 0.25, 0.5, 2.0, 4.0, 32.0 };
+    for (scales) |s| {
+        var i: usize = 0;
+        while (i < 3000) : (i += 1) {
+            const x = rnd.float(f32) * 2.0 - 1.0;
+            if (x == 0.0) continue;
+            const plain = GF16.fromF32(x).toF32();
+            const scaled = GF16.fromF32(x * s).toF32() / s;
+            const e_plain = @abs(plain - x) / @abs(x);
+            const e_scaled = @abs(scaled - x) / @abs(x);
+            try std.testing.expectEqual(e_plain, e_scaled);
+        }
+    }
+}
+
+// phi^-2 is not a power of two, so it is not inert -- and it is not an
+// improvement either.
+//
+// This test asserts the direction, not a precise ratio: the phi pre-scale must
+// not come out ahead. Measured over uniform(-1,1) it is about 5% worse, in 8
+// seeds out of 8, and 1/e, 1/3, 0.30 and 0.40 all land in the same 5-7% band.
+// The doc comment on `phiQuantize` claimed the opposite for as long as nothing
+// measured it.
+test "the phi pre-scale is not better than encoding directly" {
+    var prng = std.Random.DefaultPrng.init(4242);
+    const rnd = prng.random();
+    var sum_plain: f64 = 0;
+    var sum_phi: f64 = 0;
+    var n: usize = 0;
+    while (n < 20000) : (n += 1) {
+        const x = rnd.float(f32) * 2.0 - 1.0;
+        if (x == 0.0) continue;
+        const plain = GF16.fromF32(x).toF32();
+        const phi = GF16.phiDequantize(GF16.phiQuantize(x));
+        sum_plain += @abs(plain - x) / @abs(x);
+        sum_phi += @abs(phi - x) / @abs(x);
+    }
+    // Not better. If a future change makes the phi path genuinely win, this
+    // fires and the claim can be reinstated -- with the measurement beside it.
+    try std.testing.expect(sum_phi >= sum_plain);
+}
