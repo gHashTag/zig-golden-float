@@ -2,7 +2,7 @@
 // Common types and imports for VSA module
 
 const std = @import("std");
-const tvc_hybrid = @import("../hybrid.zig");
+const tvc_hybrid = @import("../ternary/hybrid.zig");
 
 pub const HybridBigInt = tvc_hybrid.HybridBigInt;
 pub const Trit = tvc_hybrid.Trit;

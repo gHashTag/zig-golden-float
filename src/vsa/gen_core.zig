@@ -5,7 +5,7 @@
 // φ² + 1/φ² = 3 | TRINITY
 
 const std = @import("std");
-const hybrid = @import("hybrid.zig");
+const hybrid = @import("../ternary/hybrid.zig");
 const HybridBigInt = hybrid.HybridBigInt;
 const Trit = hybrid.Trit;
 const Vec32i8 = hybrid.Vec32i8;

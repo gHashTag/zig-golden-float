@@ -11,14 +11,15 @@
 
 const std = @import("std");
 
-// Import from canonical source (ANTI-PATTERN: no inline constants!)
-const sacred = @import("sacred/constants.zig");
+// The "canonical source" this file re-exported (sacred/constants.zig) exists
+// nowhere in the repository -- the import compiled for no consumer, because
+// nothing compiled this file until the root-api guard. Defined directly.
 
 /// Golden Ratio φ = (1 + √5) / 2 ≈ 1.618033988749895
-pub const PHI = sacred.SacredConstants.PHI;
+pub const PHI = 1.618033988749895;
 
 /// φ² = φ + 1 ≈ 2.618033988749895
-pub const PHI_SQUARED = sacred.SacredConstants.PHI_SQ;
+pub const PHI_SQUARED = PHI + 1.0;
 
 /// 1/φ² ≈ 0.381966011250105
 pub const INVERSE_PHI_SQUARED: f64 = 1.0 / PHI_SQUARED;

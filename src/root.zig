@@ -17,14 +17,14 @@
 // ═══════════════════════════════════════════════════════════════════
 
 /// Number formats: GF16, TF3
-pub const formats = @import("src/formats/golden_float16.zig");
+pub const formats = @import("formats/golden_float16.zig");
 
 /// GF-T ternary-exponent ladder: GFT4 / GFT8 / GFT16 / GFT32 (+ generic `GFT(E, M)`).
 /// ```zig
 /// const golden = @import("golden-float");
 /// const x = golden.gft.GFT16.fromF32(3.14159);
 /// ```
-pub const gft = @import("src/formats/gft.zig");
+pub const gft = @import("formats/gft.zig");
 /// Convenience re-exports of the four GF-T rungs.
 pub const GFT4 = gft.GFT4;
 pub const GFT8 = gft.GFT8;
@@ -38,49 +38,49 @@ pub const GFT32 = gft.GFT32;
 /// const golden = @import("golden-float");
 /// const x = golden.gf_binary.GF12.fromF32(3.14159);
 /// ```
-pub const gf_binary = @import("src/formats/gf_binary.zig");
+pub const gf_binary = @import("formats/gf_binary.zig");
 
 // ═══════════════════════════════════════════════════════════════
 // VSA MODULES
 // ═══════════════════════════════════════════════════════════════════
 
 /// Vector Symbolic Architecture core
-pub const vsa = @import("src/vsa/core.zig");
+pub const vsa = @import("vsa/core.zig");
 
 /// VSA common types (Trit, HybridBigInt, SIMD)
-pub const vsa_common = @import("src/vsa/common.zig");
+pub const vsa_common = @import("vsa/common.zig");
 
 /// HyperVector10K — 10K-dimensional VSA
-pub const vsa_10k = @import("src/vsa/10k_vsa.zig");
+pub const vsa_10k = @import("vsa/10k_vsa.zig");
 
 /// Holographic Reduced Representations
-pub const hrr = @import("src/vsa/hrr.zig");
+pub const hrr = @import("vsa/hrr.zig");
 
 /// Lock-free data structures for VSA
-pub const vsa_concurrency = @import("src/vsa/concurrency.zig");
+pub const vsa_concurrency = @import("vsa/concurrency.zig");
 
 /// FPGA-accelerated VSA operations
-pub const fpga_bind = @import("src/vsa/fpga_bind.zig");
+pub const fpga_bind = @import("vsa/fpga_bind.zig");
 
 // ═══════════════════════════════════════════════════════════════════
 // TERNARY MODULES
 // ═════════════════════════════════════════════════════════════════════
 
 /// HybridBigInt — main big integer engine
-pub const bigint = @import("src/ternary/hybrid.zig");
+pub const bigint = @import("ternary/hybrid.zig");
 
 /// Packed trit storage
-pub const packed_trit = @import("src/ternary/packed_trit.zig");
+pub const packed_trit = @import("ternary/packed_trit.zig");
 
 /// Ternary primitives from bigint
-pub const ternary_primitives = @import("src/ternary/bigint.zig");
+pub const ternary_primitives = @import("ternary/bigint.zig");
 
 // ═══════════════════════════════════════════════════════════════
 // MATH MODULES
 // ═════════════════════════════════════════════════════════════════════════
 
 /// Sacred constants (φ, e, π)
-pub const math = @import("src/math/constants.zig");
+pub const math = @import("math/constants.zig");
 
 // ═══════════════════════════════════════════════════════════════════════
 // TRINITY CONSTANTS (re-exported for convenience)

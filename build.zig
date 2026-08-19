@@ -207,7 +207,22 @@ pub fn build(b: *std.Build) void {
     });
     const run_jepa_t_tests = b.addRunArtifact(jepa_t_tests);
 
+    // The public module root. Nothing else compiles it, which is how thirteen
+    // broken import paths shipped invisibly: every consumer of
+    // @import("golden-float") failed while the suite stayed green.
+    const root_api_tests_root = b.createModule(.{
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const root_api_tests = b.addTest(.{
+        .name = "root-api-tests",
+        .root_module = root_api_tests_root,
+    });
+    const run_root_api_tests = b.addRunArtifact(root_api_tests);
+
     const test_step = b.step("test", "Run all tests");
+    test_step.dependOn(&run_root_api_tests.step);
     test_step.dependOn(&run_tests.step);
     test_step.dependOn(&run_gft_tests.step);
     test_step.dependOn(&run_gf_binary_tests.step);
