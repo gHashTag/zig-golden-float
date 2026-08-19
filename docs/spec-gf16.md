@@ -124,7 +124,11 @@ S = 1, E = 0, M = 0  →  -0.0
 E = 0, M ≠ 0  →  value = (-1)^S × 2^-30 × (M/512)
 ```
 
-Smallest positive subnormal: 2^-30 × 1/512 ≈ 4.7×10^-10
+Smallest positive value in the SHIPPED codec: the minimum normal
+2^-30 ≈ 9.31×10^-10 — the subnormal formula above is not implemented
+(E = 0, M ≠ 0 decodes to zero, measured). Note the earlier line here said
+"≈ 4.7×10^-10", which matches neither this formula (2^-30/512 = 2^-39 ≈
+1.8×10^-12) nor the codec.
 
 ### Infinity
 
@@ -302,25 +306,37 @@ extern "C" {
 
 ### Basic Values
 
+Regenerated 2026-08-20 from the shipped codec (`GF16.fromF32`/`toF32`; the
+previous table carried IEEE fp16 codes — 1.0 as 0x3C00, ∞ as 0x7C00 — which
+this codec never emits; see docs/AUDIT_2026-08-20.md).
+
 | Input (f32) | GF16 (hex) | GF16 (dec) | Error (vs f32) |
 |-------------|-------------|-------------|-----------------|
 | 0.0 | 0x0000 | 0 | 0% |
 | -0.0 | 0x8000 | 32768 | 0% |
-| 1.0 | 0x3C00 | 15360 | 0% |
-| -1.0 | 0xBC00 | 48128 | 0% |
-| 2.0 | 0x3D00 | 15616 | 0% |
-| 3.14159 | 0x3E23 | 15907 | 0.01% |
-| -3.14159 | 0xBE23 | 48675 | 0.01% |
-| +∞ | 0x7C00 | 31744 | - |
-| -∞ | 0xFC00 | 64512 | - |
-| NaN | 0x7C01 | 31745 | - |
+| 1.0 | 0x3E00 | 15872 | 0% |
+| -1.0 | 0xBE00 | 48640 | 0% |
+| 2.0 | 0x4000 | 16384 | 0% |
+| 3.14159 | 0x4124 | 16676 | 0.031% |
+| -3.14159 | 0xC124 | 49444 | 0.031% |
+| +∞ | 0x7E00 | 32256 | - |
+| -∞ | 0xFE00 | 65024 | - |
+| NaN | 0x7E01 | 32257 | - |
 
-### Subnormals
+### Small magnitudes (no subnormals)
 
-| Input (f32) | GF16 (hex) | Value |
-|-------------|-------------|-------|
-| 1.0e-10 | 0x0001 | ~4.7e-10 |
-| 2.0e-9 | 0x0008 | ~1.9e-9 |
+The shipped codec has **no subnormal support**: codes with E = 0, M ≠ 0
+decode to zero (measured on 0x0001 and 0x01FF), and the encoder flushes
+inputs below the minimum normal to zero (1.0e-10 → 0x0000). The smallest
+positive value is the minimum normal 2^-30 ≈ 9.31e-10 (code 0x0200). The
+previous table's subnormal rows described a design this codec does not
+implement, with a "≈4.7e-10" that matched neither the formula above (which
+gives 2^-39) nor the codec.
+
+| Input (f32) | GF16 (hex) | Decoded |
+|-------------|-------------|---------|
+| 1.0e-10 | 0x0000 | 0.0 (flushed) |
+| 9.31e-10 | 0x0200 | 9.313e-10 (min normal) |
 
 ---
 
@@ -412,7 +428,7 @@ Rounding to integers gives **k=6** exponent bits, **9** mantissa bits.
 | Ratio | 0.5 | 1.14 | 1.33 | **0.6** |
 | φ-distance | 0.082 | 0.525 | 0.715 | **0.018** |
 | Max value | 65,504 | 3.4e38 | 448 | **4.3e9** |
-| Min subnormal | 6.1e-5 | 1.2e-38 | 0.0039 | **4.7e-10** |
+| Min positive | 6.1e-5 | 1.2e-38 | 0.0039 | **9.3e-10** (min normal; no subnormals) |
 | Precision | 3.3 digits | 2.4 digits | 1.2 digits | **2.8 digits** |
 
 ---

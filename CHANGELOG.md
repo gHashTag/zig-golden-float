@@ -32,10 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Metric | Value |
 |--------|-------|
-| GF16 MSE (UNIFORM ±100) | 2.3×10⁻³ |
-| bf16 MSE (UNIFORM ±100) | 3.8×10⁻² |
-| GF16 vs bf16 improvement | 16.3× lower MSE |
-| GF16 accuracy vs fp32 (σ=1.0) | > 99.99% |
+| GF16 MSE (UNIFORM ±100) | 5.77×10⁻⁴ (per the committed bench_010.log; this row earlier said 2.3×10⁻³) |
+| bf16 MSE (UNIFORM ±100) | 9.37×10⁻³ (log value; earlier 3.8×10⁻²) |
+| GF16 vs bf16 improvement | 16.2× lower MSE (per the committed bench_010.log; this row earlier said 16.3×) |
+| GF16 vs fp32, 1 − mean rel err (σ=1.0) | 99.965% (metric named; the bare “> 99.99%” did not hold under it) |
 | GFTernary sparsity (He init) | 100% (all \|w\| < 0.5) |
 | Pearson r(φ-distance, MSE) | −0.34 (weak) |
 
@@ -94,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **fp16 subnormal decoder** (#63) — biased exponent was `(112 - wrapping_exp)`, corrected to `(113 - shifts)`. Fixed 131072× magnitude error for values near zero
 - **GF16 NaN preservation** (#45) — split `!isFinite` into `isNaN`/`isInf` checks
 - **GF8 max-value clamping** — corrected to 1.9375 with proper range tests
-- **GF8 range assertion** — test now correctly asserts GF8 saturates at [-10,10] (φ³ ≈ 4.24)
+- **GF8 range assertion** — test asserts saturation at [-10,10]; the φ³ ≈ 4.24 figure describes the Rust base-φ bench model, not the shipped codec (which clamps at 1.9375 — see docs/AUDIT_2026-08-20.md)
 - **CI workflow** (#40) — replaced `goto-bus/setup-zig` (404) with `mlugg/setup-zig`
 - **Rust binding** (#41) — added `#![allow(non_camel_case_types)]`
 - **Go binding** (#42) — removed `import "C"` from test file
@@ -114,7 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | GF16 accuracy vs fp32 (σ=1.0) | > 99.99% |
 | GF16 vs bf16 MSE ratio (uniform ±100) | 16.2× better |
 | GF16 sparsity at [-10,10] | 0% (no saturation) |
-| GF8 at [-10,10] | CLIP (max φ³ ≈ 4.24) |
+| GF8 at [-10,10] | CLIP (shipped codec max 1.9375; φ³ ≈ 4.24 was the Rust bench model) |
 | Pearson r(φ-distance, MSE) | −0.42 (bit-width dominates) |
 | GFTernary sparsity (He init σ=0.05) | 100% |
 
