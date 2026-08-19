@@ -8,6 +8,24 @@
 // φ² + 1/φ² = 3
 
 const std = @import("std");
+
+/// zig 0.15.x and 0.16 disagree on several std APIs this file uses. The
+/// repository declares minimum_zig_version 0.15.0 and CI runs 0.15.2, while
+/// development happens on 0.16 — so both must compile. Zig does not analyse
+/// the untaken branch of a comptime-known `if`, which is what makes this work.
+const zig_016 = @import("builtin").zig_version.major == 0 and
+    @import("builtin").zig_version.minor >= 16;
+
+/// Monotonic nanoseconds. std.time.Timer/nanoTimestamp left std by 0.16.
+fn monotonicNs() u64 {
+    if (comptime zig_016) {
+        var ts: std.c.timespec = undefined;
+        _ = std.c.clock_gettime(.MONOTONIC, &ts);
+        return @as(u64, @intCast(ts.sec)) * 1_000_000_000 + @as(u64, @intCast(ts.nsec));
+    } else {
+        return @intCast(std.time.nanoTimestamp());
+    }
+}
 const packed_trit = @import("../ternary/packed_trit.zig");
 const hybrid = @import("../ternary/hybrid.zig");
 // There is no vsa.zig; bind, bundle2 and randomVector are all in the
@@ -365,13 +383,6 @@ test "packed unbind retrieval" {
 // from a knowledge-graph consumer. The three tests below used Entity only
 // for djb2 over a string, to derive a seed. That function is reproduced
 // here verbatim so the seeds — and therefore the tests — are unchanged.
-/// std.time.Timer left std by zig 0.16; the monotonic clock via libc is the
-/// portable replacement for a benchmark delta.
-fn monotonicNs() u64 {
-    var ts: std.c.timespec = undefined;
-    _ = std.c.clock_gettime(.MONOTONIC, &ts);
-    return @as(u64, @intCast(ts.sec)) * 1_000_000_000 + @as(u64, @intCast(ts.nsec));
-}
 
 fn hashString(s: []const u8) u64 {
     var hash: u64 = 5381;
