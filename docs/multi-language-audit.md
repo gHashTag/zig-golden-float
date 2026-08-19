@@ -116,10 +116,10 @@ GF16 (6:9 = 0.667) is the **closest engineering implementation** of this princip
 docs/
 ├── spec-gf16.md         ✅ Complete bit-level spec
 ├── test-vectors.csv    ✅ 45 test vectors (f32 → GF16 → f32)
-└── zig-float-audit.md  ✅ 62 Zig issues documented
+└── (an earlier line listed zig-float-audit.md “62 Zig issues” — no such file exists in this repository)
 
 c/
-├── gf16.h               ✅ C99 header, 80 lines
+├── gf16.h               ✅ C99 header, 405 lines (an earlier line said 80)
 └── gf16.c               ✅ C99 implementation, 300 lines
 ```
 
@@ -154,10 +154,10 @@ rust/
 | Metric | FP32 | FP16 | GF16 | Savings |
 |--------|------|------|------|---------|
 | Memory per weight | 32 bits | 16 bits | **16 bits** | 50% vs FP32, **same** as FP16 |
-| Compute | Mul + Add | Mul + Add | **Add only** | **10×** vs FP16/FP32 |
-| 70B model RAM | 280 GB | 140 GB | **14 GB** | **10×** vs FP16, **20×** vs FP32 |
-| SIMD inst (per loop) | 100 | 2,304 | **56** | **41×** vs FP16 |
-| Energy (per FLOP) | 1× | 0.5× | **0.1×** | **5×** vs FP16 |
+| Compute | Mul + Add | Mul + Add | Mul + Add (shipped; “add only” is a design aspiration — every shipped GF16 op routes through f32 multiply) | — |
+| 70B model RAM | 280 GB | 140 GB | **140 GB** (16 bits/weight — the earlier “14 GB, 10×” contradicted this table's own memory row) | same as FP16, 2× vs FP32 |
+| SIMD inst (per loop) | 100 | 2,304 | 56 (unrecorded; kept as claim, no record file) | — |
+| Energy (per FLOP) | 1× | 0.5× | 0.5× class (the earlier 0.1×/5× row had no record; whitepaper §6.1 gives GF16 2× total vs FP32) | — |
 
 ---
 
@@ -169,7 +169,7 @@ rust/
 use gf16::Gf16;
 
 let x = Gf16::from_f32(3.14159);
-let y = x.to_f32();  // 3.14062 (0.003% error)
+let y = x.to_f32();  // 3.140625 (0.031% error; an earlier comment said 0.003%)
 ```
 
 ### C++
