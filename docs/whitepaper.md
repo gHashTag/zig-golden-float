@@ -19,7 +19,7 @@ This whitepaper now governs the entire Golden Float Family (GF8, GF16, GF32, GF6
 
 All updates to this document must be cross-linked to [trios issue #143](https://github.com/gHashTag/trios/issues/143) and to `.trinity/MASTER_EXPERIMENTS.md` so the experiment tracker, the Coq invariants, and this whitepaper stay synchronized.
 
-> Abstract: We present the **Golden Float Family** — a hierarchy of integer-backed floating-point formats (GF8, GF16, GF32, GF64, GFTernary) optimized for machine learning workloads through golden-ratio information partitioning. The flagship format, GoldenFloat16 (GF16, 6:9 exp:mantissa), achieves f32 accuracy (0.00% gap) on trained neural networks (BENCH-004b: 97.67% MNIST MLP) while requiring 47–59× fewer hardware resources (unit-level) and only 1.37× at MAC-level compared to minimal ternary logic. The integer-backed implementation (`u16`, `u32`, `u64`, `u8`) eliminates hardware half-type dependencies, enabling stable compilation across Zig, Rust, C++, WASM and LLVM IR without the 62+ compiler issues affecting current f16 ecosystems. The φ²+φ⁻²=3 (Trinity) identity and Lucas closure (φ²ⁿ+φ⁻²ⁿ ∈ ℤ) are the algebraic anchors that make every member of the family numerically self-consistent.
+> Abstract: We present the **Golden Float Family** — a hierarchy of integer-backed floating-point formats (GF8, GF16, GF32, GF64, GFTernary) optimized for machine learning workloads through golden-ratio information partitioning. The flagship format, GoldenFloat16 (GF16, 6:9 exp:mantissa), achieves f32 accuracy (0.00% gap) on trained neural networks (BENCH-004b: 97.67% MNIST MLP) while requiring 47–59× MORE unit-level hardware than minimal ternary logic and 1.37× at MAC-level (§1.4's own table; an earlier abstract said “fewer”, inverting its own measurement — see docs/AUDIT_2026-08-20.md). The integer-backed implementation (`u16`, `u32`, `u64`, `u8`) eliminates hardware half-type dependencies, enabling stable compilation across Zig, Rust, C++, WASM and LLVM IR without the 62+ compiler issues affecting current f16 ecosystems. The φ²+φ⁻²=3 (Trinity) identity and Lucas closure (φ²ⁿ+φ⁻²ⁿ ∈ ℤ) are the algebraic anchors that make every member of the family numerically self-consistent.
 
 ---
 
@@ -68,8 +68,8 @@ All updates to this document must be cross-linked to [trios issue #143](https://
 │ GF16        │ 0.003 │ 0.04 │ 0.049 ✅     │ Best GF format, ≈ φ⁻⁵               │
 │ fp16 🏆     │ 0.001 │ 0.03 │ 0.118        │ IEEE — empirically ≈ α_φ = φ⁻³/2    │
 │ GF8         │ 0.003 │ 0.04 │ 0.132        │ Edge/sensors, ≈ φ⁻³                 │
-│ GF64        │ 0.003 │ 0.04 │ 0.264        │ Double precision, 21:42 split        │
-│ GF32        │ 0.003 │ 0.04 │ 0.340        │ FP32 drop-in, 13:18 split            │
+│ GF64        │ 0.003 │ 0.04 │ 0.264        │ Double precision, 24:39 split (shipped; 21:42 was a superseded draft) │
+│ GF32        │ 0.003 │ 0.04 │ 0.340        │ FP32 drop-in, 12:19 split (shipped; 13:18 was a superseded draft) │
 │ bf16        │ 0.003 │ 0.04 │ 0.525 ❌     │ Worst — random 1:8:7 split           │
 └─────────────┴───────┴──────┴──────────────┴──────────────────────────────────────┘
 ```
@@ -417,7 +417,7 @@ Energy per Inference (Estimated, XC7A100T @ 50MHz)
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Note:** GF16 achieves 10× energy savings vs FP32 while preserving f32 accuracy.
+**Note:** per the table above, GF16 achieves 2× total energy savings vs FP32 while preserving f32 accuracy; the 10× row is Ternary's (an earlier note attributed it to GF16).
 
 ### 6.2 Throughput Projections
 
@@ -527,7 +527,7 @@ Hybrid Forward Pass Flow
 
 All BENCH-001..006 results assume frozen f32 weights quantized to GF16 at inference. Open question: can GF16 be used as the **storage** dtype during training (gradient updates in GF16) without exceeding ∆BPB ≤ 0.01 vs f32?
 
-- Plan: enable `gf16_training_step` in `tjepa_train.rs` with `d_model ∈ {256, 384, 512}` (L-R9 guard), `lr=0.004 = α_φ/φ³` (INV-8), Muon NS5 optimizer with weight-decay 0.04 (parameter-golf SOTA setting).
+- Plan: enable `gf16_training_step` in `tjepa_train.rs` with `d_model ∈ {256, 384, 512}` (L-R9 guard), `lr=0.004` (the earlier identity “= α_φ/φ³” does not hold: 0.118/4.236 = 0.028; the shipped phiLrSchedule is the reference), Muon NS5 optimizer with weight-decay 0.04 (parameter-golf SOTA setting).
 - Pass criterion: BPB(gf16) − BPB(f32) ≤ 0.01 on 3-seed average (seeds 42, 43, 44).
 - Failure mode predictions: gradient underflow at small d_model (INV-3 violation) → fall back to mixed precision (master-weights f32, GF16 stored).
 
@@ -566,7 +566,7 @@ GF16 is the proven flagship; the rest of the family follows the same φ-optimal-
 | **GF8** | 8 | 1 : 3 : 4 | 8 ≈ φ⁴+φ⁻⁴ = 7 (Lucas L₄) | Ultra-low-power edge / sensors | ✅ BENCH-007 (φ-dist=0.132) |
 | **GF16** | 16 | 1 : 6 : 9 | 6/9 ≈ 2/3 ≈ 1/φ | Production training & inference (proven) | ✅ BENCH-001..007 |
 | **GF32** | 32 | 1 : 13 : 18 | 13/18 ≈ φ⁻²·k (Fibonacci ratio) | FP32 drop-in replacement | ✅ BENCH-007 (φ-dist=0.340) |
-| **GF64** | 64 | 1 : 21 : 42 | 21:42 = F₈ : F₈·2, double Fibonacci | Double-precision scientific | ✅ BENCH-007 (φ-dist=0.264) |
+| **GF64** | 64 | 1 : 24 : 39 | 24:39 per the φ² rule (the 21:42 “double Fibonacci” row was a superseded draft; shipped split is 24:39) | Double-precision scientific | ✅ BENCH-007 (φ-dist=0.264, measured on the draft model) |
 | **GFTernary** | 2 | sign + zero | values in {-φ, 0, +φ} | Bulk quantized ternary with φ step | ✅ BENCH-007 (φ-dist=0.000, perfect) |
 
 **Why these splits?** The exponent : mantissa ratio for every member approximates 1/φ ≈ 0.618 (or its complement 0.382), which matches Bergman's information-partition theorem for base-φ: half the dynamic range goes to scale, half to precision, with the irrational split minimizing quantization-error-energy across the entire IEEE-style cone of representable values.
@@ -582,7 +582,7 @@ GF16 is the proven flagship; the rest of the family follows the same φ-optimal-
 | **φ²+1/φ²** | **3.0** (exact ℤ) | Trinity identity | Single algebraic anchor — ASHA threshold = 3.5 = φ²+φ⁻²+0.5 |
 | φ−1/φ | 1.0 (exact ℤ) | Unit residual | Constant-1 fixed point |
 | ln(φ) | 0.4812118250... | log φ | Information-content normaliser |
-| φ³ | 4.2360679... | 2φ+1 | LR ladder (lr = α_φ/φ³ = 0.004), depth recurrence |
+| φ³ | 4.2360679... | 2φ+1 | depth recurrence (an earlier row derived lr=0.004 as α_φ/φ³, which is 0.028, not 0.004) |
 | √φ | 1.2720196... | φ^0.5 | Intermediate split, optional GF12 spec |
 | ψ | −1/φ = −0.618... | 1−φ | Lucas conjugate (INV-5) |
 | L_n | ⌊φⁿ + 1/2⌋ | φⁿ+(−φ)⁻ⁿ | Lucas closure ladder for accumulator widths |
@@ -600,7 +600,7 @@ Worked examples:
 - n=3: φ⁶ + φ⁻⁶ = 18 (Lucas L₆)
 - n=4: φ⁸ + φ⁻⁸ = 47 (Lucas L₈)
 
-For GF16 with 9 mantissa bits, the safe MAC depth is L ≤ 2^9 / 2 = 256 — exactly the L-R9 guard `d_model ≥ 256`.
+For GF16 with 9 mantissa bits, this criterion gives safe MAC depth L ≤ 2^9 / 2 = 256 — the L-R9 guard `d_model ≥ 256` enforces it. (§11.5.2 derives ≤ 8.3 from a different, Lucas-based criterion; the two bounds contradict each other and only this one is enforced by shipped code — see docs/AUDIT_2026-08-20.md.)
 
 ### 9.4 Bergman base-φ representation (uniqueness)
 
@@ -626,7 +626,7 @@ Every non-negative real number has a unique base-φ expansion when no two consec
 ## 10. Summary
 
 GF16 achieves **f32-equivalent accuracy** (97.67% on trained MNIST MLP, 0.00% gap) while providing:
-- **10× energy savings** vs FP32 (0.5× memory, 0.56× compute)
+- **2× energy savings** vs FP32 (0.5× memory, 0.56× compute; §6.1 — the 10× figure an earlier summary carried belongs to Ternary)
 - **1.37× LUT overhead** at MAC-level vs ternary (71 vs 52)
 - **Stable cross-platform compilation** (Zig, Rust, C++, WASM, LLVM IR)
 - **Drop-in replacement** for f32 in neural networks
@@ -744,7 +744,7 @@ Where:
 
 ### 11.9 CA φ-Mask (Fibonacci Distances)
 
-The CA (Cross-Attention) $\phi$-Mask implements Fibonacci-based sparse attention, reducing computational complexity by 78.5% while preserving critical long-range dependencies.
+The CA (Cross-Attention) $\phi$-Mask implements Fibonacci-based sparse attention, reducing computational complexity by 97.85% under its own accounting (1 − 5632/262144; an earlier sentence said 78.5%, which its own formula contradicts) while preserving critical long-range dependencies.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
@@ -756,7 +756,7 @@ The CA (Cross-Attention) $\phi$-Mask implements Fibonacci-based sparse attention
 │ 2                 │ Fib #2 (φ)      │ 2.618034       │ φ²                         │
 │ 3                 │ Fib #5 (φ³)     │ 4.236068       │ φ³                         │
 │ 5                 │ Fib #8 (φ⁴)     │ 6.854102       │ φ⁴                         │
-│ 8                 │ Fib #13 (φ⁵)    │ 10.944272      │ φ⁵                         │
+│ 8                 │ Fib #13 (φ⁵)    │ 11.090170      │ φ⁵ (10.944272 was printed earlier; φ⁵ = 11.090170) │
 │ 13                │ Fib #21 (φ⁶)    │ 17.944272      │ φ⁶ (≈ 2×φ⁵)               │
 │ 21                │ Fib #34 (φ⁷)    │ 29.034442      │ φ⁷                         │
 │ 34                │ Fib #55 (φ⁸)    │ 46.978714      │ φ⁸                         │
@@ -779,7 +779,7 @@ The CA (Cross-Attention) $\phi$-Mask implements Fibonacci-based sparse attention
 │ Sparsity                 │ 11/512 = 2.15%  │ Visible / Total                 │
 │ Full attention pairs     │ 262,144         │ 512 × 512                        │
 │ Sparse attention pairs   │ 5,632           │ 11 × 512                         │
-│ Attention reduction      │ 78.5%           │ 1 - (5632 / 262144)             │
+│ Attention reduction      │ 97.85%          │ 1 - (5632 / 262144)             │
 └──────────────────────────┴─────────────────┴──────────────────────────────────┘
 ```
 
