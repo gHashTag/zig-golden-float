@@ -12,6 +12,24 @@
 // ╚════════════════════════════════════════════════════════════════════════════╝
 
 const std = @import("std");
+
+/// zig 0.15.x and 0.16 disagree on several std APIs this file uses. The
+/// repository declares minimum_zig_version 0.15.0 and CI runs 0.15.2, while
+/// development happens on 0.16 — so both must compile. Zig does not analyse
+/// the untaken branch of a comptime-known `if`, which is what makes this work.
+const zig_016 = @import("builtin").zig_version.major == 0 and
+    @import("builtin").zig_version.minor >= 16;
+
+/// Monotonic nanoseconds. std.time.Timer/nanoTimestamp left std by 0.16.
+fn monotonicNs() u64 {
+    if (comptime zig_016) {
+        var ts: std.c.timespec = undefined;
+        _ = std.c.clock_gettime(.MONOTONIC, &ts);
+        return @as(u64, @intCast(ts.sec)) * 1_000_000_000 + @as(u64, @intCast(ts.nsec));
+    } else {
+        return @intCast(std.time.nanoTimestamp());
+    }
+}
 const builtin = @import("builtin");
 const common = @import("common.zig");
 
@@ -274,9 +292,12 @@ pub const BenchmarkResult = struct {
     dimensions: usize = DIM_10K,
 };
 
+
 /// Run 10K VSA benchmark
 pub fn benchmark(_: std.mem.Allocator, iterations: usize) !BenchmarkResult {
-    var rng = std.Random.DefaultPrng.init(@intCast(std.time.timestamp()));
+    // std.time.timestamp left std by zig 0.16; a fixed seed also makes the
+    // benchmark deterministic, like every other test in this repository.
+    var rng = std.Random.DefaultPrng.init(0x10AD5EED);
 
     // Create test vectors
     const vec_a = try HyperVector10K.random(&rng);
@@ -288,30 +309,30 @@ pub fn benchmark(_: std.mem.Allocator, iterations: usize) !BenchmarkResult {
     _ = try HyperVector10K.cosineSimilarity(&vec_a, &vec_b);
 
     // Benchmark bind
-    const bind_start = std.time.nanoTimestamp();
+    const bind_start = monotonicNs();
     var i: usize = 0;
     while (i < iterations) : (i += 1) {
         _ = HyperVector10K.bind(&vec_a, &vec_b);
     }
-    const bind_end = std.time.nanoTimestamp();
+    const bind_end = monotonicNs();
     const bind_ns = @as(f64, @floatFromInt(bind_end - bind_start)) / @as(f64, @floatFromInt(iterations));
 
     // Benchmark bundle
-    const bundle_start = std.time.nanoTimestamp();
+    const bundle_start = monotonicNs();
     i = 0;
     while (i < iterations) : (i += 1) {
         _ = try HyperVector10K.bundle(&vec_a, &vec_b);
     }
-    const bundle_end = std.time.nanoTimestamp();
+    const bundle_end = monotonicNs();
     const bundle_ns = @as(f64, @floatFromInt(bundle_end - bundle_start)) / @as(f64, @floatFromInt(iterations));
 
     // Benchmark similarity
-    const sim_start = std.time.nanoTimestamp();
+    const sim_start = monotonicNs();
     i = 0;
     while (i < iterations) : (i += 1) {
         _ = try HyperVector10K.cosineSimilarity(&vec_a, &vec_b);
     }
-    const sim_end = std.time.nanoTimestamp();
+    const sim_end = monotonicNs();
     const sim_ns = @as(f64, @floatFromInt(sim_end - sim_start)) / @as(f64, @floatFromInt(iterations));
 
     return BenchmarkResult{

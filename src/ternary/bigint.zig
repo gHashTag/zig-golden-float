@@ -544,11 +544,14 @@ pub const TVCBigInt = struct {
             const cmp = simdCompareTrits(a_vec, b_vec);
 
             // Check from most significant position in chunk
+            // A @Vector cannot be indexed at runtime (zig 0.16); coerce to
+            // an array first.
+            const cmp_arr: [32]i8 = cmp;
             var pos: usize = 32;
             while (pos > 0) {
                 pos -= 1;
-                if (cmp[pos] != 0) {
-                    return cmp[pos];
+                if (cmp_arr[pos] != 0) {
+                    return cmp_arr[pos];
                 }
             }
         }

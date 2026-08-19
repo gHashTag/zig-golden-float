@@ -7,6 +7,12 @@
 // φ² + 1/φ² = 3
 
 const std = @import("std");
+
+/// PROT flags are decl-constants on 0.15.x and a packed struct on 0.16;
+/// mprotect left std.posix in 0.16. Both paths compile because the condition
+/// is comptime-known and Zig skips the untaken branch.
+const zig_016_mem = @import("builtin").zig_version.major == 0 and
+    @import("builtin").zig_version.minor >= 16;
 const builtin = @import("builtin");
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -26,7 +32,7 @@ pub const X86_64JitCompiler = struct {
 
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
-            .code = .{},
+            .code = .empty,
             .allocator = allocator,
         };
     }
@@ -354,7 +360,7 @@ pub const X86_64JitCompiler = struct {
         const mem = try std.posix.mmap(
             null,
             alloc_size,
-            std.posix.PROT.READ | std.posix.PROT.WRITE,
+            if (comptime zig_016_mem) .{ .READ = true, .WRITE = true } else std.posix.PROT.READ | std.posix.PROT.WRITE,
             .{ .TYPE = .PRIVATE, .ANONYMOUS = true },
             -1,
             0,
@@ -364,7 +370,12 @@ pub const X86_64JitCompiler = struct {
         @memcpy(mem[0..code_size], self.code.items);
 
         // Change to PROT_READ | PROT_EXEC
-        try std.posix.mprotect(mem, std.posix.PROT.READ | std.posix.PROT.EXEC);
+        if (comptime zig_016_mem) {
+            if (std.c.mprotect(@ptrCast(mem.ptr), mem.len, .{ .READ = true, .EXEC = true }) != 0)
+                return error.MprotectFailed;
+        } else {
+            try std.posix.mprotect(mem, std.posix.PROT.READ | std.posix.PROT.EXEC);
+        }
 
         self.exec_mem = mem;
 

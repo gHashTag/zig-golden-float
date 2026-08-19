@@ -8,6 +8,24 @@
 // φ² + 1/φ² = 3
 
 const std = @import("std");
+
+/// zig 0.15.x and 0.16 disagree on several std APIs this file uses. The
+/// repository declares minimum_zig_version 0.15.0 and CI runs 0.15.2, while
+/// development happens on 0.16 — so both must compile. Zig does not analyse
+/// the untaken branch of a comptime-known `if`, which is what makes this work.
+const zig_016 = @import("builtin").zig_version.major == 0 and
+    @import("builtin").zig_version.minor >= 16;
+
+/// Monotonic nanoseconds. std.time.Timer/nanoTimestamp left std by 0.16.
+fn monotonicNs() u64 {
+    if (comptime zig_016) {
+        var ts: std.c.timespec = undefined;
+        _ = std.c.clock_gettime(.MONOTONIC, &ts);
+        return @as(u64, @intCast(ts.sec)) * 1_000_000_000 + @as(u64, @intCast(ts.nsec));
+    } else {
+        return @intCast(std.time.nanoTimestamp());
+    }
+}
 const packed_trit = @import("../ternary/packed_trit.zig");
 const hybrid = @import("../ternary/hybrid.zig");
 // There is no vsa.zig; bind, bundle2 and randomVector are all in the
@@ -365,6 +383,7 @@ test "packed unbind retrieval" {
 // from a knowledge-graph consumer. The three tests below used Entity only
 // for djb2 over a string, to derive a seed. That function is reproduced
 // here verbatim so the seeds — and therefore the tests — are unchanged.
+
 fn hashString(s: []const u8) u64 {
     var hash: u64 = 5381;
     for (s) |c| {
@@ -461,20 +480,20 @@ test "benchmark Packed vs Unpacked" {
         const p_b = fromHybrid(&h_b);
 
         // Benchmark Unpacked (vsa.bind)
-        var timer = std.time.Timer.start() catch unreachable;
+        const t0 = monotonicNs();
         for (0..iterations) |_| {
             const result = vsa.bind(&h_a, &h_b);
             std.mem.doNotOptimizeAway(&result);
         }
-        const unpacked_ns = timer.read();
+        const unpacked_ns = monotonicNs() - t0;
 
         // Benchmark Packed
-        timer.reset();
+        const t1 = monotonicNs();
         for (0..iterations) |_| {
             const result = packedBind(&p_a, &p_b);
             std.mem.doNotOptimizeAway(&result);
         }
-        const packed_ns = timer.read();
+        const packed_ns = monotonicNs() - t1;
 
         const unpacked_us = @as(f64, @floatFromInt(unpacked_ns)) / 1000.0 / @as(f64, @floatFromInt(iterations));
         const packed_us = @as(f64, @floatFromInt(packed_ns)) / 1000.0 / @as(f64, @floatFromInt(iterations));

@@ -120,7 +120,7 @@ zig fetch --save https://github.com/gHashTag/zig-golden-float/archive/refs/tags/
 ```
 
 ```zig
-const gf = @import("golden_float");
+const gf = @import("golden-float");
 
 const x = gf.GF16.fromF32(3.14);
 const y = gf.GF16.fromF32(2.71);

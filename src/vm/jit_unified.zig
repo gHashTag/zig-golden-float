@@ -7,6 +7,26 @@
 // φ² + 1/φ² = 3
 
 const std = @import("std");
+
+/// zig 0.15.x and 0.16 disagree on several std APIs this file uses. The
+/// repository declares minimum_zig_version 0.15.0 and CI runs 0.15.2, while
+/// development happens on 0.16 — so both must compile. Zig does not analyse
+/// the untaken branch of a comptime-known `if`, which is what makes this work.
+const zig_016 = @import("builtin").zig_version.major == 0 and
+    @import("builtin").zig_version.minor >= 16;
+
+/// Monotonic nanoseconds. std.time.Timer/nanoTimestamp left std by 0.16.
+fn monotonicNs() u64 {
+    if (comptime zig_016) {
+        var ts: std.c.timespec = undefined;
+        _ = std.c.clock_gettime(.MONOTONIC, &ts);
+        return @as(u64, @intCast(ts.sec)) * 1_000_000_000 + @as(u64, @intCast(ts.nsec));
+    } else {
+        return @intCast(std.time.nanoTimestamp());
+    }
+}
+
+
 const builtin = @import("builtin");
 
 // Import architecture-specific backends
@@ -409,12 +429,12 @@ test "Unified JIT benchmark" {
         b[i] = @intCast(@as(i32, @intCast((i + 1) % 3)) - 1);
     }
 
-    var timer = try std.time.Timer.start();
+    const t_mark = monotonicNs();
     var result: i64 = 0;
     for (0..iterations) |_| {
         result = func(@ptrCast(&a), @ptrCast(&b));
     }
-    const ns = timer.read();
+    const ns = monotonicNs() - t_mark;
 
     const ms = @as(f64, @floatFromInt(ns)) / 1_000_000.0;
     const ns_per_iter = @as(f64, @floatFromInt(ns)) / @as(f64, iterations);

@@ -3,7 +3,7 @@
 // ⲤⲀⲔⲢⲀ ⲪⲞⲢⲘⲨⲖⲀ: V = n × 3^k × π^m × φ^p × e^q
 
 const std = @import("std");
-const tvc_hybrid = @import("hybrid.zig");
+const tvc_hybrid = @import("../ternary/hybrid.zig");
 const tvc_vsa = @import("vsa.zig");
 const gf = @import("golden-float");
 

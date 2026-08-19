@@ -7,6 +7,26 @@
 // φ² + 1/φ² = 3
 
 const std = @import("std");
+
+/// zig 0.15.x and 0.16 disagree on several std APIs this file uses. The
+/// repository declares minimum_zig_version 0.15.0 and CI runs 0.15.2, while
+/// development happens on 0.16 — so both must compile. Zig does not analyse
+/// the untaken branch of a comptime-known `if`, which is what makes this work.
+const zig_016 = @import("builtin").zig_version.major == 0 and
+    @import("builtin").zig_version.minor >= 16;
+
+/// Monotonic nanoseconds. std.time.Timer/nanoTimestamp left std by 0.16.
+fn monotonicNs() u64 {
+    if (comptime zig_016) {
+        var ts: std.c.timespec = undefined;
+        _ = std.c.clock_gettime(.MONOTONIC, &ts);
+        return @as(u64, @intCast(ts.sec)) * 1_000_000_000 + @as(u64, @intCast(ts.nsec));
+    } else {
+        return @intCast(std.time.nanoTimestamp());
+    }
+}
+
+
 const builtin = @import("builtin");
 const jit_unified = @import("vm/jit_unified.zig");
 const hybrid = @import("ternary/hybrid.zig");
@@ -48,7 +68,7 @@ pub const JitVSAEngine = struct {
             .hamming_cache = std.AutoHashMap(usize, jit_unified.JitDotFn).init(allocator),
             .cosine_cache = std.AutoHashMap(usize, jit_unified.JitDotFn).init(allocator),
             .bundle_cache = std.AutoHashMap(usize, jit_unified.JitDotFn).init(allocator),
-            .compilers = .{},
+            .compilers = .empty,
         };
     }
 
@@ -517,20 +537,20 @@ test "JitVSAEngine benchmark vs fallback" {
     _ = try engine.dotProduct(&a, &b);
 
     // Benchmark JIT
-    var timer = try std.time.Timer.start();
+    var t_mark = monotonicNs();
     var jit_result: i64 = 0;
     for (0..iterations) |_| {
         jit_result = try engine.dotProduct(&a, &b);
     }
-    const jit_ns = timer.read();
+    const jit_ns = monotonicNs() - t_mark;
 
     // Benchmark fallback
-    timer.reset();
+    t_mark = monotonicNs();
     var fallback_result: i64 = 0;
     for (0..iterations) |_| {
         fallback_result = JitVSAEngine.dotProductFallback(&a, &b);
     }
-    const fallback_ns = timer.read();
+    const fallback_ns = monotonicNs() - t_mark;
 
     // Results should match
     try std.testing.expectEqual(jit_result, fallback_result);

@@ -116,7 +116,9 @@ test "every public declaration of this module is analysed" {
     // That is not hypothetical. The same omission in gHashTag/zig-hdc hid five
     // distinct API-drift errors against the version of this package it pins,
     // while its CI stayed green throughout (zig-hdc#2).
-    @import("std").testing.refAllDeclsRecursive(@This());
+    // refAllDeclsRecursive was removed by zig 0.16; refAllDecls references
+    // every top-level export, which is what forces each module file to load.
+    @import("std").testing.refAllDecls(@This());
 }
 
 // vsa_jit was never exported, so nothing ever compiled it, so nobody found

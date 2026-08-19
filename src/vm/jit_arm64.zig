@@ -7,6 +7,32 @@
 // φ² + 1/φ² = 3
 
 const std = @import("std");
+
+/// PROT flags are decl-constants on 0.15.x and a packed struct on 0.16;
+/// mprotect left std.posix in 0.16. Both paths compile because the condition
+/// is comptime-known and Zig skips the untaken branch.
+const zig_016_mem = @import("builtin").zig_version.major == 0 and
+    @import("builtin").zig_version.minor >= 16;
+
+/// zig 0.15.x and 0.16 disagree on several std APIs this file uses. The
+/// repository declares minimum_zig_version 0.15.0 and CI runs 0.15.2, while
+/// development happens on 0.16 — so both must compile. Zig does not analyse
+/// the untaken branch of a comptime-known `if`, which is what makes this work.
+const zig_016 = @import("builtin").zig_version.major == 0 and
+    @import("builtin").zig_version.minor >= 16;
+
+/// Monotonic nanoseconds. std.time.Timer/nanoTimestamp left std by 0.16.
+fn monotonicNs() u64 {
+    if (comptime zig_016) {
+        var ts: std.c.timespec = undefined;
+        _ = std.c.clock_gettime(.MONOTONIC, &ts);
+        return @as(u64, @intCast(ts.sec)) * 1_000_000_000 + @as(u64, @intCast(ts.nsec));
+    } else {
+        return @intCast(std.time.nanoTimestamp());
+    }
+}
+
+
 const builtin = @import("builtin");
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -26,7 +52,7 @@ pub const Arm64JitCompiler = struct {
 
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
-            .code = .{},
+            .code = .empty,
             .allocator = allocator,
         };
     }
@@ -1426,7 +1452,7 @@ pub const Arm64JitCompiler = struct {
         const mem = try std.posix.mmap(
             null,
             alloc_size,
-            std.posix.PROT.READ | std.posix.PROT.WRITE,
+            if (comptime zig_016_mem) .{ .READ = true, .WRITE = true } else std.posix.PROT.READ | std.posix.PROT.WRITE,
             .{ .TYPE = .PRIVATE, .ANONYMOUS = true },
             -1,
             0,
@@ -1434,7 +1460,12 @@ pub const Arm64JitCompiler = struct {
 
         @memcpy(mem[0..code_size], self.code.items);
 
-        try std.posix.mprotect(mem, std.posix.PROT.READ | std.posix.PROT.EXEC);
+        if (comptime zig_016_mem) {
+            if (std.c.mprotect(@ptrCast(mem.ptr), mem.len, .{ .READ = true, .EXEC = true }) != 0)
+                return error.MprotectFailed;
+        } else {
+            try std.posix.mprotect(mem, std.posix.PROT.READ | std.posix.PROT.EXEC);
+        }
 
         self.exec_mem = mem;
 
@@ -1642,20 +1673,20 @@ test "ARM64 NEON SIMD benchmark vs scalar" {
     const simd_func = try simd_compiler.finalize();
 
     // Benchmark scalar
-    var timer = try std.time.Timer.start();
+    var t_mark = monotonicNs();
     var scalar_result: i64 = 0;
     for (0..iterations) |_| {
         scalar_result = scalar_func(@ptrCast(&a), @ptrCast(&b));
     }
-    const scalar_ns = timer.read();
+    const scalar_ns = monotonicNs() - t_mark;
 
     // Benchmark SIMD
-    timer.reset();
+    t_mark = monotonicNs();
     var simd_result: i64 = 0;
     for (0..iterations) |_| {
         simd_result = simd_func(@ptrCast(&a), @ptrCast(&b));
     }
-    const simd_ns = timer.read();
+    const simd_ns = monotonicNs() - t_mark;
 
     // Verify results match
     try std.testing.expectEqual(scalar_result, simd_result);
@@ -1832,20 +1863,20 @@ test "ARM64 hybrid benchmark vs pure scalar" {
     const hybrid_func = try hybrid_compiler.finalize();
 
     // Benchmark scalar
-    var timer = try std.time.Timer.start();
+    var t_mark = monotonicNs();
     var scalar_result: i64 = 0;
     for (0..iterations) |_| {
         scalar_result = scalar_func(@ptrCast(&a), @ptrCast(&b));
     }
-    const scalar_ns = timer.read();
+    const scalar_ns = monotonicNs() - t_mark;
 
     // Benchmark hybrid
-    timer.reset();
+    t_mark = monotonicNs();
     var hybrid_result: i64 = 0;
     for (0..iterations) |_| {
         hybrid_result = hybrid_func(@ptrCast(&a), @ptrCast(&b));
     }
-    const hybrid_ns = timer.read();
+    const hybrid_ns = monotonicNs() - t_mark;
 
     // Verify results match
     try std.testing.expectEqual(scalar_result, hybrid_result);
@@ -2015,7 +2046,7 @@ test "ARM64 SIMD bind benchmark vs scalar" {
     const scalar_func = try scalar_compiler.finalize();
 
     // Benchmark SIMD
-    var timer = try std.time.Timer.start();
+    var t_mark = monotonicNs();
     for (0..iterations) |_| {
         // Reset a for fair comparison
         for (0..dim) |i| {
@@ -2023,17 +2054,17 @@ test "ARM64 SIMD bind benchmark vs scalar" {
         }
         _ = simd_func(@ptrCast(&a_simd), @ptrCast(&b));
     }
-    const simd_ns = timer.read();
+    const simd_ns = monotonicNs() - t_mark;
 
     // Benchmark scalar
-    timer.reset();
+    t_mark = monotonicNs();
     for (0..iterations) |_| {
         for (0..dim) |i| {
             a_scalar[i] = @intCast(@as(i32, @intCast(i % 3)) - 1);
         }
         _ = scalar_func(@ptrCast(&a_scalar), @ptrCast(&b));
     }
-    const scalar_ns = timer.read();
+    const scalar_ns = monotonicNs() - t_mark;
 
     const simd_ms = @as(f64, @floatFromInt(simd_ns)) / 1_000_000.0;
     const scalar_ms = @as(f64, @floatFromInt(scalar_ns)) / 1_000_000.0;
@@ -2106,16 +2137,16 @@ test "ARM64 fused cosine benchmark vs 3x dot" {
     }
 
     // Benchmark fused
-    var timer = try std.time.Timer.start();
+    var t_mark = monotonicNs();
     var fused_result: f64 = 0;
     for (0..iterations) |_| {
         const bits = fused_func(@ptrCast(&a), @ptrCast(&b));
         fused_result = @bitCast(bits);
     }
-    const fused_ns = timer.read();
+    const fused_ns = monotonicNs() - t_mark;
 
     // Benchmark 3x dot
-    timer.reset();
+    t_mark = monotonicNs();
     var dot_result: f64 = 0;
     for (0..iterations) |_| {
         const dot_ab = dot_func(@ptrCast(&a), @ptrCast(&b));
@@ -2124,7 +2155,7 @@ test "ARM64 fused cosine benchmark vs 3x dot" {
         const norm = @sqrt(@as(f64, @floatFromInt(dot_aa)) * @as(f64, @floatFromInt(dot_bb)));
         dot_result = @as(f64, @floatFromInt(dot_ab)) / norm;
     }
-    const dot_ns = timer.read();
+    const dot_ns = monotonicNs() - t_mark;
 
     const fused_ms = @as(f64, @floatFromInt(fused_ns)) / 1_000_000.0;
     const dot_ms = @as(f64, @floatFromInt(dot_ns)) / 1_000_000.0;
