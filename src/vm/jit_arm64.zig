@@ -8,12 +8,30 @@
 
 const std = @import("std");
 
-/// std.time.Timer left std by zig 0.16; monotonic clock via libc.
+/// PROT flags are decl-constants on 0.15.x and a packed struct on 0.16;
+/// mprotect left std.posix in 0.16. Both paths compile because the condition
+/// is comptime-known and Zig skips the untaken branch.
+const zig_016_mem = @import("builtin").zig_version.major == 0 and
+    @import("builtin").zig_version.minor >= 16;
+
+/// zig 0.15.x and 0.16 disagree on several std APIs this file uses. The
+/// repository declares minimum_zig_version 0.15.0 and CI runs 0.15.2, while
+/// development happens on 0.16 — so both must compile. Zig does not analyse
+/// the untaken branch of a comptime-known `if`, which is what makes this work.
+const zig_016 = @import("builtin").zig_version.major == 0 and
+    @import("builtin").zig_version.minor >= 16;
+
+/// Monotonic nanoseconds. std.time.Timer/nanoTimestamp left std by 0.16.
 fn monotonicNs() u64 {
-    var ts: std.c.timespec = undefined;
-    _ = std.c.clock_gettime(.MONOTONIC, &ts);
-    return @as(u64, @intCast(ts.sec)) * 1_000_000_000 + @as(u64, @intCast(ts.nsec));
+    if (comptime zig_016) {
+        var ts: std.c.timespec = undefined;
+        _ = std.c.clock_gettime(.MONOTONIC, &ts);
+        return @as(u64, @intCast(ts.sec)) * 1_000_000_000 + @as(u64, @intCast(ts.nsec));
+    } else {
+        return @intCast(std.time.nanoTimestamp());
+    }
 }
+
 
 const builtin = @import("builtin");
 
@@ -1434,7 +1452,7 @@ pub const Arm64JitCompiler = struct {
         const mem = try std.posix.mmap(
             null,
             alloc_size,
-            .{ .READ = true, .WRITE = true },
+            if (comptime zig_016_mem) .{ .READ = true, .WRITE = true } else std.posix.PROT.READ | std.posix.PROT.WRITE,
             .{ .TYPE = .PRIVATE, .ANONYMOUS = true },
             -1,
             0,
@@ -1442,8 +1460,12 @@ pub const Arm64JitCompiler = struct {
 
         @memcpy(mem[0..code_size], self.code.items);
 
-        if (std.c.mprotect(@ptrCast(mem.ptr), mem.len, .{ .READ = true, .EXEC = true }) != 0)
-            return error.MprotectFailed;
+        if (comptime zig_016_mem) {
+            if (std.c.mprotect(@ptrCast(mem.ptr), mem.len, .{ .READ = true, .EXEC = true }) != 0)
+                return error.MprotectFailed;
+        } else {
+            try std.posix.mprotect(mem, std.posix.PROT.READ | std.posix.PROT.EXEC);
+        }
 
         self.exec_mem = mem;
 
