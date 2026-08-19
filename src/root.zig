@@ -72,6 +72,13 @@ pub const bigint = @import("ternary/hybrid.zig");
 /// Packed trit storage
 pub const packed_trit = @import("ternary/packed_trit.zig");
 
+// packed_vsa was reachable from nowhere: not from root, not through
+// vsa/core.zig. Its five functions are the packed-representation half of the
+// VSA surface, and a downstream package that wanted them had to vendor a copy
+// of the file — which is exactly how the copies in this fleet started
+// diverging. Same failure as vsa_jit: present, correct, unexported.
+pub const packed_vsa = @import("vsa/packed_vsa.zig");
+
 /// Ternary primitives from bigint
 pub const ternary_primitives = @import("ternary/bigint.zig");
 
@@ -97,3 +104,26 @@ pub const PHI_INV_SQ = formats.PHI_INV_SQ;
 
 /// Trinity Identity: φ² + 1/φ² = 3
 pub const TRINITY = formats.TRINITY;
+
+test "every public declaration of this module is analysed" {
+    // src/root.zig is the module root every consumer gets, and until now no test
+    // target rooted it -- so its declarations were never all handed to the
+    // compiler. Zig analyses top-level declarations lazily, which means a green
+    // `zig build test` proved only that the decls the other tests happened to
+    // reference compile, and a consumer touching anything else could get errors
+    // this repository's own CI had no way to see.
+    //
+    // That is not hypothetical. The same omission in gHashTag/zig-hdc hid five
+    // distinct API-drift errors against the version of this package it pins,
+    // while its CI stayed green throughout (zig-hdc#2).
+    // refAllDeclsRecursive was removed by zig 0.16; refAllDecls references
+    // every top-level export, which is what forces each module file to load.
+    @import("std").testing.refAllDecls(@This());
+}
+
+// vsa_jit was never exported, so nothing ever compiled it, so nobody found
+// that vm/jit_unified.zig imported "../../jit_arm64.zig" — a path that
+// escapes the module root and could not resolve on any machine. The file
+// sat beside it the whole time. Exporting it is what makes the compiler
+// look, and the compiler looking is the only reason the defect surfaced.
+pub const vsa_jit = @import("vsa_jit.zig");

@@ -23,7 +23,9 @@
 const std = @import("std");
 const math = std.math;
 const Allocator = std.mem.Allocator;
-const random = std.crypto.random;
+// std.crypto.random left the std namespace by zig 0.16; a seeded PRNG also
+// matches the determinism the rest of this repository's tests rely on.
+var hrr_prng = std.Random.DefaultPrng.init(0x48525244);
 
 /// ═══════════════════════════════════════════════════════════════════════════════
 /// SACRED CONSTANTS FOR HRR
@@ -73,8 +75,8 @@ pub const HRR = struct {
         var i: usize = 0;
         while (i < self.dim) : (i += 2) {
             // Generate uniform random floats in (0, 1]
-            const u1_raw: f32 = random.float(f32);
-            const u2_raw: f32 = random.float(f32);
+            const u1_raw: f32 = hrr_prng.random().float(f32);
+            const u2_raw: f32 = hrr_prng.random().float(f32);
 
             // Avoid log(0) and ensure valid range
             const u1_safe = if (u1_raw <= 0.0) 1.0e-6 else if (u1_raw >= 1.0) 0.999999 else u1_raw;

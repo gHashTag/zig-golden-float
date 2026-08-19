@@ -38,9 +38,9 @@ pub const FPGAInterface = struct {
             return error.UnsupportedOS;
 
         // Try to open the UART device
+        // OpenFlags dropped the separate .read/.write booleans for .mode.
         const port = std.fs.openFileAbsolute(device_path, .{
-            .read = true,
-            .write = true,
+            .mode = .read_write,
         }) catch |err| {
             std.log.err("Failed to open FPGA UART device: {}", .{err});
             return err;
@@ -146,26 +146,34 @@ pub const FPGAInterface = struct {
 
         // Pack vector A
         for (0..dim) |i| {
-            const trit_val: i2 = if (i < a.trit_len) a.unpacked_cache[i] else 0;
+            const trit_val: i2 = if (i < a.trit_len) @intCast(a.unpacked_cache[i]) else 0;
             const encoded = encodeTrit(trit_val);
             const byte_idx = (i * 2) / 8;
             const bit_offset = (i * 2) % 8;
-            buffer[byte_idx] |= encoded << bit_offset;
+            // encoded is a u2, and Zig types a shift amount by the width of what
+            // is being shifted: a u2 admits only a u1, which is why a bit_offset
+            // of 0, 2, 4 or 6 could not be used here at all. The value is going
+            // into a u8, so it is widened first and the amount typed to match.
+            buffer[byte_idx] |= @as(u8, encoded) << @as(u3, @intCast(bit_offset));
             if (bit_offset >= 6) {
-                buffer[byte_idx + 1] |= encoded >> (8 - bit_offset);
+                buffer[byte_idx + 1] |= @as(u8, encoded) >> @as(u3, @intCast(8 - bit_offset));
             }
         }
 
         // Pack vector B (offset by bytes_needed)
         const b_offset = bytes_needed;
         for (0..dim) |i| {
-            const trit_val: i2 = if (i < b.trit_len) b.unpacked_cache[i] else 0;
+            const trit_val: i2 = if (i < b.trit_len) @intCast(b.unpacked_cache[i]) else 0;
             const encoded = encodeTrit(trit_val);
             const byte_idx = b_offset + (i * 2) / 8;
             const bit_offset = (i * 2) % 8;
-            buffer[byte_idx] |= encoded << bit_offset;
+            // encoded is a u2, and Zig types a shift amount by the width of what
+            // is being shifted: a u2 admits only a u1, which is why a bit_offset
+            // of 0, 2, 4 or 6 could not be used here at all. The value is going
+            // into a u8, so it is widened first and the amount typed to match.
+            buffer[byte_idx] |= @as(u8, encoded) << @as(u3, @intCast(bit_offset));
             if (bit_offset >= 6) {
-                buffer[byte_idx + 1] |= encoded >> (8 - bit_offset);
+                buffer[byte_idx + 1] |= @as(u8, encoded) >> @as(u3, @intCast(8 - bit_offset));
             }
         }
 
@@ -183,7 +191,12 @@ pub const FPGAInterface = struct {
         for (0..dim) |i| {
             const byte_idx = 2 + (i * 2) / 8;
             const bit_offset = (i * 2) % 8;
-            const encoded = (response[byte_idx] >> bit_offset) & 0x03;
+            // Same rule as the packing side: response[byte_idx] is a u8, so the
+            // shift amount has to be a u3.
+            // Typed u2 rather than left as u8: decodeTrit takes a u2, and the
+            // mask has already narrowed the value to two bits, so the cast
+            // states what the mask guarantees.
+            const encoded: u2 = @intCast((response[byte_idx] >> @as(u3, @intCast(bit_offset))) & 0x03);
             result.unpacked_cache[i] = decodeTrit(encoded);
         }
 
@@ -209,25 +222,33 @@ pub const FPGAInterface = struct {
 
         // Pack vectors (same as bind)
         for (0..dim) |i| {
-            const trit_val: i2 = if (i < a.trit_len) a.unpacked_cache[i] else 0;
+            const trit_val: i2 = if (i < a.trit_len) @intCast(a.unpacked_cache[i]) else 0;
             const encoded = encodeTrit(trit_val);
             const byte_idx = (i * 2) / 8;
             const bit_offset = (i * 2) % 8;
-            buffer[byte_idx] |= encoded << bit_offset;
+            // encoded is a u2, and Zig types a shift amount by the width of what
+            // is being shifted: a u2 admits only a u1, which is why a bit_offset
+            // of 0, 2, 4 or 6 could not be used here at all. The value is going
+            // into a u8, so it is widened first and the amount typed to match.
+            buffer[byte_idx] |= @as(u8, encoded) << @as(u3, @intCast(bit_offset));
             if (bit_offset >= 6) {
-                buffer[byte_idx + 1] |= encoded >> (8 - bit_offset);
+                buffer[byte_idx + 1] |= @as(u8, encoded) >> @as(u3, @intCast(8 - bit_offset));
             }
         }
 
         const b_offset = bytes_needed;
         for (0..dim) |i| {
-            const trit_val: i2 = if (i < b.trit_len) b.unpacked_cache[i] else 0;
+            const trit_val: i2 = if (i < b.trit_len) @intCast(b.unpacked_cache[i]) else 0;
             const encoded = encodeTrit(trit_val);
             const byte_idx = b_offset + (i * 2) / 8;
             const bit_offset = (i * 2) % 8;
-            buffer[byte_idx] |= encoded << bit_offset;
+            // encoded is a u2, and Zig types a shift amount by the width of what
+            // is being shifted: a u2 admits only a u1, which is why a bit_offset
+            // of 0, 2, 4 or 6 could not be used here at all. The value is going
+            // into a u8, so it is widened first and the amount typed to match.
+            buffer[byte_idx] |= @as(u8, encoded) << @as(u3, @intCast(bit_offset));
             if (bit_offset >= 6) {
-                buffer[byte_idx + 1] |= encoded >> (8 - bit_offset);
+                buffer[byte_idx + 1] |= @as(u8, encoded) >> @as(u3, @intCast(8 - bit_offset));
             }
         }
 
@@ -245,7 +266,12 @@ pub const FPGAInterface = struct {
         for (0..dim) |i| {
             const byte_idx = 2 + (i * 2) / 8;
             const bit_offset = (i * 2) % 8;
-            const encoded = (response[byte_idx] >> bit_offset) & 0x03;
+            // Same rule as the packing side: response[byte_idx] is a u8, so the
+            // shift amount has to be a u3.
+            // Typed u2 rather than left as u8: decodeTrit takes a u2, and the
+            // mask has already narrowed the value to two bits, so the cast
+            // states what the mask guarantees.
+            const encoded: u2 = @intCast((response[byte_idx] >> @as(u3, @intCast(bit_offset))) & 0x03);
             result.unpacked_cache[i] = decodeTrit(encoded);
         }
 
@@ -264,25 +290,33 @@ pub const FPGAInterface = struct {
 
         // Pack vectors
         for (0..dim) |i| {
-            const trit_val: i2 = if (i < a.trit_len) a.unpacked_cache[i] else 0;
+            const trit_val: i2 = if (i < a.trit_len) @intCast(a.unpacked_cache[i]) else 0;
             const encoded = encodeTrit(trit_val);
             const byte_idx = (i * 2) / 8;
             const bit_offset = (i * 2) % 8;
-            buffer[byte_idx] |= encoded << bit_offset;
+            // encoded is a u2, and Zig types a shift amount by the width of what
+            // is being shifted: a u2 admits only a u1, which is why a bit_offset
+            // of 0, 2, 4 or 6 could not be used here at all. The value is going
+            // into a u8, so it is widened first and the amount typed to match.
+            buffer[byte_idx] |= @as(u8, encoded) << @as(u3, @intCast(bit_offset));
             if (bit_offset >= 6) {
-                buffer[byte_idx + 1] |= encoded >> (8 - bit_offset);
+                buffer[byte_idx + 1] |= @as(u8, encoded) >> @as(u3, @intCast(8 - bit_offset));
             }
         }
 
         const b_offset = bytes_needed;
         for (0..dim) |i| {
-            const trit_val: i2 = if (i < b.trit_len) b.unpacked_cache[i] else 0;
+            const trit_val: i2 = if (i < b.trit_len) @intCast(b.unpacked_cache[i]) else 0;
             const encoded = encodeTrit(trit_val);
             const byte_idx = b_offset + (i * 2) / 8;
             const bit_offset = (i * 2) % 8;
-            buffer[byte_idx] |= encoded << bit_offset;
+            // encoded is a u2, and Zig types a shift amount by the width of what
+            // is being shifted: a u2 admits only a u1, which is why a bit_offset
+            // of 0, 2, 4 or 6 could not be used here at all. The value is going
+            // into a u8, so it is widened first and the amount typed to match.
+            buffer[byte_idx] |= @as(u8, encoded) << @as(u3, @intCast(bit_offset));
             if (bit_offset >= 6) {
-                buffer[byte_idx + 1] |= encoded >> (8 - bit_offset);
+                buffer[byte_idx + 1] |= @as(u8, encoded) >> @as(u3, @intCast(8 - bit_offset));
             }
         }
 
@@ -295,9 +329,13 @@ pub const FPGAInterface = struct {
         // Parse dot product (signed 11-bit: -256 to +256)
         const dot_lsb = response[1];
         const dot_msb = response[2] & 0x07;
-        var dot: i11 = @as(i11, @bitCast(@as(u11, @intCast(dot_msb)) << 8 | dot_lsb));
-        // Sign extend
-        if (dot_msb & 0x04) dot |= 0xF800;
+        const dot: i11 = @as(i11, @bitCast(@as(u11, @intCast(dot_msb)) << 8 | dot_lsb));
+        // No manual sign extension. Zig's `if` takes a bool and `dot_msb & 0x04`
+        // is a u8, so this never compiled -- and the operation it was reaching
+        // for is already done: @bitCast from u11 to i11 reads the top bit as the
+        // sign, which is exactly what bit 2 of dot_msb is. The old line also
+        // or-ed 0xF800 into an i11, a value that does not fit in one, so it
+        // could not have run even if the condition had been well typed.
 
         // Normalize by dimension (cosine similarity for unit vectors)
         // For raw similarity: just return dot / dim
@@ -377,7 +415,9 @@ pub const AutoVSA = struct {
 
     /// Initialize with auto-detection
     pub fn init(config: Config, allocator: std.mem.Allocator) Self {
-        const fpga = FPGAInterface.init(config, allocator) catch |err| {
+        // var, because ping takes *Self and a const binding cannot hand out the
+        // mutable pointer the method asks for.
+        var fpga = FPGAInterface.init(config, allocator) catch |err| {
             std.log.warn("FPGA unavailable ({}), using CPU fallback", .{err});
             return Self{
                 .fpga = null,
@@ -475,8 +515,14 @@ test "fpga bind: cpu fallback" {
 
     // Fill with test data
     for (0..16) |i| {
-        a.unpacked_cache[i] = @intCast(@rem(i, 3) - 1);
-        b.unpacked_cache[i] = @intCast(@rem(i + 1, 3) - 1);
+        // The subtraction has to happen in a signed type. i is a usize, so
+        // @rem(i, 3) is a usize too, and the first iteration computed 0 - 1 in
+        // unsigned arithmetic and panicked on the overflow. The cycle intended
+        // is -1, 0, +1, which needs somewhere for the -1 to live.
+        const idx: i8 = @intCast(@rem(i, 3));
+        const idx_b: i8 = @intCast(@rem(i + 1, 3));
+        a.unpacked_cache[i] = idx - 1;
+        b.unpacked_cache[i] = idx_b - 1;
     }
 
     const result = try cpu.bind(&a, &b);

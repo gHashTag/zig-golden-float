@@ -240,7 +240,9 @@ pub const HyperVector10K = struct {
 
     /// Format as hex string
     pub fn formatHex(self: *const Self, allocator: std.mem.Allocator) ![]u8 {
-        return std.fmt.allocPrint(allocator, "{s}", .{std.fmt.fmtSliceHexLower(&self.data)});
+        // std.fmt.fmtSliceHexLower was removed in 0.15; {x} on the slice is the
+        // replacement and produces the same lowercase hex.
+        return std.fmt.allocPrint(allocator, "{x}", .{&self.data});
     }
 };
 
@@ -272,9 +274,18 @@ pub const BenchmarkResult = struct {
     dimensions: usize = DIM_10K,
 };
 
+/// std.time.nanoTimestamp left std by zig 0.16.
+fn monotonicNs() i128 {
+    var ts: std.c.timespec = undefined;
+    _ = std.c.clock_gettime(.MONOTONIC, &ts);
+    return @as(i128, ts.sec) * 1_000_000_000 + ts.nsec;
+}
+
 /// Run 10K VSA benchmark
 pub fn benchmark(_: std.mem.Allocator, iterations: usize) !BenchmarkResult {
-    var rng = std.Random.DefaultPrng.init(@intCast(std.time.timestamp()));
+    // std.time.timestamp left std by zig 0.16; a fixed seed also makes the
+    // benchmark deterministic, like every other test in this repository.
+    var rng = std.Random.DefaultPrng.init(0x10AD5EED);
 
     // Create test vectors
     const vec_a = try HyperVector10K.random(&rng);
@@ -286,30 +297,30 @@ pub fn benchmark(_: std.mem.Allocator, iterations: usize) !BenchmarkResult {
     _ = try HyperVector10K.cosineSimilarity(&vec_a, &vec_b);
 
     // Benchmark bind
-    const bind_start = std.time.nanoTimestamp();
+    const bind_start = monotonicNs();
     var i: usize = 0;
     while (i < iterations) : (i += 1) {
         _ = HyperVector10K.bind(&vec_a, &vec_b);
     }
-    const bind_end = std.time.nanoTimestamp();
+    const bind_end = monotonicNs();
     const bind_ns = @as(f64, @floatFromInt(bind_end - bind_start)) / @as(f64, @floatFromInt(iterations));
 
     // Benchmark bundle
-    const bundle_start = std.time.nanoTimestamp();
+    const bundle_start = monotonicNs();
     i = 0;
     while (i < iterations) : (i += 1) {
         _ = try HyperVector10K.bundle(&vec_a, &vec_b);
     }
-    const bundle_end = std.time.nanoTimestamp();
+    const bundle_end = monotonicNs();
     const bundle_ns = @as(f64, @floatFromInt(bundle_end - bundle_start)) / @as(f64, @floatFromInt(iterations));
 
     // Benchmark similarity
-    const sim_start = std.time.nanoTimestamp();
+    const sim_start = monotonicNs();
     i = 0;
     while (i < iterations) : (i += 1) {
         _ = try HyperVector10K.cosineSimilarity(&vec_a, &vec_b);
     }
-    const sim_end = std.time.nanoTimestamp();
+    const sim_end = monotonicNs();
     const sim_ns = @as(f64, @floatFromInt(sim_end - sim_start)) / @as(f64, @floatFromInt(iterations));
 
     return BenchmarkResult{
@@ -322,7 +333,12 @@ pub fn benchmark(_: std.mem.Allocator, iterations: usize) !BenchmarkResult {
 
 /// Print benchmark results
 pub fn printBenchmark(result: BenchmarkResult) void {
-    const stdout = std.io.getStdOut().writer();
+    // std.io.getStdOut() was removed in 0.15. A File writer needs a buffer it
+    // does not own, so the buffer lives here and the interface borrows it.
+    var stdout_buffer: [4096]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
+    defer stdout.flush() catch {};
 
     stdout.print(
         \\╔════════════════════════════════════════════════════════════════════════════╗

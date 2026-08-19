@@ -2,6 +2,8 @@
 // Common types and imports for VSA module
 
 const std = @import("std");
+// ../hybrid.zig resolves to src/hybrid.zig, which does not exist. The file
+// is src/ternary/hybrid.zig.
 const tvc_hybrid = @import("../ternary/hybrid.zig");
 
 pub const HybridBigInt = tvc_hybrid.HybridBigInt;

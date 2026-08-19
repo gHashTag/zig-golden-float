@@ -26,7 +26,7 @@ pub const X86_64JitCompiler = struct {
 
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
-            .code = .{},
+            .code = .empty,
             .allocator = allocator,
         };
     }
@@ -354,7 +354,7 @@ pub const X86_64JitCompiler = struct {
         const mem = try std.posix.mmap(
             null,
             alloc_size,
-            std.posix.PROT.READ | std.posix.PROT.WRITE,
+            .{ .READ = true, .WRITE = true },
             .{ .TYPE = .PRIVATE, .ANONYMOUS = true },
             -1,
             0,
@@ -364,7 +364,8 @@ pub const X86_64JitCompiler = struct {
         @memcpy(mem[0..code_size], self.code.items);
 
         // Change to PROT_READ | PROT_EXEC
-        try std.posix.mprotect(mem, std.posix.PROT.READ | std.posix.PROT.EXEC);
+        if (std.c.mprotect(@ptrCast(mem.ptr), mem.len, .{ .READ = true, .EXEC = true }) != 0)
+            return error.MprotectFailed;
 
         self.exec_mem = mem;
 

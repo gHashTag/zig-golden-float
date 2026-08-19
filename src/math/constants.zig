@@ -11,15 +11,21 @@
 
 const std = @import("std");
 
-// The "canonical source" this file re-exported (sacred/constants.zig) exists
-// nowhere in the repository -- the import compiled for no consumer, because
-// nothing compiled this file until the root-api guard. Defined directly.
+// Import from canonical source (ANTI-PATTERN: no inline constants!)
+// sacred/constants.zig does not exist in this repository and never has, so
+// this file could not compile and neither could anything importing it --
+// including src/root.zig, which is the module root every consumer gets.
+// The two values it supplied are PHI and PHI squared, and this repository
+// already carries them at 1.6180339887498948482 in trinity_constants.zig,
+// gf_binary.zig and golden_float16.zig, all three identical. Pointing at
+// the repository's own constants keeps the value rather than inventing one.
+const sacred_constants = @import("../trinity_constants.zig");
 
 /// Golden Ratio φ = (1 + √5) / 2 ≈ 1.618033988749895
-pub const PHI = 1.618033988749895;
+pub const PHI = sacred_constants.PHI;
 
 /// φ² = φ + 1 ≈ 2.618033988749895
-pub const PHI_SQUARED = PHI + 1.0;
+pub const PHI_SQUARED = sacred_constants.PHI_SQ;
 
 /// 1/φ² ≈ 0.381966011250105
 pub const INVERSE_PHI_SQUARED: f64 = 1.0 / PHI_SQUARED;
@@ -79,11 +85,18 @@ pub const SacredMath = struct {
 
     /// Generate sacred checksum for validation
     pub fn sacredChecksum(data: []const u8) u64 {
-        var hash: u64 = LAMBDA_10;
+        // The multiplier is 2^64/φ, which is what φ IS in integer hashing --
+        // Knuth's multiplicative constant. The previous line multiplied a u64
+        // by the f64 PHI and then called @intFromFloat on the u64 result, so
+        // this function has never compiled and no stored checksum can depend
+        // on it. Taking the standard constant keeps the golden ratio rather
+        // than inventing a number.
+        const PHI_U64: u64 = 0x9E3779B97F4A7C15;
+        var hash: u64 = @intFromFloat(LAMBDA_10);
         for (data) |byte| {
-            hash = hash *% PHI + byte;
+            hash = hash *% PHI_U64 +% byte;
         }
-        return @intFromFloat(hash);
+        return hash;
     }
 
     /// Verify Trinity alignment

@@ -8,9 +8,11 @@
 // φ² + 1/φ² = 3
 
 const std = @import("std");
-const packed_trit = @import("packed_trit.zig");
+const packed_trit = @import("../ternary/packed_trit.zig");
 const hybrid = @import("../ternary/hybrid.zig");
-const vsa = @import("vsa.zig");
+// There is no vsa.zig; bind, bundle2 and randomVector are all in the
+// sibling core.zig.
+const vsa = @import("core.zig");
 
 const PackedBigInt = packed_trit.PackedBigInt;
 const HybridBigInt = hybrid.HybridBigInt;
@@ -328,9 +330,9 @@ test "packed unbind retrieval" {
     // to: bind(Paris, bind(capital_of, France))
     // with: unbind(fact, bind(Paris, capital_of)) → France
 
-    const paris = randomPackedVector(100, Entity.hashString("Paris"));
-    const capital_of = randomPackedVector(100, Entity.hashString("capital_of") ^ 0xDEADBEEF);
-    const france = randomPackedVector(100, Entity.hashString("France"));
+    const paris = randomPackedVector(100, hashString("Paris"));
+    const capital_of = randomPackedVector(100, hashString("capital_of") ^ 0xDEADBEEF);
+    const france = randomPackedVector(100, hashString("France"));
 
     // Encode to: Paris is capital_of France
     const pred_obj = packedBind(&capital_of, &france);
@@ -352,7 +354,32 @@ test "packed unbind retrieval" {
     try std.testing.expect(sim_paris > sim_france);
 }
 
-const Entity = @import("knowledge_graph.zig").Entity;
+// Was `@import("knowledge_graph.zig").Entity` — a file that does not exist
+// in this repository. It exists in gHashTag/zig-knowledge-graph, whose own
+// knowledge_graph.zig imports "packed_vsa.zig", which does not exist THERE.
+// One directory was split into two repositories and every relative import
+// was left pointing at the sibling that stayed behind, so neither half
+// compiles.
+//
+// The dependency was also inverted: a VSA primitive should not need a type
+// from a knowledge-graph consumer. The three tests below used Entity only
+// for djb2 over a string, to derive a seed. That function is reproduced
+// here verbatim so the seeds — and therefore the tests — are unchanged.
+/// std.time.Timer left std by zig 0.16; the monotonic clock via libc is the
+/// portable replacement for a benchmark delta.
+fn monotonicNs() u64 {
+    var ts: std.c.timespec = undefined;
+    _ = std.c.clock_gettime(.MONOTONIC, &ts);
+    return @as(u64, @intCast(ts.sec)) * 1_000_000_000 + @as(u64, @intCast(ts.nsec));
+}
+
+fn hashString(s: []const u8) u64 {
+    var hash: u64 = 5381;
+    for (s) |c| {
+        hash = ((hash << 5) +% hash) +% c;
+    }
+    return hash;
+}
 
 test "large vector bind correctness (1000 trits)" {
     var h_a = vsa.randomVector(1000, 12345);
@@ -442,20 +469,20 @@ test "benchmark Packed vs Unpacked" {
         const p_b = fromHybrid(&h_b);
 
         // Benchmark Unpacked (vsa.bind)
-        var timer = std.time.Timer.start() catch unreachable;
+        const t0 = monotonicNs();
         for (0..iterations) |_| {
             const result = vsa.bind(&h_a, &h_b);
             std.mem.doNotOptimizeAway(&result);
         }
-        const unpacked_ns = timer.read();
+        const unpacked_ns = monotonicNs() - t0;
 
         // Benchmark Packed
-        timer.reset();
+        const t1 = monotonicNs();
         for (0..iterations) |_| {
             const result = packedBind(&p_a, &p_b);
             std.mem.doNotOptimizeAway(&result);
         }
-        const packed_ns = timer.read();
+        const packed_ns = monotonicNs() - t1;
 
         const unpacked_us = @as(f64, @floatFromInt(unpacked_ns)) / 1000.0 / @as(f64, @floatFromInt(iterations));
         const packed_us = @as(f64, @floatFromInt(packed_ns)) / 1000.0 / @as(f64, @floatFromInt(iterations));

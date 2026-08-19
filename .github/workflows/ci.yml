@@ -1,0 +1,41 @@
+name: CI
+
+# Builds and tests this package on the version its consumers target.
+#
+# Deliberately separate from test-bindings.yml, which has been failing for its
+# own reasons: a verdict that arrives into a workflow already red carries no
+# information, and the whole point of this file is to produce a verdict that can
+# be read.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+      - name: The library builds on the version this package declares
+        run: zig build
+      - name: Test, including the module root in full
+        # src/root.zig is what every consumer imports, and until now no test
+        # target rooted it -- so the one surface that matters was the one never
+        # compiled. refAllDeclsRecursive in that file forces it through.
+        run: zig build test
+
+      - name: The 0.16-only tools are still buildable, on 0.16
+        run: |
+          set -euo pipefail
+          echo "zig build tools needs 0.16; this job pins 0.15.2 to match consumers."
+          echo "Checked here only that the step exists, so it cannot be silently dropped:"
+          zig build --help 2>&1 | grep -q '^  tools ' && echo "  tools step present" || {
+            echo "::error::the tools step is gone"; exit 1; }

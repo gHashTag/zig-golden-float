@@ -7,10 +7,18 @@
 // φ² + 1/φ² = 3
 
 const std = @import("std");
+
+/// std.time.Timer left std by zig 0.16; monotonic clock via libc.
+fn monotonicNs() u64 {
+    var ts: std.c.timespec = undefined;
+    _ = std.c.clock_gettime(.MONOTONIC, &ts);
+    return @as(u64, @intCast(ts.sec)) * 1_000_000_000 + @as(u64, @intCast(ts.nsec));
+}
+
 const builtin = @import("builtin");
 
 // Import architecture-specific backends
-const arm64 = @import("../../jit_arm64.zig");
+const arm64 = @import("jit_arm64.zig");
 const x86_64 = @import("jit_x86_64.zig");
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -409,12 +417,12 @@ test "Unified JIT benchmark" {
         b[i] = @intCast(@as(i32, @intCast((i + 1) % 3)) - 1);
     }
 
-    var timer = try std.time.Timer.start();
+    const t_mark = monotonicNs();
     var result: i64 = 0;
     for (0..iterations) |_| {
         result = func(@ptrCast(&a), @ptrCast(&b));
     }
-    const ns = timer.read();
+    const ns = monotonicNs() - t_mark;
 
     const ms = @as(f64, @floatFromInt(ns)) / 1_000_000.0;
     const ns_per_iter = @as(f64, @floatFromInt(ns)) / @as(f64, iterations);
