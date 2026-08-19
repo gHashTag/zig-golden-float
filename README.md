@@ -14,13 +14,16 @@
 
 | Format | Layout | Bias | Range | Notes |
 |--------|--------|------|-------|-------|
-| **GF16** | `[s:1][e:6][m:9]` | 31 | ~±65504 | Golden ratio base, no subnormals |
+| **GF16** | `[s:1][e:6][m:9]` | 31 | ~±4.29e9 | Golden ratio base, no subnormals |
 | **fp16** | IEEE 754 binary16 | 15 | ±65504 | Full subnormal support |
 | **bf16** | IEEE 754 brain16 | 127 | ~±3.4e38 | Canonical `(bits +\| 0x7FFF) >> 16` encoder |
-| **GF8** | `[s:1][e:3][m:4]` | 7 | ~±4.24 | 3-bit φ-exponent, 4-bit mantissa; saturates outside φ³ |
+| **GF8** | `[s:1][e:3][m:4]` | 7 | ~±1.94 | 3-bit φ-exponent, 4-bit mantissa (standalone codec clamps at 1.9375; the φ³ figure belonged to the Rust base-φ bench model, not this codec) |
 | **GFTernary** | `{-1, 0, +1}` | — | ±1 | ±0.5 threshold, 100% sparse |
 
-All formats use **round-to-nearest-even** via `quantizeValue()` dispatch.
+Rounding goes through `quantizeValue()` dispatch and is **round-to-nearest,
+ties away from zero** (measured on tie inputs; an earlier line here said
+ties-to-even, which no shipped codec implements — and the fp16 encoder
+truncates its mantissa outright). See docs/AUDIT_2026-08-20.md.
 
 ## The GoldenFloat Ladder (GF + GF-T)
 
@@ -37,7 +40,7 @@ One normative rule sizes every binary rung (FORMAT-SPEC-001 v1.2):
 | GF4 | 4 | `[1:1:2]` | 0 | Verified |
 | **GF8** | 8 | `[1:3:4]` | 3 † | Verified — edge / sensors |
 | GF12 | 12 | `[1:4:7]` | 7 | Verified — mid-range / audio |
-| **GF16** | 16 | `[1:6:9]` | 31 | **Primary** — FPGA 35/35 @ 323 MHz Artix-7 |
+| **GF16** | 16 | `[1:6:9]` | 31 | **Primary** (an earlier row cited 35/35 @ 323 MHz Artix-7 — that figure has no record in this repository and was withdrawn upstream) |
 | GF20 | 20 | `[1:7:12]` | 63 | Experimental |
 | GF24 | 24 | `[1:9:14]` | 255 | Experimental |
 | GF32 | 32 | `[1:12:19]` | 2047 | Spec |
@@ -68,10 +71,16 @@ with `e = offset − EXP_OFFSET`; the top offset row `3^E − 1` is reserved (In
 
 | Format | Layout `[s : E trits : M bits]` | EXP_OFFSET | Special row `3^E−1` | Exponent range | Dynamic range |
 |--------|----------------------------------|-----------|---------------------|----------------|---------------|
-| GF-T4 | `[1 : 2t : 1]` | 4 | 8 | ±4 | ~2.4 decades |
-| GF-T8 | `[1 : 3t : 4]` | 13 | 26 | ±13 | ~8 decades |
-| GF-T16 | `[1 : 4t : 9]` | 40 | 80 | ±40 | ~24 decades |
-| GF-T32 | `[1 : 6t : 25]` | 364 | 728 | ±364 | ~219 decades |
+| GF-T4 | `[1 : 2t : 1]` | 4 | 8 | [−4, +3] | ~2.1 decades |
+| GF-T8 | `[1 : 3t : 4]` | 13 | 26 | [−13, +12] | ~7.5 decades |
+| GF-T16 | `[1 : 4t : 9]` | 40 | 80 | [−40, +39] | ~23.8 decades |
+| GF-T32 | `[1 : 6t : 25]` | 364 | 728 | [−364, +363] | ~218.8 decades |
+
+The exponent ranges above are asymmetric because the top offset row is the
+special row: the maximum finite exponent is `EXP_OFFSET − 1` (measured:
+GF-T16 accepts 1e12 and rejects 1.2e12). An earlier revision printed the
+symmetric ±N, overstating the top by one step — the same off-by-one the
+TNF paper carried in its `3^Et − 1` family.
 
 GF-T16 keeps GF16's φ-optimal 9-bit mantissa across its whole range, where
 tekum16 tapers to ~4 bits at the extremes. The authoritative parameters live in
@@ -221,7 +230,7 @@ Neural network architecture built on φ-math:
 
 | Metric | Result |
 |--------|--------|
-| GF16 accuracy vs fp32 (σ=1.0) | > 99.99% |
+| GF16 vs fp32, mean relative error, normal σ=1.0 | 99.965% (1 − mean rel err; an earlier row said > 99.99% without naming the metric — under this reading it does not hold) |
 | GF16 vs bf16 MSE ratio (uniform ±100) | 16.2× better |
 | GF16 sparsity at [-10,10] | 0% (no saturation) |
 | GFTernary sparsity (He init σ=0.05) | 100% |
