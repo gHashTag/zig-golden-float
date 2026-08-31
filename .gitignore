@@ -6,3 +6,8 @@ rust/*.rs
 build/
 cpp/build/
 rust/test_nan
+cpp/build/
+python/__pycache__/
+*.pyc
+go/pkg/
+go/bin/
